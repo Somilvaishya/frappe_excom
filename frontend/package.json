@@ -1,0 +1,33 @@
+{
+  "name": "excom-frontend",
+  "private": true,
+  "license": "MIT",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build --base=/assets/excom/excom/ && yarn copy-html-entry",
+    "preview": "vite preview",
+    "copy-html-entry": "cp ../excom/public/excom/index.html ../excom/www/excom.html"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "clsx": "^2.1.0",
+    "dayjs": "^1.11.11",
+    "frappe-react-sdk": "^1.13.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.4.0",
+    "react-router-dom": "^6.26.1",
+    "sonner": "^2.0.3",
+    "tailwindcss": "^3.4.10",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.41",
+    "vite": "^6.3.6"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.2.19",
+    "typescript": "^5.3.3"
+  }
+}
