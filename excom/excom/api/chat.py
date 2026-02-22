@@ -38,8 +38,13 @@ def get_threads(search: str = "", limit: int = 50, offset: int = 0):
 
 
 @frappe.whitelist()
-def get_messages(thread_id: str, limit: int = 50, before: str = ""):
+def get_messages(thread_id: str = "", profile_id: str = "", limit: int = 50, before: str = ""):
     """Load messages for a thread, ordered chronologically."""
+    # Backward compatibility for older frontend payloads.
+    thread_id = thread_id or profile_id
+    if not thread_id:
+        frappe.throw(_("thread_id is required"))
+
     limit = int(limit)
     params = {"thread": thread_id, "limit": limit}
 
@@ -68,11 +73,18 @@ def get_messages(thread_id: str, limit: int = 50, before: str = ""):
 
 
 @frappe.whitelist()
-def send_message(thread_id: str, message: str):
+def send_message(thread_id: str = "", profile_id: str = "", message: str = ""):
     """Send a text message on an existing thread."""
+    # Backward compatibility for older frontend payloads.
+    thread_id = thread_id or profile_id
+    if not thread_id:
+        frappe.throw(_("thread_id is required"))
+    if not message or not message.strip():
+        frappe.throw(_("message is required"))
+
     msg_name = send_outbound_message(
         thread_name=thread_id,
-        content_text=message,
+        content_text=message.strip(),
         message_type="Text",
     )
     frappe.db.commit()

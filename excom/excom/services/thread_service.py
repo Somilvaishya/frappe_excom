@@ -159,7 +159,7 @@ def send_outbound_message(
     if not to_number:
         frappe.throw(_("No phone number on identity to send to"))
 
-    account = frappe.get_doc(thread.account_doctype, thread.account)
+    account = _resolve_thread_account(thread)
 
     provider_message_id = ""
     delivery_status = "Queued"
@@ -230,8 +230,17 @@ def update_delivery_status(provider_message_id: str, status: str, conversation_i
 
 def _send_whatsapp(account, to_number: str, text: str, message_type: str, media_file: str):
     """Call WhatsApp Cloud API. Returns (provider_message_id, delivery_status)."""
-    token = account.get_password("wa_token")
-    url = f"{account.wa_url}/{account.wa_version}/{account.wa_phone_id}/messages"
+    # Support both Excom Channel Account fields and legacy WhatsApp Account fields.
+    token_field = "wa_token" if account.doctype == "Excom Channel Account" else "token"
+    token = account.get_password(token_field)
+    base_url = account.get("wa_url") or account.get("url")
+    version = account.get("wa_version") or account.get("version")
+    phone_id = account.get("wa_phone_id") or account.get("phone_id")
+
+    if not token or not base_url or not version or not phone_id:
+        frappe.throw(_("Missing WhatsApp account configuration (token/url/version/phone_id)"))
+
+    url = f"{base_url}/{version}/{phone_id}/messages"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -272,3 +281,26 @@ def _make_preview(text: str) -> str:
         return ""
     clean = re.sub(r"<[^>]+>", "", text)
     return clean[:120]
+
+
+def _resolve_thread_account(thread):
+    """
+    Resolve account doc for a thread with backward compatibility.
+    If thread still points to legacy WhatsApp Account but a matching
+    Excom Channel Account exists, self-heal the thread reference.
+    """
+    if thread.account_doctype == "Excom Channel Account":
+        return frappe.get_doc("Excom Channel Account", thread.account)
+
+    mapped = frappe.db.exists("Excom Channel Account", thread.account)
+    if mapped:
+        frappe.db.set_value(
+            "Excom Thread",
+            thread.name,
+            {"account_doctype": "Excom Channel Account", "account": mapped},
+        )
+        thread.account_doctype = "Excom Channel Account"
+        thread.account = mapped
+        return frappe.get_doc("Excom Channel Account", mapped)
+
+    return frappe.get_doc(thread.account_doctype, thread.account)
