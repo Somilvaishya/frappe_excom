@@ -356,3 +356,64 @@ Current change set includes schema and runtime behavior updates.
 - Historical relevance: if future channels (email/web/social) expose unavoidable modeling gaps, revisit with strict ADR and migration notes.
 - Added requirement that each `Contact` carries an AI-generated profile summary using `Contact` extension fields instead of a new profile DocType.
 
+## Implementation Update (2026-02-23, Omni Identity)
+
+### What is Omni Identity
+
+A universal person anchor that represents one real-world person across all communication channels and ERP entities. It is NOT a replacement for Contact, Customer, or Lead. Those remain first-class ERP entities. Omni Identity sits above them as a cross-channel resolution layer.
+
+### DocTypes Added
+
+1. **Omni Identity** — main record
+   - `display_name` — human-readable label
+   - `primary_phone`, `primary_email`, `primary_whatsapp` — contact coordinates
+   - `normalized_phone`, `normalized_email` — hidden, system-computed for dedup
+   - `hash_fingerprint` — SHA-256 of sorted normalized identifiers (unique, hidden)
+   - `status` — Active / Merged / Archived
+   - `channels` — Table of Omni Identity Channel (channel-specific IDs)
+   - `linked_entities` — Table of Omni Identity Link (Contact, Lead, Customer, etc.)
+   - `is_master`, `merged_into`, `merge_group_id` — merge/dedup system
+   - `ai_profile_summary` — AI-generated behavioral summary
+
+2. **Omni Identity Channel** (child table)
+   - `channel_type` — Link to Excom Channel (WhatsApp, Instagram, etc.)
+   - `channel_user_id` — provider-specific user ID (phone number, handle, etc.)
+   - `verified`, `last_seen`
+
+3. **Omni Identity Link** (child table)
+   - `linked_doctype` — Link to DocType (Lead, Contact, Customer, Supplier, etc.)
+   - `linked_name` — Dynamic Link to the actual record
+   - `role` — Decision Maker / Billing / Technical / Primary Contact / Influencer / Unknown
+
+### Identity Resolution Flow (v1)
+
+When a new message arrives:
+
+1. Normalize phone/email
+2. Search Omni Identity:
+   - Match `normalized_phone`
+   - OR match `channel_user_id` in Omni Identity Channel
+   - OR match `normalized_email`
+3. If found → attach channel, update last_seen
+4. If not → create new Omni Identity with channel entry
+5. Then: link or create Contact/Lead as needed
+
+API: `excom.excom.doctype.omni_identity.omni_identity.resolve_identity`
+Merge: `excom.excom.doctype.omni_identity.omni_identity.merge_identities`
+
+### Merge Mechanics
+
+- Source identity's channels and links are copied to the master
+- Source status becomes "Merged", `merged_into` points to master
+- Both records share the same `merge_group_id`
+- Source `is_master` is set to 0
+- All future lookups skip Merged records
+
+### Design Constraints
+
+- Omni Identity does not store messages (WhatsApp Message does)
+- Omni Identity does not replace Contact (it links to Contact)
+- Normalized fields are hidden from UI, computed on validate
+- `hash_fingerprint` is unique to prevent accidental duplicate creation
+- Track changes enabled for full audit trail
+

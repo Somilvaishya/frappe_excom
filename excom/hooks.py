@@ -10,16 +10,18 @@ app_license = "mit"
 
 # required_apps = []
 
-# Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "excom",
-# 		"logo": "/assets/excom/logo.png",
-# 		"title": "Excom",
-# 		"route": "/excom",
-# 		"has_permission": "excom.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "excom",
+		"logo": "/assets/excom/excom/excom-logo.svg",
+		"title": "Excom",
+		"route": "/excom",
+	}
+]
+
+website_route_rules = [
+	{"from_route": "/excom/<path:app_path>", "to_route": "excom"},
+]
 
 # Includes in <head>
 # ------------------

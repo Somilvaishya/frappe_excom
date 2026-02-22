@@ -1,0 +1,231 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-02-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "basic_section",
+  "display_name",
+  "status",
+  "column_break_basic",
+  "primary_phone",
+  "primary_email",
+  "primary_whatsapp",
+
+  "normalized_section",
+  "normalized_phone",
+  "normalized_email",
+  "column_break_norm",
+  "hash_fingerprint",
+
+  "channel_identifiers_section",
+  "channels",
+
+  "linked_entities_section",
+  "linked_entities",
+
+  "merge_section",
+  "is_master",
+  "merged_into",
+  "column_break_merge",
+  "merge_group_id",
+
+  "ai_section",
+  "ai_profile_summary",
+
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "basic_section",
+   "fieldtype": "Section Break",
+   "label": "Identity"
+  },
+  {
+   "fieldname": "display_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Display Name",
+   "reqd": 1
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Active\nMerged\nArchived"
+  },
+  {
+   "fieldname": "column_break_basic",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "primary_phone",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Primary Phone",
+   "options": "Phone"
+  },
+  {
+   "fieldname": "primary_email",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Primary Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "primary_whatsapp",
+   "fieldtype": "Data",
+   "label": "Primary WhatsApp",
+   "options": "Phone"
+  },
+
+  {
+   "collapsible": 1,
+   "fieldname": "normalized_section",
+   "fieldtype": "Section Break",
+   "label": "Normalized (System)"
+  },
+  {
+   "fieldname": "normalized_phone",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Normalized Phone",
+   "read_only": 1
+  },
+  {
+   "fieldname": "normalized_email",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Normalized Email",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_norm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "hash_fingerprint",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Hash Fingerprint",
+   "read_only": 1,
+   "unique": 1
+  },
+
+  {
+   "fieldname": "channel_identifiers_section",
+   "fieldtype": "Section Break",
+   "label": "Channel Identifiers"
+  },
+  {
+   "fieldname": "channels",
+   "fieldtype": "Table",
+   "label": "Channels",
+   "options": "Omni Identity Channel"
+  },
+
+  {
+   "fieldname": "linked_entities_section",
+   "fieldtype": "Section Break",
+   "label": "Linked ERP Entities"
+  },
+  {
+   "fieldname": "linked_entities",
+   "fieldtype": "Table",
+   "label": "Linked Entities",
+   "options": "Omni Identity Link"
+  },
+
+  {
+   "collapsible": 1,
+   "fieldname": "merge_section",
+   "fieldtype": "Section Break",
+   "label": "Merge & Dedup"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_master",
+   "fieldtype": "Check",
+   "label": "Is Master Record"
+  },
+  {
+   "fieldname": "merged_into",
+   "fieldtype": "Link",
+   "label": "Merged Into",
+   "options": "Omni Identity",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_merge",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "merge_group_id",
+   "fieldtype": "Data",
+   "label": "Merge Group ID",
+   "read_only": 1
+  },
+
+  {
+   "collapsible": 1,
+   "fieldname": "ai_section",
+   "fieldtype": "Section Break",
+   "label": "AI Profile"
+  },
+  {
+   "fieldname": "ai_profile_summary",
+   "fieldtype": "Long Text",
+   "label": "AI Profile Summary"
+  },
+
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Omni Identity",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "WhatsApp Message",
+   "link_fieldname": "to"
+  }
+ ],
+ "modified": "2026-02-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Excom",
+ "name": "Omni Identity",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "display_name,primary_phone,primary_email",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "display_name",
+ "track_changes": 1
+}
