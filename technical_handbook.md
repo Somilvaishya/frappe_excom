@@ -411,9 +411,45 @@ Merge: `excom.excom.doctype.omni_identity.omni_identity.merge_identities`
 
 ### Design Constraints
 
-- Omni Identity does not store messages (WhatsApp Message does)
+- Omni Identity does not store messages (Excom Message does)
 - Omni Identity does not replace Contact (it links to Contact)
 - Normalized fields are hidden from UI, computed on validate
 - `hash_fingerprint` is unique to prevent accidental duplicate creation
 - Track changes enabled for full audit trail
+- Omni Identity Alias child table added for alternate phones/emails; searched during resolution as fallback
 
+
+## Implementation Update (2026-02-23, Excom Thread and Message)
+
+### What Changed
+
+Introduced the conversation and message layer that replaces WhatsApp Message and WhatsApp Profiles with channel-agnostic doctypes.
+
+### New DocTypes
+
+**Excom Thread** — conversation anchor, one per identity x channel x account. Fields include omni_identity, channel, account (Dynamic Link), thread_key (unique), status (Open/Pending/Closed), assigned_to, priority, unread_count, last_message_at/last_inbound_at/last_outbound_at, last_message_preview, last_message_direction, display_name, primary_phone (denormalized). Indexed on thread_key, last_message_at, and (omni_identity, channel, account).
+
+**Excom Message** — immutable event log replacing WhatsApp Message. Fields include thread, omni_identity, channel, account (Dynamic Link), direction (Inbound/Outbound), message_type, delivery_status, content_text, content_json, media_file, provider_message_id (idempotency key), provider_timestamp, reply_to, created_by_user, template, failure_reason, reference_doctype/reference_name. Indexed on provider_message_id and (thread, creation). Track changes disabled (immutable log).
+
+**Omni Identity Alias** — child table on Omni Identity for alternate numbers, emails, country codes. Fields: alias_type, alias_value_raw, alias_value_normalized, verified, source, last_seen.
+
+### Service Layer
+
+File: `excom/excom/services/thread_service.py`
+
+- `upsert_thread()` — find or create thread by thread_key
+- `ingest_inbound_message()` — full pipeline: resolve identity, upsert thread, check idempotency, insert message, update thread counters
+- `send_outbound_message()` — call provider API, insert message, update thread timestamps
+- `update_delivery_status()` — update delivery_status on Excom Message by provider_message_id
+
+### Inbox Correctness Rule (Non-Negotiable)
+
+Inbox reads ONLY from `tabExcom Thread` ordered by `last_message_at DESC`. Zero joins, zero subqueries, O(1) per row. Messages loaded only when a thread is opened, queried by `(thread, creation)` index.
+
+### Webhook and Chat API
+
+Webhook handler routes all inbound messages through `ingest_inbound_message()`. Status callbacks update `delivery_status` on Excom Message. Chat API queries Excom Thread for sidebar and Excom Message for message list. Send operations go through `send_outbound_message()`.
+
+### Migration
+
+Patch `migrate_whatsapp_to_excom_messages` converts existing WhatsApp Profiles and Messages into Omni Identity + Excom Thread + Excom Message records. Original WhatsApp Message table preserved as archive.

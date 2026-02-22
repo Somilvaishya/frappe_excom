@@ -9,6 +9,7 @@ from frappe.model.document import Document
 class OmniIdentity(Document):
 	def validate(self):
 		self.normalize_identifiers()
+		self.normalize_aliases()
 		self.compute_fingerprint()
 		self.validate_merge_state()
 
@@ -24,6 +25,15 @@ class OmniIdentity(Document):
 			self.normalized_email = normalize_email(self.primary_email)
 		else:
 			self.normalized_email = ""
+
+	def normalize_aliases(self):
+		for alias in self.get("aliases", []):
+			if alias.alias_type in ("Phone", "WhatsApp"):
+				alias.alias_value_normalized = normalize_phone(alias.alias_value_raw)
+			elif alias.alias_type == "Email":
+				alias.alias_value_normalized = normalize_email(alias.alias_value_raw)
+			else:
+				alias.alias_value_normalized = (alias.alias_value_raw or "").strip()
 
 	def compute_fingerprint(self):
 		"""Deterministic hash from normalized identifiers for fast dedup lookups."""
@@ -137,6 +147,22 @@ def resolve_identity(phone: str = "", email: str = "", channel: str = "", channe
 			{"normalized_phone": norm_phone, "status": ["!=", "Merged"]},
 			"name",
 		)
+
+	if not identity_name and norm_phone:
+		alias_hit = frappe.db.sql(
+			"""
+			SELECT oia.parent FROM `tabOmni Identity Alias` oia
+			JOIN `tabOmni Identity` oi ON oi.name = oia.parent
+			WHERE oia.alias_value_normalized = %(val)s
+			AND oia.alias_type IN ('Phone', 'WhatsApp')
+			AND oi.status != 'Merged'
+			LIMIT 1
+			""",
+			{"val": norm_phone},
+			as_dict=True,
+		)
+		if alias_hit:
+			identity_name = alias_hit[0].parent
 
 	if not identity_name and channel and channel_user_id:
 		result = frappe.db.sql(

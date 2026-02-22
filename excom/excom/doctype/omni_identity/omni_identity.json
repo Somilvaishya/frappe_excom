@@ -31,6 +31,9 @@
   "column_break_merge",
   "merge_group_id",
 
+  "aliases_section",
+  "aliases",
+
   "ai_section",
   "ai_profile_summary",
 
@@ -170,6 +173,19 @@
    "fieldtype": "Data",
    "label": "Merge Group ID",
    "read_only": 1
+  },
+
+  {
+   "collapsible": 1,
+   "fieldname": "aliases_section",
+   "fieldtype": "Section Break",
+   "label": "Aliases"
+  },
+  {
+   "fieldname": "aliases",
+   "fieldtype": "Table",
+   "label": "Aliases",
+   "options": "Omni Identity Alias"
   },
 
   {

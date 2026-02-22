@@ -1,13 +1,13 @@
 import { useFrappeGetCall } from "frappe-react-sdk";
-import { WhatsAppProfile } from "@/types";
+import { ExcomThread } from "@/types";
 
-export function useContacts(search: string = "") {
+export function useThreads(search: string = "") {
   const { data, error, isLoading, mutate } = useFrappeGetCall<{
-    message: WhatsAppProfile[];
-  }>("excom.excom.api.chat.get_contacts", { search, limit: 100 });
+    message: ExcomThread[];
+  }>("excom.excom.api.chat.get_threads", { search, limit: 100 });
 
   return {
-    contacts: data?.message ?? [],
+    threads: data?.message ?? [],
     error,
     isLoading,
     refresh: mutate,

@@ -1,12 +1,12 @@
 import { useFrappeGetCall } from "frappe-react-sdk";
-import { WhatsAppMessage } from "@/types";
+import { ExcomMessage } from "@/types";
 
-export function useMessages(profileId: string) {
+export function useMessages(threadId: string) {
   const { data, error, isLoading, mutate } = useFrappeGetCall<{
-    message: WhatsAppMessage[];
+    message: ExcomMessage[];
   }>(
-    profileId ? "excom.excom.api.chat.get_messages" : null,
-    profileId ? { profile_id: profileId, limit: 100 } : undefined
+    threadId ? "excom.excom.api.chat.get_messages" : null,
+    threadId ? { thread_id: threadId, limit: 100 } : undefined
   );
 
   return {

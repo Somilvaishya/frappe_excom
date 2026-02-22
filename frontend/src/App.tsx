@@ -16,7 +16,7 @@ const router = createBrowserRouter(
     <>
       <Route path="/" element={<ChatLayout />}>
         <Route index element={<EmptyState />} />
-        <Route path=":profileId" element={<ChatWindow />} />
+        <Route path=":threadId" element={<ChatWindow />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </>
