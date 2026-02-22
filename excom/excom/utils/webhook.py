@@ -5,7 +5,7 @@ import frappe
 import requests as http_requests
 from werkzeug.wrappers import Response
 
-from excom.excom.utils import get_whatsapp_account
+from excom.excom.utils import get_channel_account
 from excom.excom.services.thread_service import (
 	ingest_inbound_message,
 	update_delivery_status,
@@ -25,12 +25,12 @@ def get():
 	hub_challenge = frappe.form_dict.get("hub.challenge")
 	verify_token = frappe.form_dict.get("hub.verify_token")
 	webhook_verify_token = frappe.db.get_value(
-		"WhatsApp Account",
-		{"webhook_verify_token": verify_token},
-		"webhook_verify_token",
+		"Excom Channel Account",
+		{"wa_webhook_verify_token": verify_token},
+		"wa_webhook_verify_token",
 	)
 	if not webhook_verify_token:
-		frappe.throw("No matching WhatsApp account")
+		frappe.throw("No matching Excom Channel Account")
 
 	if verify_token != webhook_verify_token:
 		frappe.throw("Verify token does not match")
@@ -75,15 +75,15 @@ def post():
 		None,
 	)
 
-	whatsapp_account = get_whatsapp_account(phone_id) if phone_id else None
-	if not whatsapp_account:
+	channel_account = get_channel_account(phone_id) if phone_id else None
+	if not channel_account:
 		return
 
-	account_name = whatsapp_account.name
+	account_name = channel_account.name
 
 	if messages:
 		for message in messages:
-			_process_inbound_message(message, sender_profile_name, whatsapp_account, account_name)
+			_process_inbound_message(message, sender_profile_name, channel_account, account_name)
 	else:
 		changes = None
 		try:
@@ -97,7 +97,7 @@ def post():
 			_process_status_update(changes)
 
 
-def _process_inbound_message(message, sender_profile_name, whatsapp_account, account_name):
+def _process_inbound_message(message, sender_profile_name, channel_account, account_name):
 	"""Route a single inbound message through the service layer."""
 	message_type = message.get("type", "text")
 	phone = message.get("from", "")
@@ -159,7 +159,7 @@ def _process_inbound_message(message, sender_profile_name, whatsapp_account, acc
 
 	elif message_type in ("image", "audio", "video", "document"):
 		content_text = message.get(message_type, {}).get("caption", "")
-		media_file = _download_media(message, message_type, whatsapp_account)
+		media_file = _download_media(message, message_type, channel_account)
 
 	elif message_type == "button":
 		content_text = message.get("button", {}).get("text", "")
@@ -170,7 +170,6 @@ def _process_inbound_message(message, sender_profile_name, whatsapp_account, acc
 	ingest_inbound_message(
 		phone=phone,
 		channel="whatsapp",
-		account_doctype="WhatsApp Account",
 		account=account_name,
 		provider_message_id=provider_msg_id,
 		content_text=content_text,
@@ -183,11 +182,11 @@ def _process_inbound_message(message, sender_profile_name, whatsapp_account, acc
 	)
 
 
-def _download_media(message, message_type, whatsapp_account):
+def _download_media(message, message_type, channel_account):
 	"""Download media from WhatsApp and save as Frappe File. Returns file URL."""
 	try:
-		token = whatsapp_account.get_password("token")
-		base_url = f"{whatsapp_account.url}/{whatsapp_account.version}/"
+		token = channel_account.get_password("wa_token")
+		base_url = f"{channel_account.wa_url}/{channel_account.wa_version}/"
 		media_id = message[message_type]["id"]
 		headers = {"Authorization": f"Bearer {token}"}
 

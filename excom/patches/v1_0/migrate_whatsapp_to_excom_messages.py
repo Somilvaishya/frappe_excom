@@ -50,15 +50,19 @@ def execute():
 			identity.insert(ignore_permissions=True)
 			identity_name = identity.name
 
-		account = profile.whatsapp_account
+		account = frappe.db.get_value(
+			"Excom Channel Account",
+			{"account_name": profile.whatsapp_account, "channel": "whatsapp"},
+			"name",
+		)
 		if not account:
 			account = frappe.db.get_value(
-				"WhatsApp Account",
-				{"is_default_outgoing": 1},
+				"Excom Channel Account",
+				{"is_default_outgoing": 1, "channel": "whatsapp"},
 				"name",
 			)
 		if not account:
-			account = frappe.db.get_value("WhatsApp Account", {}, "name")
+			account = frappe.db.get_value("Excom Channel Account", {"channel": "whatsapp"}, "name")
 		if not account:
 			continue
 
@@ -74,7 +78,7 @@ def execute():
 				"doctype": "Excom Thread",
 				"omni_identity": identity_name,
 				"channel": "whatsapp",
-				"account_doctype": "WhatsApp Account",
+				"account_doctype": "Excom Channel Account",
 				"account": account,
 				"thread_key": thread_key,
 				"status": "Open",
@@ -130,7 +134,7 @@ def execute():
 				"thread": thread_name,
 				"omni_identity": identity_name,
 				"channel": "whatsapp",
-				"account_doctype": "WhatsApp Account",
+				"account_doctype": "Excom Channel Account",
 				"account": account,
 				"direction": direction,
 				"message_type": msg_type,

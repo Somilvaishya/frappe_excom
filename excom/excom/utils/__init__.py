@@ -24,7 +24,6 @@ def run_server_script_for_doc_event(doc, event):
     ).get(EVENT_MAP[event], None)
 
     if notification:
-        # run all scripts for this doctype + event
         for notification_name in notification:
             frappe.get_doc(
                 "WhatsApp Notification",
@@ -217,8 +216,40 @@ def _process_pending_whatsapp_notification_log(log_name):
         force_send=True,
     )
 
+
+def get_channel_account(phone_id=None, channel='whatsapp', account_type='incoming'):
+    """
+    Get Excom Channel Account by phone_id or default for channel.
+
+    Args:
+        phone_id: WhatsApp phone number ID to look up by wa_phone_id field.
+        channel: Channel type filter (e.g. 'whatsapp').
+        account_type: 'incoming' or 'outgoing' to pick the default account.
+
+    Returns:
+        Excom Channel Account doc or None.
+    """
+    if phone_id:
+        account_name = frappe.db.get_value(
+            'Excom Channel Account', {'wa_phone_id': phone_id}, 'name'
+        )
+        if account_name:
+            return frappe.get_doc("Excom Channel Account", account_name)
+
+    account_field_type = 'is_default_incoming' if account_type == 'incoming' else 'is_default_outgoing'
+    default_account_name = frappe.db.get_value(
+        'Excom Channel Account',
+        {account_field_type: 1, 'channel': channel},
+        'name',
+    )
+    if default_account_name:
+        return frappe.get_doc("Excom Channel Account", default_account_name)
+
+    return None
+
+
 def get_whatsapp_account(phone_id=None, account_type='incoming'):
-    """map whatsapp account with message"""
+    """Map whatsapp account with message (legacy – kept for backward compat)."""
     if phone_id:
         account_name = frappe.db.get_value('WhatsApp Account', {'phone_id': phone_id}, 'name')
         if account_name:

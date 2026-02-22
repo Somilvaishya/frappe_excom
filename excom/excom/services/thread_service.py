@@ -13,10 +13,10 @@ import requests as http_requests
 from frappe import _
 
 from excom.excom.doctype.omni_identity.omni_identity import resolve_identity
-from excom.excom.utils import get_whatsapp_account
+from excom.excom.utils import get_channel_account
 
 
-def upsert_thread(omni_identity: str, channel: str, account_doctype: str, account: str) -> str:
+def upsert_thread(omni_identity: str, channel: str, account: str) -> str:
     """
     Find or create an Excom Thread for the given identity + channel + account.
     Returns the thread name.
@@ -36,7 +36,7 @@ def upsert_thread(omni_identity: str, channel: str, account_doctype: str, accoun
         "doctype": "Excom Thread",
         "omni_identity": omni_identity,
         "channel": channel,
-        "account_doctype": account_doctype,
+        "account_doctype": "Excom Channel Account",
         "account": account,
         "thread_key": thread_key,
         "status": "Open",
@@ -52,7 +52,6 @@ def upsert_thread(omni_identity: str, channel: str, account_doctype: str, accoun
 def ingest_inbound_message(
     phone: str,
     channel: str,
-    account_doctype: str,
     account: str,
     provider_message_id: str,
     content_text: str,
@@ -86,7 +85,7 @@ def ingest_inbound_message(
         display_name=display_name,
     )
 
-    thread_name = upsert_thread(identity_name, channel, account_doctype, account)
+    thread_name = upsert_thread(identity_name, channel, account)
 
     reply_to = ""
     if reply_to_provider_id:
@@ -104,7 +103,7 @@ def ingest_inbound_message(
         "thread": thread_name,
         "omni_identity": identity_name,
         "channel": channel,
-        "account_doctype": account_doctype,
+        "account_doctype": "Excom Channel Account",
         "account": account,
         "direction": "Inbound",
         "message_type": message_type,
@@ -231,8 +230,8 @@ def update_delivery_status(provider_message_id: str, status: str, conversation_i
 
 def _send_whatsapp(account, to_number: str, text: str, message_type: str, media_file: str):
     """Call WhatsApp Cloud API. Returns (provider_message_id, delivery_status)."""
-    token = account.get_password("token")
-    url = f"{account.url}/{account.version}/{account.phone_id}/messages"
+    token = account.get_password("wa_token")
+    url = f"{account.wa_url}/{account.wa_version}/{account.wa_phone_id}/messages"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
