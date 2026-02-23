@@ -98,3 +98,13 @@ The immediate objective is to establish a coherent architecture and language bef
 - Established `WhatsApp Notification Log` as both operational queue and audit trail to preserve explainability of delayed sends.
 - Added cancellation safety expectation: delayed notifications must not send if source documents are cancelled or deleted.
 
+### 2026-02-24
+
+- Complete UI overhaul: replaced 2-panel WhatsApp-clone layout with 4-panel omnichannel dashboard.
+- New design system: zinc-based dark theme with blue-purple gradient accents, shadcn/ui component library.
+- Omni Identity panel makes cross-channel contact context immediately visible to operators.
+- AI Assistant drawer introduces AI-assisted communication without replacing human judgment.
+- Channel tabs with account switching reflect the product principle of one conversation timeline across channels.
+- Mobile experience ensures operators can respond from any device without losing context.
+- Architectural intent: UI now matches the backend's omnichannel ambition (Omni Identity, Excom Thread, Channel Accounts).
+

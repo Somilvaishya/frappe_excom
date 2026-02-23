@@ -38,13 +38,8 @@ def get_threads(search: str = "", limit: int = 50, offset: int = 0):
 
 
 @frappe.whitelist()
-def get_messages(thread_id: str = "", profile_id: str = "", limit: int = 50, before: str = ""):
+def get_messages(thread_id: str, limit: int = 50, before: str = ""):
     """Load messages for a thread, ordered chronologically."""
-    # Backward compatibility for older frontend payloads.
-    thread_id = thread_id or profile_id
-    if not thread_id:
-        frappe.throw(_("thread_id is required"))
-
     limit = int(limit)
     params = {"thread": thread_id, "limit": limit}
 
@@ -73,22 +68,22 @@ def get_messages(thread_id: str = "", profile_id: str = "", limit: int = 50, bef
 
 
 @frappe.whitelist()
-def send_message(thread_id: str = "", profile_id: str = "", message: str = ""):
+def send_message(thread_id: str, message: str):
     """Send a text message on an existing thread."""
-    # Backward compatibility for older frontend payloads.
-    thread_id = thread_id or profile_id
-    if not thread_id:
-        frappe.throw(_("thread_id is required"))
-    if not message or not message.strip():
-        frappe.throw(_("message is required"))
-
-    msg_name = send_outbound_message(
-        thread_name=thread_id,
-        content_text=message.strip(),
-        message_type="Text",
-    )
-    frappe.db.commit()
-    return {"success": True, "message_name": msg_name}
+    try:
+        msg_name = send_outbound_message(
+            thread_name=thread_id,
+            content_text=message,
+            message_type="Text",
+        )
+        frappe.db.commit()
+        return {"success": True, "message_name": msg_name}
+    except Exception as e:
+        frappe.log_error(
+            title="Excom send_message failed",
+            message=f"thread_id={thread_id}\n{str(e)}",
+        )
+        raise
 
 
 @frappe.whitelist()
@@ -96,3 +91,49 @@ def mark_read(thread_id: str):
     """Reset unread count for a thread."""
     frappe.db.set_value("Excom Thread", thread_id, "unread_count", 0)
     return {"success": True}
+
+
+@frappe.whitelist()
+def get_linked_entities(omni_identity: str):
+    """
+    Fetch all linked ERP entities from the Omni Identity's linked_entities child table.
+    Returns list of {linked_doctype, linked_name, role, title} for display in the sidebar.
+    """
+    if not omni_identity or not frappe.db.exists("Omni Identity", omni_identity):
+        return []
+
+    links = frappe.get_all(
+        "Omni Identity Link",
+        filters={"parent": omni_identity},
+        fields=["linked_doctype", "linked_name", "role"],
+        order_by="creation desc",
+    )
+
+    result = []
+    for link in links:
+        title = link.linked_name
+        try:
+            doc = frappe.get_cached_doc(link.linked_doctype, link.linked_name)
+            title = (
+                getattr(doc, "customer_name", None)
+                or getattr(doc, "lead_name", None)
+                or getattr(doc, "company_name", None)
+                or getattr(doc, "supplier_name", None)
+                or (
+                    (getattr(doc, "first_name", None) or "")
+                    + " "
+                    + (getattr(doc, "last_name", None) or "")
+                ).strip()
+                or getattr(doc, "email_id", None)
+            )
+        except Exception:
+            pass
+        result.append(
+            {
+                "linked_doctype": link.linked_doctype,
+                "linked_name": link.linked_name,
+                "role": link.role or "Unknown",
+                "title": str(title).strip() if title else link.linked_name,
+            }
+        )
+    return result

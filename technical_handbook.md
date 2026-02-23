@@ -453,3 +453,110 @@ Webhook handler routes all inbound messages through `ingest_inbound_message()`. 
 ### Migration
 
 Patch `migrate_whatsapp_to_excom_messages` converts existing WhatsApp Profiles and Messages into Omni Identity + Excom Thread + Excom Message records. Original WhatsApp Message table preserved as archive.
+
+## Implementation Update (2026-02-24, Frontend UI Overhaul)
+
+### What Changed
+
+Complete replacement of the WhatsApp-style 2-panel chat UI with a modern 4-panel omnichannel communication dashboard adapted from Figma designs.
+
+### Architecture Change: 2-Panel to 4-Panel Layout
+
+Old layout (removed):
+- `ChatSidebar` + `ChatWindow` (WhatsApp clone)
+- Components: `ChatSidebar.tsx`, `ChatWindow.tsx`, `MessageBubble.tsx`, `ContactItem.tsx`, `Avatar.tsx`, `EmptyState.tsx`
+- Page: `ChatLayout.tsx`
+- Theme: WhatsApp green dark (`chat-*` color palette)
+- Icons: `react-icons`
+- Dates: `dayjs`
+
+New layout (implemented):
+- `LeftSidebar` + `ChatThreadList` + `ChannelTabsView` + `OmniIdentityPanel` + `AIAssistantDrawer`
+- Full mobile experience: `MobileApp`, `MobileConversationList`, `MobileChannelView`, `MobileContactView`, `MobileAIDrawer`, `CallScreen`
+- Theme: zinc/blue-purple dark gradient
+- UI library: shadcn/ui (Radix primitives)
+- Icons: `lucide-react`
+- Dates: `date-fns`
+
+### New Component Library (shadcn/ui)
+
+Created `frontend/src/components/ui/` with reusable primitives:
+- `button.tsx` (CVA variant system)
+- `input.tsx`
+- `badge.tsx`
+- `scroll-area.tsx` (Radix)
+- `tabs.tsx` (Radix)
+- `separator.tsx` (Radix)
+- `dropdown-menu.tsx` (Radix)
+- `tooltip.tsx` (Radix)
+- `utils.ts` (`cn()` helper using `clsx` + `tailwind-merge`)
+
+### New Desktop Components
+
+- **LeftSidebar**: Channel filter dropdown, search input, conversation statistics, branding
+- **ChatThreadList**: Conversation cards with avatar, channel icons, unread badges, ERP entity tags, multi-channel indicators
+- **ChannelTabsView**: Channel tabs header, account selector, message list with delivery status, AI status badge, message input with attachments
+- **OmniIdentityPanel**: Contact card, active channels and accounts with access badges, contact information, ERP integration details, quick actions
+- **AIAssistantDrawer**: Suggested replies, conversation summary, recommended actions with priority, quick insights
+
+### New Mobile Components
+
+- **MobileApp**: Root mobile component with view stack (list, conversation, call, contact) and bottom tab navigation
+- **MobileConversationList**: Thread list with search, channel icons, AI/human status badges
+- **MobileChannelView**: Conversation view with channel tabs, account selector, message list, input area
+- **MobileContactView**: Full-screen contact info with ERP integration details
+- **MobileAIDrawer**: AI suggestions overlay for mobile
+- **CallScreen**: Voice/video call UI with controls and status
+
+### Data Model Adaptation
+
+New TypeScript types added alongside existing ones:
+- `UnifiedContact` — aggregates threads by omni_identity into a single contact with all channels, accounts, and messages
+- `Account` — represents a channel account with access control
+- `Message` — enhanced message type with sender info, delivery status, media support
+- `Conversation` — denormalized view for the OmniIdentityPanel
+
+### Hook Transformation
+
+- `useContacts.ts` (`useThreads`) — now returns both raw `ExcomThread[]` and transformed `UnifiedContact[]` by grouping threads by `omni_identity`
+- `useMessages.ts` — now returns both raw `ExcomMessage[]` and transformed `Message[]` with mapped delivery status and message types
+
+### Dependencies Added
+
+- `lucide-react` (replacing `react-icons`)
+- `date-fns` (replacing `dayjs`)
+- `class-variance-authority` + `tailwind-merge` + `clsx` (shadcn/ui variant system)
+- `@radix-ui/react-scroll-area`, `@radix-ui/react-tabs`, `@radix-ui/react-separator`, `@radix-ui/react-dropdown-menu`, `@radix-ui/react-dialog`, `@radix-ui/react-slot`, `@radix-ui/react-tooltip`
+
+### Deleted Files
+
+- `src/components/ChatSidebar.tsx`
+- `src/components/ChatWindow.tsx`
+- `src/components/MessageBubble.tsx`
+- `src/components/ContactItem.tsx`
+- `src/components/Avatar.tsx`
+- `src/components/EmptyState.tsx`
+- `src/pages/ChatLayout.tsx`
+
+### Migration Implications
+
+- Frontend-only change; no backend schema modifications
+- Old `react-icons` and `dayjs` packages can be removed from `package.json` in a follow-up cleanup
+- Tailwind config completely replaced; any custom `chat-*` color references in other files will need updating
+- `App.tsx` no longer uses React Router for page routing; the 4-panel layout is rendered directly with state-driven navigation
+
+## Implementation Update (2026-02-24, Linked ERP Entities in Sidebar)
+
+Linked ERP Entities from the Omni Identity doctype are now displayed in the right sidebar when a conversation is opened.
+
+### What Changed
+
+- **Backend**: Added `get_linked_entities(omni_identity)` whitelisted API in `excom.excom.api.chat` that fetches all Omni Identity Link child table rows and returns `{linked_doctype, linked_name, role, title}` for each. The `title` is derived from the linked doc (e.g. `lead_name`, `customer_name`) for human-readable display.
+- **Frontend**: Added `useLinkedEntities(omniIdentity)` hook that calls the API. OmniIdentityPanel and MobileContactView now render a "Linked ERP Entities" section with loading/empty/list states. Each entity is shown as a clickable card (doctype badge, title, role) that opens the Frappe Form in a new tab via `/app/{doctype}/{docname}`.
+
+### Impacted Modules
+
+- `excom/excom/api/chat.py` — new `get_linked_entities` method
+- `frontend/src/hooks/useLinkedEntities.ts` — new hook
+- `frontend/src/components/OmniIdentityPanel.tsx` — Linked ERP Entities section
+- `frontend/src/components/mobile/MobileContactView.tsx` — same section for mobile

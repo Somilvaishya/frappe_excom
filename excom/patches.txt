@@ -4,3 +4,4 @@
 excom.patches.v1_0.create_default_excom_channel
 excom.patches.v1_0.migrate_whatsapp_to_excom_messages
 excom.patches.v1_0.migrate_whatsapp_account_to_channel_account
+excom.patches.v1_0.fix_thread_account_doctype

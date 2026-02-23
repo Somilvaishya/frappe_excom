@@ -159,7 +159,15 @@ def send_outbound_message(
     if not to_number:
         frappe.throw(_("No phone number on identity to send to"))
 
-    account = _resolve_thread_account(thread)
+    # Resolve account: prefer Excom Channel Account; fall back to legacy WhatsApp Account
+    account_doctype = thread.account_doctype
+    account_name = thread.account
+    if account_doctype == "WhatsApp Account" and frappe.db.exists("Excom Channel Account", account_name):
+        account = frappe.get_doc("Excom Channel Account", account_name)
+        frappe.db.set_value("Excom Thread", thread_name, "account_doctype", "Excom Channel Account")
+        account_doctype, account_name = "Excom Channel Account", account.name
+    else:
+        account = frappe.get_doc(account_doctype, account_name)
 
     provider_message_id = ""
     delivery_status = "Queued"
@@ -177,8 +185,8 @@ def send_outbound_message(
         "thread": thread_name,
         "omni_identity": thread.omni_identity,
         "channel": thread.channel,
-        "account_doctype": thread.account_doctype,
-        "account": thread.account,
+        "account_doctype": account_doctype,
+        "account": account_name,
         "direction": "Outbound",
         "message_type": message_type,
         "provider_message_id": provider_message_id,
@@ -229,16 +237,36 @@ def update_delivery_status(provider_message_id: str, status: str, conversation_i
 
 
 def _send_whatsapp(account, to_number: str, text: str, message_type: str, media_file: str):
-    """Call WhatsApp Cloud API. Returns (provider_message_id, delivery_status)."""
-    # Support both Excom Channel Account fields and legacy WhatsApp Account fields.
-    token_field = "wa_token" if account.doctype == "Excom Channel Account" else "token"
-    token = account.get_password(token_field)
-    base_url = account.get("wa_url") or account.get("url")
-    version = account.get("wa_version") or account.get("version")
-    phone_id = account.get("wa_phone_id") or account.get("phone_id")
+    """Call WhatsApp Cloud API. Returns (provider_message_id, delivery_status).
+    Supports both Excom Channel Account (wa_* fields) and legacy WhatsApp Account.
+    """
+    from frappe.utils.password import get_decrypted_password
 
-    if not token or not base_url or not version or not phone_id:
-        frappe.throw(_("Missing WhatsApp account configuration (token/url/version/phone_id)"))
+    # Excom Channel Account uses wa_token; legacy WhatsApp Account uses token
+    token = account.get_password("wa_token") or account.get_password("token")
+    if not token:
+        token = get_decrypted_password(
+            account.doctype, account.name, "wa_token", raise_exception=False
+        ) or get_decrypted_password(
+            account.doctype, account.name, "token", raise_exception=False
+        )
+    if not token:
+        frappe.throw(
+            _("No access token for account {0}. Set the Access Token in Excom Channel Account.").format(
+                account.name
+            )
+        )
+
+    # Excom Channel Account: wa_url, wa_version, wa_phone_id; WhatsApp Account: url, version, phone_id
+    base_url = getattr(account, "wa_url", None) or getattr(account, "url", None) or "https://graph.facebook.com"
+    version = getattr(account, "wa_version", None) or getattr(account, "version", None) or "v21.0"
+    phone_id = getattr(account, "wa_phone_id", None) or getattr(account, "phone_id", None)
+    if not phone_id:
+        frappe.throw(
+            _("No Phone Number ID for account {0}. Set it in Excom Channel Account.").format(
+                account.name
+            )
+        )
 
     url = f"{base_url}/{version}/{phone_id}/messages"
     headers = {
@@ -272,7 +300,11 @@ def _send_whatsapp(account, to_number: str, text: str, message_type: str, media_
         return data["messages"][0].get("id", ""), "Sent"
 
     error = data.get("error", {}).get("message", "Unknown error")
-    frappe.throw(_(f"WhatsApp API error: {error}"))
+    error_code = data.get("error", {}).get("code")
+    hint = ""
+    if "expired" in error.lower() or error_code in (190, 102):
+        hint = _(" Update the Access Token in Excom Channel Account ({0}).").format(account.name)
+    frappe.throw(_("WhatsApp API error: {0}.{1}").format(error, hint))
 
 
 def _make_preview(text: str) -> str:
@@ -281,26 +313,3 @@ def _make_preview(text: str) -> str:
         return ""
     clean = re.sub(r"<[^>]+>", "", text)
     return clean[:120]
-
-
-def _resolve_thread_account(thread):
-    """
-    Resolve account doc for a thread with backward compatibility.
-    If thread still points to legacy WhatsApp Account but a matching
-    Excom Channel Account exists, self-heal the thread reference.
-    """
-    if thread.account_doctype == "Excom Channel Account":
-        return frappe.get_doc("Excom Channel Account", thread.account)
-
-    mapped = frappe.db.exists("Excom Channel Account", thread.account)
-    if mapped:
-        frappe.db.set_value(
-            "Excom Thread",
-            thread.name,
-            {"account_doctype": "Excom Channel Account", "account": mapped},
-        )
-        thread.account_doctype = "Excom Channel Account"
-        thread.account = mapped
-        return frappe.get_doc("Excom Channel Account", mapped)
-
-    return frappe.get_doc(thread.account_doctype, thread.account)
