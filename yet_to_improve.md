@@ -308,6 +308,34 @@ doc_events = {
 
 ## Change Log
 
+### 2026-02-24 (Phase 0 + Phase 1)
+Items resolved by Phase 0 and Phase 1 implementation:
+
+- **#1** FIXED — Bulk WhatsApp Message status bug (Phase 0)
+- **#2** FIXED — hooks.py scheduler_events activated (Phase 0)
+- **#3** FIXED — hooks.py doc_events activated (Phase 0)
+- **#4** FIXED — WhatsApp Message timestamp fields added (Phase 1)
+- **#5** FIXED — WhatsApp Message `body` field added (Phase 1)
+- **#6** FIXED — WhatsApp Message media metadata fields added (Phase 1)
+- **#8** FIXED — WhatsApp Account rate limit and health fields added (Phase 1)
+- **#9** FIXED — WhatsApp Account required fields marked (Phase 1)
+- **#10** FIXED — E.164 phone validation utility created (Phase 1)
+- **#11** FIXED — WhatsApp Templates approval lifecycle fields added (Phase 1)
+- **#12** FIXED — WhatsApp Templates button count validation (Phase 1)
+- **#13** FIXED — WhatsApp Notification delay field validation (Phase 1)
+- **#14** FIXED — Webhook idempotency (Phase 0, via thread_service)
+- **#15** FIXED — Bulk WhatsApp Message full validation + failed_count (Phase 1)
+- **#16** FIXED — WhatsApp Recipient List deduplication (Phase 1)
+- **#21** FIXED — WhatsApp Settings consolidation with account flags (Phase 1)
+- **#22** FIXED — N+1 query eliminated (Excom Thread caches, Phase 0+1)
+- **#23** FIXED — Database indexes added via patch (Phase 1)
+- **#24** FIXED — Webhook async processing via frappe.enqueue (Phase 0)
+- **#28** FIXED — Unified error handling with ExcomError hierarchy (Phase 1)
+- **#29** FIXED — Event bus with publish_realtime for 4 events (Phase 1)
+- **#30** FIXED — WhatsApp service layer extraction (Phase 1)
+
+Items still open: #7, #17, #18, #19, #20, #25, #26, #27
+
 ### 2026-02-20
 - Created initial improvement audit after building the Excom Chat frontend.
 - Identified 30 items across 7 categories.

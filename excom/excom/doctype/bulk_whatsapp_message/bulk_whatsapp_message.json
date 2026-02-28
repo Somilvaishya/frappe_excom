@@ -27,7 +27,9 @@
   "scheduled_time",
   "column_break_hwbk",
   "amended_from",
-  "sent_count"
+  "sent_count",
+  "failed_count",
+  "completed_at"
  ],
  "fields": [
   {
@@ -121,6 +123,19 @@
    "fieldname": "sent_count",
    "fieldtype": "Int",
    "label": "Sent Count",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "failed_count",
+   "fieldtype": "Int",
+   "label": "Failed Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "completed_at",
+   "fieldtype": "Datetime",
+   "label": "Completed At",
    "read_only": 1
   },
   {

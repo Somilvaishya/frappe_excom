@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from frappe.utils import flt
 
 from excom.excom.services.thread_service import send_outbound_message
 
@@ -137,3 +138,87 @@ def get_linked_entities(omni_identity: str):
             }
         )
     return result
+
+
+@frappe.whitelist()
+def get_conversation_stats(omni_identity: str):
+    """
+    Returns real conversation statistics across ALL threads for an Omni Identity:
+    - total_messages: total Excom Message count
+    - inbound_count / outbound_count: breakdown by direction
+    - erp_users_replied: whether any ERP user has sent an outbound message
+    - avg_response_time_seconds: average seconds between an inbound message
+      and the next outbound reply (calculated per-thread, then averaged)
+    - channels: list of distinct channels used
+    """
+    empty = {
+        "total_messages": 0,
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "erp_users_replied": False,
+        "avg_response_time_seconds": None,
+        "channels": [],
+    }
+
+    if not omni_identity:
+        return empty
+
+    thread_names = frappe.get_all(
+        "Excom Thread",
+        filters={"omni_identity": omni_identity},
+        pluck="name",
+    )
+
+    if not thread_names:
+        return empty
+
+    channels = list(set(
+        frappe.get_all(
+            "Excom Thread",
+            filters={"name": ["in", thread_names]},
+            pluck="channel",
+        )
+    ))
+
+    messages = frappe.db.sql(
+        """
+        SELECT direction, creation, thread
+        FROM `tabExcom Message`
+        WHERE thread IN %(threads)s
+        ORDER BY thread, creation ASC
+        """,
+        {"threads": thread_names},
+        as_dict=True,
+    )
+
+    total = len(messages)
+    inbound = sum(1 for m in messages if m.direction == "Inbound")
+    outbound = sum(1 for m in messages if m.direction == "Outbound")
+    erp_replied = outbound > 0
+
+    response_times = []
+    last_inbound_at = None
+    current_thread = None
+    for m in messages:
+        if m.thread != current_thread:
+            current_thread = m.thread
+            last_inbound_at = None
+        if m.direction == "Inbound":
+            last_inbound_at = m.creation
+        elif m.direction == "Outbound" and last_inbound_at is not None:
+            delta = (m.creation - last_inbound_at).total_seconds()
+            response_times.append(delta)
+            last_inbound_at = None
+
+    avg_response = None
+    if response_times:
+        avg_response = flt(sum(response_times) / len(response_times), 0)
+
+    return {
+        "total_messages": total,
+        "inbound_count": inbound,
+        "outbound_count": outbound,
+        "erp_users_replied": erp_replied,
+        "avg_response_time_seconds": avg_response,
+        "channels": channels,
+    }

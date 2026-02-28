@@ -3,7 +3,7 @@
 Tracks every hardcoded value, non-functional button, and incomplete feature
 in the current frontend implementation. Updated after each change.
 
-Last updated: 2026-02-24 (v3 -- message sending + scroll fixes)
+Last updated: 2026-02-24 (v4 -- conversation stats from live data)
 
 ---
 
@@ -29,17 +29,17 @@ Last updated: 2026-02-24 (v3 -- message sending + scroll fixes)
 | `SUMMARY` object | Hardcoded sentiment ("positive"), topics, nextActions | Same AI API as desktop |
 | AI Insights text | "This lead shows high engagement..." | AI-generated per contact |
 
-### OmniIdentityPanel.tsx
+### ~~OmniIdentityPanel.tsx~~ -- FIXED
 
 | What | Current Value | Should Be |
 |------|--------------|-----------|
-| Response time | "~5 min" | Calculated from average reply time in conversation messages |
+| ~~Response time~~ | ~~"~5 min"~~ | **FIXED** -- Now fetched from `get_conversation_stats` API. Shows total messages, inbound/outbound breakdown, team replied status, avg response time, and channels -- all from live Excom Message data. |
 
-### MobileContactView.tsx
+### ~~MobileContactView.tsx~~ -- FIXED
 
 | What | Current Value | Should Be |
 |------|--------------|-----------|
-| Response time | "~5m" | Same calculation as OmniIdentityPanel |
+| ~~Response time~~ | ~~"~5m"~~ | **FIXED** -- Same `useConversationStats` hook as desktop. Shows total messages, avg response time, inbound/outbound counts, and team replied badge -- all from live data. |
 
 ### useContacts.ts (hook)
 

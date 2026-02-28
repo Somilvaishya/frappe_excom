@@ -167,15 +167,21 @@ Excom policy:
 Minimum account-level fields:
 
 - account label
-- graph base URL
-- graph version
-- phone number ID
+- graph base URL (reqd)
+- graph version (reqd)
+- phone number ID (reqd, unique)
 - business account ID
 - app ID (if required by feature)
 - webhook verify token
-- encrypted access token
+- encrypted access token (reqd)
 - default incoming/outgoing flags
 - enabled flag
+- **rate_limit_per_second** — provider rate limit (default 80)
+- **rate_limit_per_day** — daily throughput cap (default 1000)
+- **last_health_check** — timestamp of last successful API call
+- **health_status** — Healthy/Degraded/Down
+- **token_expires_at** — for proactive rotation
+- **webhook_url** — auto-computed, read-only
 
 Minimum message-level fields:
 
@@ -184,10 +190,14 @@ Minimum message-level fields:
 - from/to phone
 - content type
 - text/caption/payload
+- **body** — raw plain-text content from webhook
 - attachment reference
 - status
 - conversation/external conversation ID when available
 - related account
+- **queued_at / sent_at / delivered_at / read_at / failed_at** — lifecycle timestamps
+- **failure_reason** — Meta API error detail
+- **media_id / media_url / media_mime_type / media_sha256 / media_caption / media_filename** — incoming media metadata
 
 ## WhatsApp Implementation Status
 

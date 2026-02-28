@@ -20,31 +20,43 @@
   "business_id",
   "is_default_incoming",
   "is_default_outgoing",
-  "allow_auto_read_receipt"
+  "allow_auto_read_receipt",
+  "section_break_health",
+  "rate_limit_per_second",
+  "rate_limit_per_day",
+  "column_break_health",
+  "last_health_check",
+  "health_status",
+  "token_expires_at",
+  "webhook_url"
  ],
  "fields": [
   {
    "fieldname": "token",
    "fieldtype": "Password",
    "label": "Token",
-   "length": 300
+   "length": 300,
+   "reqd": 1
   },
   {
    "fieldname": "url",
    "fieldtype": "Data",
-   "label": "URL"
+   "label": "URL",
+   "reqd": 1
   },
   {
    "fieldname": "version",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Version"
+   "label": "Version",
+   "reqd": 1
   },
   {
    "fieldname": "phone_id",
    "fieldtype": "Data",
    "label": "Phone ID",
-   "unique": 1
+   "unique": 1,
+   "reqd": 1
   },
   {
    "fieldname": "business_id",
@@ -100,6 +112,53 @@
    "fieldname": "allow_auto_read_receipt",
    "fieldtype": "Check",
    "label": "Allow auto read receipt"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_break_health",
+   "fieldtype": "Section Break",
+   "label": "Health & Rate Limits"
+  },
+  {
+   "default": "80",
+   "fieldname": "rate_limit_per_second",
+   "fieldtype": "Int",
+   "label": "Rate Limit Per Second"
+  },
+  {
+   "default": "1000",
+   "fieldname": "rate_limit_per_day",
+   "fieldtype": "Int",
+   "label": "Rate Limit Per Day"
+  },
+  {
+   "fieldname": "column_break_health",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_health_check",
+   "fieldtype": "Datetime",
+   "label": "Last Health Check",
+   "read_only": 1
+  },
+  {
+   "default": "Unknown",
+   "fieldname": "health_status",
+   "fieldtype": "Select",
+   "label": "Health Status",
+   "options": "Unknown\nHealthy\nDegraded\nDown",
+   "read_only": 1
+  },
+  {
+   "fieldname": "token_expires_at",
+   "fieldtype": "Datetime",
+   "label": "Token Expires At"
+  },
+  {
+   "fieldname": "webhook_url",
+   "fieldtype": "Data",
+   "label": "Webhook URL",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,

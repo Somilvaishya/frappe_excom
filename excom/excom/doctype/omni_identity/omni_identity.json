@@ -30,6 +30,8 @@
   "merged_into",
   "column_break_merge",
   "merge_group_id",
+  "needs_review",
+  "potential_duplicate_of",
 
   "aliases_section",
   "aliases",
@@ -173,6 +175,23 @@
    "fieldtype": "Data",
    "label": "Merge Group ID",
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "needs_review",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Needs Review",
+   "description": "Set by system when a potential duplicate identity is detected at creation time."
+  },
+  {
+   "fieldname": "potential_duplicate_of",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Potential Duplicate Of",
+   "options": "Omni Identity",
+   "read_only": 1,
+   "description": "Suspected duplicate identity flagged at creation time for supervisor review."
   },
 
   {

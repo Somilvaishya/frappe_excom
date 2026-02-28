@@ -42,6 +42,21 @@ class WhatsAppNotification(Document):
                     self.reference_doctype,
                 ))
 
+        self.validate_delay_fields()
+
+    def validate_delay_fields(self):
+        """When enable_delay is checked, delay_value must be a positive integer."""
+        if not self.enable_delay:
+            return
+        if not self.delay_value or int(self.delay_value) <= 0:
+            frappe.throw(
+                _("Delay Value must be a positive integer when delay is enabled")
+            )
+        if not self.delay_unit:
+            frappe.throw(
+                _("Delay Unit is required when delay is enabled")
+            )
+
 
     def send_scheduled_message(self) -> dict:
         """Specific to API endpoint Server Scripts."""

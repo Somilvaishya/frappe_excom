@@ -7,11 +7,40 @@ from frappe.model.document import Document
 class WhatsAppRecipientList(Document):
 	def validate(self):
 		self.validate_recipients()
-	
+		self.deduplicate_recipients()
+
 	def validate_recipients(self):
 		if not self.is_new():
 			if not self.recipients:
 				frappe.throw(_("At least one recipient is required"))
+
+	def deduplicate_recipients(self):
+		"""Remove duplicate phone numbers, keeping the first occurrence."""
+		if not self.recipients:
+			return
+		seen = set()
+		unique = []
+		removed = 0
+		for row in self.recipients:
+			phone = (row.mobile_number or "").strip()
+			if phone in seen:
+				removed += 1
+				continue
+			seen.add(phone)
+			unique.append(row)
+		if removed:
+			self.recipients = []
+			for r in unique:
+				self.append("recipients", {
+					"mobile_number": r.mobile_number,
+					"recipient_name": r.get("recipient_name"),
+					"recipient_data": r.get("recipient_data"),
+				})
+			frappe.msgprint(
+				_("Removed {0} duplicate phone number(s)").format(removed),
+				indicator="orange",
+				alert=True,
+			)
 	
 	def import_list_from_doctype(self, doctype, mobile_field, name_field=None, filters=None, limit=None, data_fields=None):
 		"""Import recipients from another DocType"""
@@ -41,10 +70,9 @@ class WhatsAppRecipientList(Document):
 			limit=limit
 		)
 		
-		# Clear existing recipients
 		self.recipients = []
-		
-		# Add recipients
+		seen_phones = set()
+
 		for record in records:
 			if not record.get(mobile_field):
 				continue
@@ -56,6 +84,9 @@ class WhatsAppRecipientList(Document):
 			
 			if not mobile:
 				continue
+			if mobile in seen_phones:
+				continue
+			seen_phones.add(mobile)
 
 			recipient_data = {}
 			if data_fields:

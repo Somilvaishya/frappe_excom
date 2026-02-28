@@ -6,6 +6,7 @@ import os
 import json
 import frappe
 import magic
+from frappe import _
 from frappe.model.document import Document
 from frappe.integrations.utils import make_post_request, make_request
 from frappe.desk.form.utils import get_pdf_link
@@ -21,12 +22,29 @@ class WhatsAppTemplates(Document):
             lang_code = frappe.db.get_value("Language", self.language) or "en"
             self.language_code = lang_code.replace("-", "_")
 
+        self.validate_button_count()
+
         if self.header_type in ["IMAGE", "DOCUMENT"] and self.sample:
             self.get_session_id()
             self.get_media_id()
 
         if not self.is_new():
             self.update_template()
+
+    def validate_button_count(self):
+        """Enforce Meta's button limits: max 3 Quick Reply, max 2 CTA."""
+        if not self.buttons:
+            return
+        quick_reply = sum(1 for b in self.buttons if b.button_type == "Quick Reply")
+        cta = sum(1 for b in self.buttons if b.button_type in ("Visit Website", "Call Phone"))
+        if quick_reply > 3:
+            frappe.throw(
+                _("Quick Reply buttons cannot exceed 3 (found {0})").format(quick_reply)
+            )
+        if cta > 2:
+            frappe.throw(
+                _("CTA buttons (Visit Website / Call Phone) cannot exceed 2 (found {0})").format(cta)
+            )
 
     def set_whatsapp_account(self):
         """Set whatsapp account to default if missing"""

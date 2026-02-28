@@ -1,8 +1,9 @@
-import { X, User, Building2, Mail, Phone, FileText, Clock, MessageCircle, Link2, ExternalLink, Loader2 } from "lucide-react";
+import { X, User, Building2, Mail, Phone, FileText, Clock, MessageCircle, Link2, ExternalLink, Loader2, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Separator } from "../ui/separator";
 import { useLinkedEntities } from "../../hooks/useLinkedEntities";
+import { useConversationStats, formatResponseTime } from "../../hooks/useConversationStats";
 import type { UnifiedContact } from "../../types";
 
 interface MobileContactViewProps {
@@ -27,6 +28,7 @@ export function MobileContactView({ contact, onClose }: MobileContactViewProps) 
   const { contactInfo } = contact;
 
   const { linkedEntities, isLoading: linkedLoading } = useLinkedEntities(contact.id);
+  const { stats, isLoading: statsLoading } = useConversationStats(contact.id);
 
   return (
     <div className="fixed inset-0 z-40 bg-zinc-950 flex flex-col overflow-hidden">
@@ -167,24 +169,56 @@ export function MobileContactView({ contact, onClose }: MobileContactViewProps) 
 
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-white">Conversation Summary</h4>
-            <div className="bg-zinc-900/50 rounded-xl p-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-zinc-800/50 rounded-lg p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <MessageCircle className="w-4 h-4 text-blue-400" />
-                    <p className="text-xs text-zinc-500">Messages</p>
+            {statsLoading ? (
+              <div className="bg-zinc-900/50 rounded-xl p-4 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+                <span className="text-xs text-zinc-500">Loading stats…</span>
+              </div>
+            ) : (
+              <div className="bg-zinc-900/50 rounded-xl p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-zinc-800/50 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <MessageCircle className="w-4 h-4 text-blue-400" />
+                      <p className="text-xs text-zinc-500">Messages</p>
+                    </div>
+                    <p className="text-xl font-semibold text-white">{stats.total_messages}</p>
                   </div>
-                  <p className="text-xl font-semibold text-white">{contact.allMessages.length}</p>
+                  <div className="bg-zinc-800/50 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Clock className="w-4 h-4 text-orange-400" />
+                      <p className="text-xs text-zinc-500">Avg Response</p>
+                    </div>
+                    <p className="text-xl font-semibold text-white">{formatResponseTime(stats.avg_response_time_seconds)}</p>
+                  </div>
                 </div>
-                <div className="bg-zinc-800/50 rounded-lg p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Clock className="w-4 h-4 text-orange-400" />
-                    <p className="text-xs text-zinc-500">Response</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-zinc-800/50 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <ArrowDownLeft className="w-4 h-4 text-cyan-400" />
+                      <p className="text-xs text-zinc-500">Inbound</p>
+                    </div>
+                    <p className="text-xl font-semibold text-white">{stats.inbound_count}</p>
                   </div>
-                  <p className="text-xl font-semibold text-white">~5m</p>
+                  <div className="bg-zinc-800/50 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <ArrowUpRight className="w-4 h-4 text-emerald-400" />
+                      <p className="text-xs text-zinc-500">Outbound</p>
+                    </div>
+                    <p className="text-xl font-semibold text-white">{stats.outbound_count}</p>
+                  </div>
+                </div>
+                <div className="bg-zinc-800/50 rounded-lg p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-zinc-500" />
+                    <p className="text-xs text-zinc-500">Team Replied</p>
+                  </div>
+                  <Badge className={`text-[10px] border ${stats.erp_users_replied ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"}`}>
+                    {stats.erp_users_replied ? "Yes" : "No"}
+                  </Badge>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="space-y-2 pb-6">

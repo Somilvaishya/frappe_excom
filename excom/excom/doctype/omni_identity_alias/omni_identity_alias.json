@@ -50,7 +50,7 @@
    "fieldname": "source",
    "fieldtype": "Select",
    "label": "Source",
-   "options": "Inbound\nManual\nImport"
+   "options": "Inbound\nAuto\nManual\nImport"
   },
   {
    "fieldname": "last_seen",

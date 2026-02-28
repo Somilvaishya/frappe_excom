@@ -19,6 +19,10 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
 import { useLinkedEntities } from "../hooks/useLinkedEntities";
+import {
+  useConversationStats,
+  formatResponseTime,
+} from "../hooks/useConversationStats";
 import type { Conversation } from "../types";
 
 interface OmniIdentityPanelProps {
@@ -60,6 +64,10 @@ export function OmniIdentityPanel({
   const { contactInfo } = conversation;
 
   const { linkedEntities, isLoading: linkedLoading } = useLinkedEntities(
+    conversation.id
+  );
+
+  const { stats, isLoading: statsLoading } = useConversationStats(
     conversation.id
   );
 
@@ -348,29 +356,80 @@ export function OmniIdentityPanel({
               Conversation Summary
             </h4>
             <div className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 rounded-lg p-4 border border-zinc-700">
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-zinc-400">Total Messages</span>
-                  <span className="font-medium text-white">
-                    {conversation.messages.length}
-                  </span>
+              {statsLoading ? (
+                <div className="flex items-center justify-center gap-2 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+                  <span className="text-xs text-zinc-500">Loading stats…</span>
                 </div>
-                <Separator className="bg-zinc-700" />
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-zinc-400">Response Time</span>
-                  <span className="font-medium text-white">~5 min</span>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-zinc-400">
+                      Total Messages
+                    </span>
+                    <span className="font-medium text-white">
+                      {stats.total_messages}
+                    </span>
+                  </div>
+                  <Separator className="bg-zinc-700" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-zinc-400">
+                      Inbound / Outbound
+                    </span>
+                    <span className="font-medium text-white">
+                      {stats.inbound_count} / {stats.outbound_count}
+                    </span>
+                  </div>
+                  <Separator className="bg-zinc-700" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-zinc-400">
+                      Team Replied
+                    </span>
+                    <Badge
+                      className={`text-[10px] border ${
+                        stats.erp_users_replied
+                          ? "bg-green-500/10 text-green-400 border-green-500/20"
+                          : "bg-red-500/10 text-red-400 border-red-500/20"
+                      }`}
+                    >
+                      {stats.erp_users_replied ? "Yes" : "No"}
+                    </Badge>
+                  </div>
+                  <Separator className="bg-zinc-700" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-zinc-400">
+                      Avg Response Time
+                    </span>
+                    <span className="font-medium text-white">
+                      {formatResponseTime(stats.avg_response_time_seconds)}
+                    </span>
+                  </div>
+                  <Separator className="bg-zinc-700" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-zinc-400">Channels</span>
+                    <div className="flex gap-1 flex-wrap justify-end">
+                      {stats.channels.length > 0 ? (
+                        stats.channels.map((ch) => (
+                          <Badge
+                            key={ch}
+                            variant="outline"
+                            className="border-zinc-600 text-zinc-300 text-[10px]"
+                          >
+                            {ch}
+                          </Badge>
+                        ))
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="border-zinc-600 text-zinc-300"
+                        >
+                          {conversation.channel}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <Separator className="bg-zinc-700" />
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-zinc-400">Channel</span>
-                  <Badge
-                    variant="outline"
-                    className="border-zinc-600 text-zinc-300"
-                  >
-                    {conversation.channel}
-                  </Badge>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 

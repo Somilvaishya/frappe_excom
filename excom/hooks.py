@@ -137,36 +137,45 @@ website_route_rules = [
 
 # Document Events
 # ---------------
-# Hook on document methods and events
+# Triggers WhatsApp Notification automation for every DocType event.
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"*": {
+		"validate": "excom.excom.utils.run_server_script_for_doc_event",
+		"on_update": "excom.excom.utils.run_server_script_for_doc_event",
+		"after_insert": "excom.excom.utils.run_server_script_for_doc_event",
+		"on_submit": "excom.excom.utils.run_server_script_for_doc_event",
+		"on_cancel": "excom.excom.utils.run_server_script_for_doc_event",
+		"on_trash": "excom.excom.utils.run_server_script_for_doc_event",
+	}
+}
 
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"excom.tasks.all"
-# 	],
-# 	"daily": [
-# 		"excom.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"excom.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"excom.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"excom.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	# Runs every minute: process delayed notification log queue.
+	"all": [
+		"excom.excom.utils.process_pending_whatsapp_notification_logs",
+		"excom.excom.utils.trigger_whatsapp_notifications_all",
+	],
+	"hourly": [
+		"excom.excom.utils.trigger_whatsapp_notifications_hourly",
+		"excom.excom.utils.trigger_whatsapp_notifications_hourly_long",
+	],
+	"daily": [
+		"excom.excom.utils.trigger_whatsapp_notifications_daily",
+		"excom.excom.utils.trigger_whatsapp_notifications_daily_long",
+	],
+	"weekly": [
+		"excom.excom.utils.trigger_whatsapp_notifications_weekly",
+		"excom.excom.utils.trigger_whatsapp_notifications_weekly_long",
+	],
+	"monthly": [
+		"excom.excom.utils.trigger_whatsapp_notifications_monthly",
+		"excom.excom.utils.trigger_whatsapp_notifications_monthly_long",
+	],
+}
 
 # Testing
 # -------

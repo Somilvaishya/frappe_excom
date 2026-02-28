@@ -9,7 +9,6 @@ import json
 import re
 
 import frappe
-import requests as http_requests
 from frappe import _
 
 from excom.excom.doctype.omni_identity.omni_identity import resolve_identity
@@ -132,6 +131,23 @@ def ingest_inbound_message(
         {"now": now, "preview": preview, "thread": thread_name},
     )
 
+    frappe.publish_realtime(
+        "excom:message_received",
+        {
+            "thread": thread_name,
+            "message": msg.name,
+            "omni_identity": identity_name,
+            "direction": "Inbound",
+            "preview": preview,
+        },
+        after_commit=True,
+    )
+    frappe.publish_realtime(
+        "excom:thread_updated",
+        {"thread": thread_name, "event": "new_inbound"},
+        after_commit=True,
+    )
+
     return msg.name
 
 
@@ -173,9 +189,17 @@ def send_outbound_message(
     delivery_status = "Queued"
 
     if thread.channel == "whatsapp":
-        provider_message_id, delivery_status = _send_whatsapp(
-            account, to_number, content_text, message_type, media_file,
+        from excom.excom.services.whatsapp_service import (
+            send_text_message,
+            send_media_message,
         )
+
+        if message_type in ("Image", "Video", "Audio", "Document") and media_file:
+            result = send_media_message(account, to_number, message_type, media_file, content_text)
+        else:
+            result = send_text_message(account, to_number, content_text)
+        provider_message_id = result.get("provider_message_id", "")
+        delivery_status = result.get("status", "Sent")
 
     now = frappe.utils.now_datetime()
     preview = _make_preview(content_text)
@@ -212,17 +236,36 @@ def send_outbound_message(
         {"now": now, "preview": preview, "thread": thread_name},
     )
 
+    frappe.publish_realtime(
+        "excom:message_sent",
+        {
+            "thread": thread_name,
+            "message": msg.name,
+            "omni_identity": thread.omni_identity,
+            "direction": "Outbound",
+            "preview": preview,
+            "delivery_status": delivery_status,
+        },
+        after_commit=True,
+    )
+    frappe.publish_realtime(
+        "excom:thread_updated",
+        {"thread": thread_name, "event": "new_outbound"},
+        after_commit=True,
+    )
+
     return msg.name
 
 
 def update_delivery_status(provider_message_id: str, status: str, conversation_id: str = ""):
     """Update delivery status on an Excom Message by provider_message_id."""
-    name = frappe.db.get_value(
+    msg = frappe.db.get_value(
         "Excom Message",
         {"provider_message_id": provider_message_id},
-        "name",
+        ["name", "thread"],
+        as_dict=True,
     )
-    if not name:
+    if not msg:
         return
 
     status_map = {
@@ -233,78 +276,20 @@ def update_delivery_status(provider_message_id: str, status: str, conversation_i
     }
     mapped = status_map.get(status, status)
 
-    frappe.db.set_value("Excom Message", name, "delivery_status", mapped)
+    frappe.db.set_value("Excom Message", msg.name, "delivery_status", mapped)
+
+    frappe.publish_realtime(
+        "excom:message_status_updated",
+        {
+            "message": msg.name,
+            "thread": msg.thread,
+            "status": mapped,
+            "provider_message_id": provider_message_id,
+        },
+        after_commit=True,
+    )
 
 
-def _send_whatsapp(account, to_number: str, text: str, message_type: str, media_file: str):
-    """Call WhatsApp Cloud API. Returns (provider_message_id, delivery_status).
-    Supports both Excom Channel Account (wa_* fields) and legacy WhatsApp Account.
-    """
-    from frappe.utils.password import get_decrypted_password
-
-    # Excom Channel Account uses wa_token; legacy WhatsApp Account uses token
-    token = account.get_password("wa_token") or account.get_password("token")
-    if not token:
-        token = get_decrypted_password(
-            account.doctype, account.name, "wa_token", raise_exception=False
-        ) or get_decrypted_password(
-            account.doctype, account.name, "token", raise_exception=False
-        )
-    if not token:
-        frappe.throw(
-            _("No access token for account {0}. Set the Access Token in Excom Channel Account.").format(
-                account.name
-            )
-        )
-
-    # Excom Channel Account: wa_url, wa_version, wa_phone_id; WhatsApp Account: url, version, phone_id
-    base_url = getattr(account, "wa_url", None) or getattr(account, "url", None) or "https://graph.facebook.com"
-    version = getattr(account, "wa_version", None) or getattr(account, "version", None) or "v21.0"
-    phone_id = getattr(account, "wa_phone_id", None) or getattr(account, "phone_id", None)
-    if not phone_id:
-        frappe.throw(
-            _("No Phone Number ID for account {0}. Set it in Excom Channel Account.").format(
-                account.name
-            )
-        )
-
-    url = f"{base_url}/{version}/{phone_id}/messages"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
-
-    to_number = re.sub(r"[^\d]", "", to_number)
-
-    if message_type in ("Image", "Video", "Audio", "Document") and media_file:
-        link = media_file if media_file.startswith("http") else frappe.utils.get_url() + media_file
-        content_key = message_type.lower()
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": to_number,
-            "type": content_key,
-            content_key: {"link": link, "caption": text} if content_key != "audio" else {"link": link},
-        }
-    else:
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": to_number,
-            "type": "text",
-            "text": {"body": text},
-        }
-
-    response = http_requests.post(url, json=payload, headers=headers)
-    data = response.json()
-
-    if response.ok and data.get("messages"):
-        return data["messages"][0].get("id", ""), "Sent"
-
-    error = data.get("error", {}).get("message", "Unknown error")
-    error_code = data.get("error", {}).get("code")
-    hint = ""
-    if "expired" in error.lower() or error_code in (190, 102):
-        hint = _(" Update the Access Token in Excom Channel Account ({0}).").format(account.name)
-    frappe.throw(_("WhatsApp API error: {0}.{1}").format(error, hint))
 
 
 def _make_preview(text: str) -> str:

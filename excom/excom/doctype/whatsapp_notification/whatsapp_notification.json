@@ -215,6 +215,26 @@
    "unique": 1
   },
   {
+   "default": "0",
+   "fieldname": "enable_delay",
+   "fieldtype": "Check",
+   "label": "Enable Delay"
+  },
+  {
+   "depends_on": "eval:doc.enable_delay==1",
+   "fieldname": "delay_value",
+   "fieldtype": "Int",
+   "label": "Delay Value"
+  },
+  {
+   "default": "Minutes",
+   "depends_on": "eval:doc.enable_delay==1",
+   "fieldname": "delay_unit",
+   "fieldtype": "Select",
+   "label": "Delay Unit",
+   "options": "Minutes\nHours\nDays"
+  },
+  {
    "description": "fields to replace button variables, separated by comma",
    "fieldname": "button_fields",
    "fieldtype": "Data",

@@ -13,28 +13,56 @@ from frappe.model.naming import make_autoname
 class BulkWhatsAppMessage(Document):
     def autoname(self):
         self.name = make_autoname("BULK-WA-.YYYY.-.#####")
-    
+
     def validate(self):
-        # self.validate_message()
+        self.validate_template()
         self.validate_recipients()
-    
-    def validate_message(self):
-        if not self.message_content:
-            frappe.throw(_("Message content is required"))
-    
+        self.validate_template_variables()
+        self.validate_scheduled_time()
+
+    def validate_template(self):
+        """Ensure a template is selected when use_template is checked."""
+        if self.use_template and not self.template:
+            frappe.throw(_("Template is required when 'Use Template' is checked"))
+
     def validate_recipients(self):
+        """Ensure recipients exist and count matches actual rows."""
         if not self.recipients and not self.recipient_list:
             frappe.throw(_("At least one recipient or a recipient list is required"))
-        
-        # If recipient list is provided, count recipients
-        if self.recipient_type == 'Recipient List' and self.recipient_list:
-            recipient_count = frappe.db.count("WhatsApp Recipient", {"parent": self.recipient_list})
+
+        if self.recipient_type == "Recipient List" and self.recipient_list:
+            recipient_count = frappe.db.count(
+                "WhatsApp Recipient", {"parent": self.recipient_list}
+            )
             if recipient_count == 0:
                 frappe.throw(_("Selected recipient list has no recipients"))
             self.recipient_count = recipient_count
-        # If individual recipients are provided
         elif self.recipients:
             self.recipient_count = len(self.recipients)
+
+    def validate_template_variables(self):
+        """Validate template_variables is valid JSON when provided."""
+        if not self.template_variables:
+            return
+        try:
+            parsed = json.loads(self.template_variables)
+            if not isinstance(parsed, (list, dict)):
+                frappe.throw(
+                    _("Template Variables must be a JSON array or object")
+                )
+        except (json.JSONDecodeError, ValueError):
+            frappe.throw(
+                _("Template Variables is not valid JSON")
+            )
+
+    def validate_scheduled_time(self):
+        """Warn if scheduled_time is in the past."""
+        if self.scheduled_time and get_datetime(self.scheduled_time) < get_datetime(now()):
+            frappe.msgprint(
+                _("Scheduled time is in the past. Messages will be sent immediately on submit."),
+                indicator="orange",
+                alert=True,
+            )
     
     def on_submit(self):
         self.db_set("status", "Queued")
@@ -72,7 +100,7 @@ class BulkWhatsAppMessage(Document):
         # message_content = self.message_content
         
         # Replace variables in the message if any
-        self.status == "In Progress"
+        self.db_set("status", "In Progress")
         if recipient.get("recipient_data"):
             try:
                 variables = json.loads(recipient.get("recipient_data", "{}"))
@@ -106,16 +134,24 @@ class BulkWhatsAppMessage(Document):
             if self.attach:
                 wa_message.attach = self.attach
         
-        # Set status to queued
         wa_message.status = "Queued"
         try:
             wa_message.insert(ignore_permissions=True)
+            self.db_set("sent_count", cint(self.sent_count) + 1)
         except Exception:
-            self.db_set("status", "Partially Failed")
-        # Update message count
-        self.db_set("sent_count", cint(self.sent_count) + 1)
-        if self.recipient_count == self.sent_count:
-            self.db_set("status", "Completed")
+            self.db_set("failed_count", cint(self.failed_count) + 1)
+            frappe.log_error(
+                title="Bulk WA message creation failed",
+                message=frappe.get_traceback(),
+            )
+
+        processed = cint(self.sent_count) + cint(self.failed_count)
+        if processed >= cint(self.recipient_count):
+            final_status = "Completed" if cint(self.failed_count) == 0 else "Partially Failed"
+            self.db_set({
+                "status": final_status,
+                "completed_at": now(),
+            })
 
     def retry_failed(self):
         """Retry failed messages"""

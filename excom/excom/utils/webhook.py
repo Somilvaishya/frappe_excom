@@ -1,4 +1,5 @@
 """Webhook handler for WhatsApp Cloud API."""
+import datetime
 import json
 
 import frappe
@@ -39,14 +40,46 @@ def get():
 
 
 def post():
-	"""Handle incoming webhook payload."""
+	"""
+	Accept Meta webhook immediately (return 200) and enqueue processing.
+
+	Meta requires a response within 20 seconds or it marks the webhook as
+	failed and retries with exponential back-off. We persist the raw payload
+	for audit, then hand off all CPU-bound work to a background job.
+	"""
 	data = frappe.local.form_dict
 
-	frappe.get_doc({
-		"doctype": "WhatsApp Notification Log",
-		"template": "Webhook",
-		"meta_data": json.dumps(data),
-	}).insert(ignore_permissions=True)
+	# Persist raw payload synchronously so we never lose it even if the job fails.
+	try:
+		frappe.get_doc({
+			"doctype": "WhatsApp Notification Log",
+			"template": "Webhook",
+			"meta_data": json.dumps(data),
+		}).insert(ignore_permissions=True)
+		frappe.db.commit()
+	except Exception:
+		frappe.log_error("Excom: webhook audit log insert failed")
+
+	# Enqueue actual message/status processing asynchronously.
+	frappe.enqueue(
+		"excom.excom.utils.webhook._process_webhook_payload",
+		data_str=json.dumps(data),
+		queue="short",
+		# In unit tests frappe.flags.in_test is True, so jobs run inline.
+		now=frappe.flags.in_test,
+	)
+
+	return Response("", status=200)
+
+
+def _process_webhook_payload(data_str: str):
+	"""
+	Background job: parse and process a Meta webhook payload.
+
+	Called from the enqueue in post(). Receives the raw payload as a JSON
+	string so it can be safely serialized across the job queue boundary.
+	"""
+	data = json.loads(data_str)
 
 	messages = []
 	phone_id = None
@@ -104,7 +137,6 @@ def _process_inbound_message(message, sender_profile_name, channel_account, acco
 	provider_msg_id = message.get("id", "")
 	provider_ts = ""
 	if message.get("timestamp"):
-		import datetime
 		provider_ts = datetime.datetime.fromtimestamp(int(message["timestamp"])).strftime("%Y-%m-%d %H:%M:%S")
 
 	is_reply = bool(message.get("context") and "forwarded" not in message.get("context", {}))
@@ -226,20 +258,47 @@ def _process_status_update(data):
 
 
 def _update_template_status(data):
-	"""Update template status from webhook."""
-	frappe.db.sql(
-		"""UPDATE `tabWhatsApp Templates`
-		SET status = %(event)s
-		WHERE id = %(message_template_id)s""",
-		data,
-	)
+	"""Update template status and approval lifecycle timestamps from webhook."""
+	event = data.get("event", "")
+	template_id = data.get("message_template_id")
+	if not template_id:
+		return
+
+	now = frappe.utils.now_datetime()
+	updates = {"status": event}
+
+	lifecycle_map = {
+		"APPROVED": "approved_at",
+		"REJECTED": "rejected_at",
+		"PAUSED": "paused_at",
+		"PENDING": "submitted_at",
+	}
+	ts_field = lifecycle_map.get(event.upper())
+	if ts_field:
+		updates[ts_field] = now
+
+	reason = data.get("reason") or data.get("rejection_reason") or ""
+	if reason and event.upper() == "REJECTED":
+		updates["rejection_reason"] = reason
+
+	name = frappe.db.get_value("WhatsApp Templates", {"id": template_id}, "name")
+	if name:
+		frappe.db.set_value("WhatsApp Templates", name, updates, update_modified=True)
 
 
 def _update_message_status(data):
-	"""Update delivery status on Excom Message."""
+	"""Update delivery status on Excom Message and WhatsApp Message lifecycle timestamps."""
 	status_entry = data.get("statuses", [{}])[0]
 	provider_id = status_entry.get("id")
 	status = status_entry.get("status")
 
 	if provider_id and status:
 		update_delivery_status(provider_id, status)
+
+		from excom.excom.services.whatsapp_service import wa_update_delivery_status
+		timestamp = ""
+		if status_entry.get("timestamp"):
+			timestamp = datetime.datetime.fromtimestamp(
+				int(status_entry["timestamp"])
+			).strftime("%Y-%m-%d %H:%M:%S")
+		wa_update_delivery_status(provider_id, status, timestamp=timestamp)

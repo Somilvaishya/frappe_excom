@@ -18,6 +18,7 @@
   "template_header_parameters",
   "column_break_5",
   "message",
+  "body",
   "message_type",
   "message_id",
   "conversation_id",
@@ -26,6 +27,22 @@
   "buttons",
   "body_param",
   "whatsapp_account",
+  "section_break_media",
+  "media_id",
+  "media_url",
+  "media_mime_type",
+  "column_break_media",
+  "media_sha256",
+  "media_caption",
+  "media_filename",
+  "section_break_timestamps",
+  "queued_at",
+  "sent_at",
+  "delivered_at",
+  "column_break_timestamps",
+  "read_at",
+  "failed_at",
+  "failure_reason",
   "section_break_flow",
   "flow",
   "flow_cta",
@@ -219,6 +236,104 @@
    "fieldtype": "Link",
    "label": "WhatsApp Account",
    "options": "WhatsApp Account"
+  },
+  {
+   "fieldname": "body",
+   "fieldtype": "Long Text",
+   "label": "Body",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_break_media",
+   "fieldtype": "Section Break",
+   "label": "Media"
+  },
+  {
+   "fieldname": "media_id",
+   "fieldtype": "Data",
+   "label": "Media ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "media_url",
+   "fieldtype": "Data",
+   "label": "Media URL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "media_mime_type",
+   "fieldtype": "Data",
+   "label": "Media MIME Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_media",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "media_sha256",
+   "fieldtype": "Data",
+   "label": "Media SHA256",
+   "read_only": 1
+  },
+  {
+   "fieldname": "media_caption",
+   "fieldtype": "Small Text",
+   "label": "Media Caption",
+   "read_only": 1
+  },
+  {
+   "fieldname": "media_filename",
+   "fieldtype": "Data",
+   "label": "Media Filename",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_break_timestamps",
+   "fieldtype": "Section Break",
+   "label": "Lifecycle Timestamps"
+  },
+  {
+   "fieldname": "queued_at",
+   "fieldtype": "Datetime",
+   "label": "Queued At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sent_at",
+   "fieldtype": "Datetime",
+   "label": "Sent At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "delivered_at",
+   "fieldtype": "Datetime",
+   "label": "Delivered At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_timestamps",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "read_at",
+   "fieldtype": "Datetime",
+   "label": "Read At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "failed_at",
+   "fieldtype": "Datetime",
+   "label": "Failed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "failure_reason",
+   "fieldtype": "Small Text",
+   "label": "Failure Reason",
+   "read_only": 1
   },
   {
    "collapsible": 1,

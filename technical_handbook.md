@@ -545,6 +545,73 @@ New TypeScript types added alongside existing ones:
 - Tailwind config completely replaced; any custom `chat-*` color references in other files will need updating
 - `App.tsx` no longer uses React Router for page routing; the 4-panel layout is rendered directly with state-driven navigation
 
+## Implementation Update (2026-02-24, Phase 0 — Critical Fixes and Identity Hardening)
+
+### What Changed
+
+Six items implemented as Phase 0 of the Excom roadmap. All are in `roadmap/phase_0_critical_fixes.md`.
+
+**0.1 — Bulk WhatsApp Message status bug fixed**
+- File: `excom/excom/doctype/bulk_whatsapp_message/bulk_whatsapp_message.py`
+- `self.status == "In Progress"` (comparison) corrected to `self.db_set("status", "In Progress")` (assignment) in `create_single_message()`.
+
+**0.2 & 0.3 — Scheduler and doc_events activated in hooks.py**
+- `scheduler_events` now calls all WhatsApp notification trigger functions: hourly, daily, weekly, monthly, and their long variants. The `process_pending_whatsapp_notification_logs` and `trigger_whatsapp_notifications_all` run on every `all` tick.
+- `doc_events` now wires `run_server_script_for_doc_event` to all six standard document lifecycle events on every DocType. WhatsApp Notification automation for DocType events is now functional.
+
+**0.4 — Webhook async processing**
+- File: `excom/excom/utils/webhook.py`
+- `post()` now logs the raw payload synchronously (audit), commits, then enqueues `_process_webhook_payload` as a background job via `frappe.enqueue`. Returns `Response("", 200)` immediately.
+- All message parsing, media download, identity resolution, and thread ingestion moved to `_process_webhook_payload(data_str)`.
+- In test mode (`frappe.flags.in_test`), the job runs inline (synchronous).
+
+**0.5 — Idempotency guard confirmed**
+- `thread_service.ingest_inbound_message()` already checks `frappe.db.exists("Excom Message", {"provider_message_id": ...})` before any write. This continues to work correctly inside the background job.
+
+**0.6 — Identity resolution hardened (8-step chain)**
+- File: `excom/excom/doctype/omni_identity/omni_identity.py`
+- Added Step 5: email alias lookup in `Omni Identity Alias` (was missing).
+- Added Step 6: ERPNext reverse lookup via `Contact Phone` — if a Contact with this phone is already linked to an Omni Identity, bridge to that identity.
+- Added Step 7: ERPNext reverse lookup via `Contact Email` — same bridge via email.
+- Added auto-alias registration: when a found identity has a different primary phone/email than the inbound signal, auto-append the new value as an alias (source=Auto) so future lookups resolve directly via step 2/5.
+- Added `_find_potential_duplicate()` helper: checks exact display_name match and last-10-digit phone match. When triggered, sets `needs_review=1` and `potential_duplicate_of` on the new record for supervisor review.
+- New schema fields on `Omni Identity`: `needs_review` (Check, hidden), `potential_duplicate_of` (Link to Omni Identity, hidden).
+- Added `Auto` as a source option on `Omni Identity Alias`.
+
+### Complete 8-Step Resolution Chain
+
+```
+1. normalized_phone on Omni Identity
+2. alias phone/WhatsApp in Omni Identity Alias
+3. channel_user_id in Omni Identity Channel
+4. normalized_email on Omni Identity
+5. alias email in Omni Identity Alias              [NEW]
+6. Contact Phone -> Omni Identity Link bridge      [NEW]
+7. Contact Email -> Omni Identity Link bridge      [NEW]
+8. Create new identity; flag potential duplicates  [NEW]
+```
+
+### Why This Matters
+
+The ERPNext reverse lookup (steps 6-7) is Excom's structural advantage over Rocket.Chat, Chatwoot, and every standalone messaging platform. A Contact record in ERPNext typically has both phone and email, acting as the cross-channel bridge. A person who messages via WhatsApp (phone match) and later sends an email (no phone match) will be resolved to the same Omni Identity as long as a Contact with both identifiers is already linked.
+
+### Impacted Modules
+
+- `excom/excom/doctype/bulk_whatsapp_message/bulk_whatsapp_message.py` — status assignment fix
+- `excom/hooks.py` — scheduler_events and doc_events activated
+- `excom/excom/utils/webhook.py` — async post(), `_process_webhook_payload` extracted, top-level `datetime` import
+- `excom/excom/doctype/omni_identity/omni_identity.py` — hardened `resolve_identity`, new `_find_potential_duplicate` helper
+- `excom/excom/doctype/omni_identity/omni_identity.json` — new `needs_review` and `potential_duplicate_of` fields
+- `excom/excom/doctype/omni_identity_alias/omni_identity_alias.json` — added `Auto` source option
+
+### Migration Implications
+
+- `bench --site <site> migrate` required to apply new Omni Identity fields (`needs_review`, `potential_duplicate_of`).
+- Alias source field now has four options (Inbound, Auto, Manual, Import). Existing aliases with old source values remain valid.
+- All other changes are runtime-only (hooks, scheduler, service logic). No existing data is modified.
+
+---
+
 ## Implementation Update (2026-02-24, Linked ERP Entities in Sidebar)
 
 Linked ERP Entities from the Omni Identity doctype are now displayed in the right sidebar when a conversation is opened.
@@ -560,3 +627,59 @@ Linked ERP Entities from the Omni Identity doctype are now displayed in the righ
 - `frontend/src/hooks/useLinkedEntities.ts` — new hook
 - `frontend/src/components/OmniIdentityPanel.tsx` — Linked ERP Entities section
 - `frontend/src/components/mobile/MobileContactView.tsx` — same section for mobile
+
+---
+
+## Implementation Update (2026-02-24, Phase 1 — Backend Architecture Hardening)
+
+Complete implementation of Phase 1 from the roadmap: schema improvements, validation hardening, performance indexes, unified error handling, WhatsApp service layer extraction, event bus, and settings consolidation.
+
+### What Changed
+
+#### 1.1 Schema Improvements
+- **WhatsApp Message** — added lifecycle timestamp fields (`queued_at`, `sent_at`, `delivered_at`, `read_at`, `failed_at`, `failure_reason`), raw body field (`body`), and media metadata fields (`media_id`, `media_url`, `media_mime_type`, `media_sha256`, `media_caption`, `media_filename`)
+- **WhatsApp Account** — added health/rate-limit fields (`rate_limit_per_second`, `rate_limit_per_day`, `last_health_check`, `health_status`, `token_expires_at`, `webhook_url`). Marked `token`, `url`, `version`, `phone_id` as required.
+- **WhatsApp Templates** — added approval lifecycle fields (`submitted_at`, `approved_at`, `rejected_at`, `rejection_reason`, `paused_at`). Webhook handler now populates these on template status events from Meta.
+- **Bulk WhatsApp Message** — added `failed_count` and `completed_at` fields
+- **WhatsApp Notification** — added missing field definitions for `enable_delay`, `delay_value`, `delay_unit`
+
+#### 1.2 Validation Improvements
+- **E.164 phone validation** — new `excom/excom/utils/phone.py` with `validate_phone_number()` and `normalize_phone()` utilities. Enforces 7-15 digit length, country code requirement.
+- **WhatsApp Templates** — button count validation: max 3 Quick Reply, max 2 CTA (Visit Website/Call Phone)
+- **WhatsApp Notification** — delay field validation: `delay_value` must be positive int, `delay_unit` required when delay is enabled
+- **Bulk WhatsApp Message** — full validation: template requirement when `use_template` checked, `template_variables` JSON format validation, scheduled_time past-date warning, `failed_count` tracking in `create_single_message`
+- **WhatsApp Recipient List** — deduplication logic in `validate()` and `import_list_from_doctype()`. Duplicate phone numbers are silently removed with a user notification.
+
+#### 1.3 Performance
+- **Database indexes** — patch `add_performance_indexes.py` adds 11 composite indexes across `tabWhatsApp Message`, `tabWhatsApp Notification Log`, `tabExcom Message`, and `tabExcom Thread`
+- **Chat API** — verified `get_threads` is a zero-join, zero-subquery single table scan. Already optimal.
+
+#### 1.4 Architecture
+- **Unified error handling** — new `excom/excom/utils/errors.py` with `ExcomError` base class and subclasses: `ExcomValidationError`, `ExcomProviderError`, `ExcomRateLimitError`, `ExcomIdentityError`. All include structured context and `.log()` for Error Log persistence.
+- **Event bus** — `thread_service.py` now calls `frappe.publish_realtime()` for four events: `excom:message_received`, `excom:message_sent`, `excom:message_status_updated`, `excom:thread_updated`. Frontend can subscribe for real-time inbox updates.
+- **WhatsApp service layer** — new `excom/excom/services/whatsapp_service.py` with `send_text_message()`, `send_template_message()`, `send_media_message()`, `wa_update_delivery_status()`. Single entry point for all WhatsApp Cloud API calls. Includes credential resolution for both Excom Channel Account and legacy WhatsApp Account. Thread service's `_send_whatsapp()` replaced with service layer calls.
+- **Settings consolidation** — `WhatsApp Account.on_update()` now syncs `is_default_incoming`/`is_default_outgoing` flags to `WhatsApp Settings` single DocType bidirectionally. Also auto-computes `webhook_url`.
+
+### Impacted Modules
+- `excom/excom/doctype/whatsapp_message/whatsapp_message.json` — 13 new fields
+- `excom/excom/doctype/whatsapp_account/whatsapp_account.json` — 7 new fields, 4 fields marked required
+- `excom/excom/doctype/whatsapp_account/whatsapp_account.py` — validate + sync_to_settings
+- `excom/excom/doctype/whatsapp_templates/whatsapp_templates.json` — 6 new fields
+- `excom/excom/doctype/whatsapp_templates/whatsapp_templates.py` — button count validation
+- `excom/excom/doctype/whatsapp_notification/whatsapp_notification.json` — 3 new field definitions
+- `excom/excom/doctype/whatsapp_notification/whatsapp_notification.py` — delay field validation
+- `excom/excom/doctype/bulk_whatsapp_message/bulk_whatsapp_message.json` — 2 new fields
+- `excom/excom/doctype/bulk_whatsapp_message/bulk_whatsapp_message.py` — full validation + failed_count tracking
+- `excom/excom/doctype/whatsapp_recipient_list/whatsapp_recipient_list.py` — deduplication
+- `excom/excom/utils/phone.py` — new file
+- `excom/excom/utils/errors.py` — new file
+- `excom/excom/services/whatsapp_service.py` — new file
+- `excom/excom/services/thread_service.py` — event bus + service layer integration, removed `_send_whatsapp`
+- `excom/excom/utils/webhook.py` — template lifecycle timestamps, WA message status timestamps
+- `excom/patches/v1_0/add_performance_indexes.py` — new patch
+- `excom/patches.txt` — registered new patch
+
+### Migration Implications
+- `bench --site <site> migrate` required to apply all schema changes (new fields on WhatsApp Message, Account, Templates, Notification, Bulk WhatsApp Message) and run the index patch.
+- All new fields are additive — no existing data is broken.
+- The `token`, `url`, `version`, `phone_id` fields on WhatsApp Account are now required. Existing accounts missing these values will need to be updated before they can be saved again.
