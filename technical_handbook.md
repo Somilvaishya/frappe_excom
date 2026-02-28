@@ -89,6 +89,25 @@ Migration implications:
 - Existing log rows remain valid; new fields are additive.
 - Scheduler now includes pending-log processing for delayed WhatsApp notifications.
 
+## Implementation Update (2026-02-24, Delayed Notification Queue Wiring)
+
+`send_template_message` previously did not check `enable_delay`; all DocType-event notifications were sent immediately. The scheduler processor existed but no code path created Pending logs with `scheduled_for`.
+
+What changed:
+
+- `send_template_message` now checks `self.enable_delay` and `notification_type == "DocType Event"`.
+- When both are true, `_queue_delayed_notification()` creates a `WhatsApp Notification Log` with `status="Pending"`, `scheduled_for`, `reference_doctype`, `reference_name`, `to_number`, and `notification`.
+- The scheduler processor (`process_pending_whatsapp_notification_logs`) picks up due logs and calls `send_template_message` with `force_send=True`, which bypasses the delay branch and sends immediately.
+- Added `notification_log_name` and `force_send` parameters for processor compatibility.
+
+Impacted modules:
+
+- `excom/excom/doctype/whatsapp_notification/whatsapp_notification.py`
+
+Migration implications:
+
+- None. Behaviour is additive; notifications without `enable_delay` unchanged.
+
 ## Sources Studied
 
 - Chatwoot (`chatwoot/chatwoot`): mature omnichannel support inbox, automation, assignments, reports.

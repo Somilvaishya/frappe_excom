@@ -208,13 +208,35 @@ def _process_pending_whatsapp_notification_log(log_name):
         return
 
     notification = frappe.get_doc("WhatsApp Notification", log.notification)
-    notification.send_template_message(
-        reference_doc,
-        phone_no=log.to_number,
-        ignore_condition=True,
-        notification_log_name=log.name,
-        force_send=True,
-    )
+    try:
+        notification.send_template_message(
+            reference_doc,
+            phone_no=log.to_number,
+            ignore_condition=True,
+            notification_log_name=log.name,
+            force_send=True,
+        )
+        frappe.db.set_value(
+            "WhatsApp Notification Log",
+            log_name,
+            {
+                "status": "Sent",
+                "processed_on": now_datetime(),
+            },
+            update_modified=True,
+        )
+    except Exception as e:
+        frappe.db.set_value(
+            "WhatsApp Notification Log",
+            log_name,
+            {
+                "status": "Failed",
+                "reason": str(e),
+                "processed_on": now_datetime(),
+            },
+            update_modified=True,
+        )
+        frappe.log_error(frappe.get_traceback(), "WhatsApp delayed notification failed")
 
 
 def get_channel_account(phone_id=None, channel='whatsapp', account_type='incoming'):

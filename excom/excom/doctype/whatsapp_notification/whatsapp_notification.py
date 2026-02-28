@@ -8,7 +8,7 @@ from frappe.model.document import Document
 from frappe.utils.safe_exec import get_safe_globals, safe_exec
 from frappe.integrations.utils import make_post_request
 from frappe.desk.form.utils import get_pdf_link
-from frappe.utils import add_to_date, nowdate, datetime
+from frappe.utils import add_to_date, nowdate, now_datetime, datetime
 
 from excom.excom.utils import get_whatsapp_account
 
@@ -43,6 +43,32 @@ class WhatsAppNotification(Document):
                 ))
 
         self.validate_delay_fields()
+
+    def _queue_delayed_notification(self, doc, doc_data, phone_number):
+        """Create a Pending WhatsApp Notification Log for delayed dispatch."""
+        unit = (self.delay_unit or "Minutes").lower()
+        value = int(self.delay_value or 1)
+        kwargs = {"minutes": 0, "hours": 0, "days": 0}
+        if unit == "minutes":
+            kwargs["minutes"] = value
+        elif unit == "hours":
+            kwargs["hours"] = value
+        else:
+            kwargs["days"] = value
+
+        scheduled_for = add_to_date(now_datetime(), **kwargs, as_datetime=True)
+        to_number = self.format_number(phone_number) if phone_number else ""
+
+        frappe.get_doc({
+            "doctype": "WhatsApp Notification Log",
+            "notification": self.name,
+            "status": "Pending",
+            "scheduled_for": scheduled_for,
+            "reference_doctype": doc_data.get("doctype"),
+            "reference_name": doc_data.get("name"),
+            "to_number": to_number,
+            "template": self.template,
+        }).insert(ignore_permissions=True)
 
     def validate_delay_fields(self):
         """When enable_delay is checked, delay_value must be a positive integer."""
@@ -102,7 +128,15 @@ class WhatsAppNotification(Document):
             self.notify(data, template_account=template.get("whatsapp_account"))
 
 
-    def send_template_message(self, doc: Document, phone_no=None, default_template=None, ignore_condition=False):
+    def send_template_message(
+        self,
+        doc: Document,
+        phone_no=None,
+        default_template=None,
+        ignore_condition=False,
+        notification_log_name=None,
+        force_send=False,
+    ):
         """Specific to Document Event triggered Server Scripts."""
         if self.disabled:
             return
@@ -122,6 +156,11 @@ class WhatsAppNotification(Document):
                 phone_number = phone_no or doc_data[self.field_name]
             else:
                 phone_number = phone_no
+
+            # Queue as delayed when enable_delay; processor will call back with force_send=True
+            if self.enable_delay and not force_send and self.notification_type == "DocType Event":
+                self._queue_delayed_notification(doc, doc_data, phone_number)
+                return
 
             data = {
                 "messaging_product": "whatsapp",
@@ -241,9 +280,9 @@ class WhatsAppNotification(Document):
                             })
 
 
-            self.notify(data, doc_data, template_account=template.whatsapp_account)
+            self.notify(data, doc_data, template_account=template.whatsapp_account, force_send=force_send)
 
-    def notify(self, data, doc_data=None, template_account=None):
+    def notify(self, data, doc_data=None, template_account=None, force_send=False):
         """Notify."""
         # Use template's whatsapp account if available, otherwise use default outgoing account
         if template_account:
@@ -324,6 +363,8 @@ class WhatsAppNotification(Document):
                 indicator="red",
                 alert=True
             )
+            if force_send:
+                raise
         finally:
             if not success:
                 meta = {"error": error_message}
