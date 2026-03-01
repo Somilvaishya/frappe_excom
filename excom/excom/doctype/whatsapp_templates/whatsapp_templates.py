@@ -5,6 +5,12 @@
 import os
 import json
 import frappe
+
+try:
+    import magic
+except ImportError:
+    magic = None
+
 from frappe import _
 from frappe.model.document import Document
 from frappe.integrations.utils import make_post_request, make_request
@@ -56,15 +62,13 @@ class WhatsAppTemplates(Document):
 
     def get_session_id(self):
         """Upload media."""
+        if magic is None:
+            frappe.throw(_("python-magic is required for media uploads. Install it with: pip install python-magic"))
+
         self.get_settings()
         file_path = self.get_absolute_path(self.sample)
-        try:
-            import magic
-            mime = magic.Magic(mime=True)
-            file_type = mime.from_file(file_path)
-        except ImportError:
-            import mimetypes
-            file_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+        mime = magic.Magic(mime=True)
+        file_type = mime.from_file(file_path)
 
         payload = {
             'file_length': os.path.getsize(file_path),
