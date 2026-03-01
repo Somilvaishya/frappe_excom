@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Building2,
   Mail,
@@ -14,6 +15,7 @@ import {
   ExternalLink,
   Link2,
   Loader2,
+  Receipt,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -23,6 +25,12 @@ import {
   useConversationStats,
   formatResponseTime,
 } from "../hooks/useConversationStats";
+import {
+  useRelatedDocuments,
+  getDocDate,
+  getDocPartyName,
+  type ERPDocument,
+} from "../hooks/useRelatedInvoices";
 import type { Conversation } from "../types";
 
 interface OmniIdentityPanelProps {
@@ -62,12 +70,17 @@ export function OmniIdentityPanel({
   onAccountSwitch,
 }: OmniIdentityPanelProps) {
   const { contactInfo } = conversation;
+  const [activeTab, setActiveTab] = useState<"profile" | "invoices">("profile");
 
   const { linkedEntities, isLoading: linkedLoading } = useLinkedEntities(
     conversation.id
   );
 
   const { stats, isLoading: statsLoading } = useConversationStats(
+    conversation.id
+  );
+
+  const { documents, isLoading: docsLoading } = useRelatedDocuments(
     conversation.id
   );
 
@@ -83,6 +96,20 @@ export function OmniIdentityPanel({
     return acc;
   }, {} as Record<string, typeof allAccounts>);
 
+  const docSections: { key: keyof typeof documents; label: string; icon: React.ReactElement; color: string; doctype: string }[] = [
+    { key: "quotations", label: "Quotations", icon: <FileText className="w-3.5 h-3.5 text-indigo-400" />, color: "indigo", doctype: "Quotation" },
+    { key: "sales_orders", label: "Sales Orders", icon: <FileText className="w-3.5 h-3.5 text-cyan-400" />, color: "cyan", doctype: "Sales Order" },
+    { key: "delivery_notes", label: "Delivery Notes", icon: <FileText className="w-3.5 h-3.5 text-teal-400" />, color: "teal", doctype: "Delivery Note" },
+    { key: "sales_invoices", label: "Sales Invoices", icon: <DollarSign className="w-3.5 h-3.5 text-green-400" />, color: "green", doctype: "Sales Invoice" },
+    { key: "rfqs", label: "RFQs", icon: <FileText className="w-3.5 h-3.5 text-violet-400" />, color: "violet", doctype: "Request for Quotation" },
+    { key: "purchase_orders", label: "Purchase Orders", icon: <FileText className="w-3.5 h-3.5 text-sky-400" />, color: "sky", doctype: "Purchase Order" },
+    { key: "purchase_receipts", label: "Purchase Receipts", icon: <Receipt className="w-3.5 h-3.5 text-amber-400" />, color: "amber", doctype: "Purchase Receipt" },
+    { key: "purchase_invoices", label: "Purchase Invoices", icon: <Receipt className="w-3.5 h-3.5 text-blue-400" />, color: "blue", doctype: "Purchase Invoice" },
+  ];
+
+  const totalDocs = Object.values(documents).reduce((s, arr) => s + arr.length, 0);
+  const hasDocs = totalDocs > 0;
+
   return (
     <div className="w-80 bg-gradient-to-b from-zinc-900 to-zinc-950 border-l border-zinc-800 flex flex-col h-full shrink-0 overflow-hidden">
       <div className="shrink-0 p-4 border-b border-zinc-800">
@@ -90,7 +117,39 @@ export function OmniIdentityPanel({
         <p className="text-xs text-zinc-400 mt-1">Unified contact profile</p>
       </div>
 
+      {/* Tab Header */}
+      <div className="shrink-0 flex border-b border-zinc-800">
+        <button
+          onClick={() => setActiveTab("profile")}
+          className={`flex-1 py-2.5 text-xs font-medium text-center transition-colors border-b-2 ${
+            activeTab === "profile"
+              ? "border-blue-500 text-white bg-zinc-800/30"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          <User className="w-3.5 h-3.5 inline mr-1" />
+          Profile
+        </button>
+        <button
+          onClick={() => setActiveTab("invoices")}
+          className={`flex-1 py-2.5 text-xs font-medium text-center transition-colors border-b-2 ${
+            activeTab === "invoices"
+              ? "border-blue-500 text-white bg-zinc-800/30"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          <Receipt className="w-3.5 h-3.5 inline mr-1" />
+          Transactions
+          {totalDocs > 0 && (
+            <Badge className="ml-1.5 text-[9px] px-1.5 h-4 bg-blue-500/20 text-blue-300 border-0">
+              {totalDocs}
+            </Badge>
+          )}
+        </button>
+      </div>
+
       <div className="flex-1 min-h-0 overflow-y-auto">
+        {activeTab === "profile" ? (
         <div className="p-4 space-y-6">
           {/* Contact Card */}
           <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
@@ -441,6 +500,14 @@ export function OmniIdentityPanel({
             <Button
               variant="outline"
               className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+              onClick={() => {
+                const entity = linkedEntities[0];
+                if (entity) {
+                  window.open(getFormUrl(entity.linked_doctype, entity.linked_name), "_blank");
+                } else {
+                  window.open(getFormUrl("Omni Identity", conversation.id), "_blank");
+                }
+              }}
             >
               <FileText className="w-4 h-4 mr-2" />
               View in ERPNext
@@ -448,6 +515,13 @@ export function OmniIdentityPanel({
             <Button
               variant="outline"
               className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+              onClick={() => {
+                const email = contactInfo.email;
+                if (email) {
+                  window.open(`mailto:${email}`, "_blank");
+                }
+              }}
+              disabled={!contactInfo.email}
             >
               <Mail className="w-4 h-4 mr-2" />
               Send Email
@@ -455,12 +529,94 @@ export function OmniIdentityPanel({
             <Button
               variant="outline"
               className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+              onClick={() => {
+                const base = window.location.origin;
+                const contact = linkedEntities.find((e) => e.linked_doctype === "Contact");
+                const params = contact
+                  ? `?party_type=Contact&party=${encodeURIComponent(contact.linked_name)}`
+                  : "";
+                window.open(`${base}/app/event/new${params}`, "_blank");
+              }}
             >
               <Clock className="w-4 h-4 mr-2" />
               Schedule Meeting
             </Button>
           </div>
         </div>
+        ) : (
+        <div className="p-4 space-y-5">
+          {docsLoading ? (
+            <div className="flex items-center justify-center gap-2 py-12">
+              <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+              <span className="text-sm text-zinc-500">Loading transactions...</span>
+            </div>
+          ) : !hasDocs ? (
+            <div className="text-center py-12">
+              <div className="w-12 h-12 rounded-full bg-zinc-800/50 flex items-center justify-center mx-auto mb-3">
+                <Receipt className="w-6 h-6 text-zinc-600" />
+              </div>
+              <p className="text-sm text-zinc-400">No transactions found</p>
+              <p className="text-xs text-zinc-600 mt-1">
+                Link a Customer or Supplier to see documents
+              </p>
+            </div>
+          ) : (
+            docSections
+              .filter((sec) => documents[sec.key].length > 0)
+              .map((sec) => (
+                <div key={sec.key} className="space-y-2">
+                  <h4 className="text-xs font-medium text-white flex items-center gap-2">
+                    {sec.icon}
+                    {sec.label}
+                    <Badge className={`ml-auto text-[9px] px-1.5 h-4 bg-${sec.color}-500/20 text-${sec.color}-300 border-0`}>
+                      {documents[sec.key].length}
+                    </Badge>
+                  </h4>
+                  <div className="space-y-1.5">
+                    {documents[sec.key].map((doc: ERPDocument) => (
+                      <a
+                        key={doc.name}
+                        href={getFormUrl(sec.doctype, doc.name)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group block p-2.5 rounded-lg bg-zinc-800/30 border border-zinc-700 hover:border-blue-500/40 hover:bg-zinc-800/50 transition-all"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-medium text-white truncate">{doc.name}</span>
+                          <Badge className={`text-[9px] px-1.5 h-4 border ${
+                            doc.status === "Completed" || doc.status === "Paid" || doc.status === "Delivered"
+                              ? "bg-green-500/10 text-green-400 border-green-500/20"
+                            : doc.status === "Overdue" || doc.status === "Cancelled"
+                              ? "bg-red-500/10 text-red-400 border-red-500/20"
+                            : doc.status === "Draft"
+                              ? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
+                            : "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                          }`}>
+                            {doc.status}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-zinc-500">{getDocDate(doc)}</span>
+                          <span className="text-zinc-300 font-medium">
+                            {doc.currency} {(doc.grand_total || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        {doc.outstanding_amount != null && doc.outstanding_amount > 0 && (
+                          <div className="text-[10px] text-orange-400 text-right mt-0.5">
+                            {doc.currency} {doc.outstanding_amount.toLocaleString()} due
+                          </div>
+                        )}
+                        {getDocPartyName(doc) && (
+                          <p className="text-[10px] text-zinc-500 mt-0.5 truncate">{getDocPartyName(doc)}</p>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ))
+          )}
+        </div>
+        )}
       </div>
     </div>
   );

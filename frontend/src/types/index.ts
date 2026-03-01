@@ -11,6 +11,10 @@ export interface ExcomThread {
   omni_identity: string;
   channel: string;
   account: string;
+  primary_email?: string;
+  company?: string;
+  assigned_to_name?: string;
+  assigned_to_avatar?: string;
 }
 
 export interface ExcomMessage {
@@ -25,6 +29,8 @@ export interface ExcomMessage {
   reply_to: string;
   created_by_user: string;
   sender_name: string;
+  is_internal?: number;
+  content_json?: string;
 }
 
 export interface Account {
@@ -42,9 +48,13 @@ export interface Message {
   timestamp: Date;
   sender: "user" | "contact" | "ai";
   status?: "sent" | "delivered" | "read";
-  type?: "text" | "image" | "document" | "audio";
+  type?: "text" | "image" | "document" | "audio" | "email";
   mediaUrl?: string;
   channel?: string;
+  isInternal?: boolean;
+  isEmail?: boolean;
+  contentJson?: string;
+  rawDirection?: "Inbound" | "Outbound";
   sentBy?: {
     name: string;
     avatar: string;

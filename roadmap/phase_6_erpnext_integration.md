@@ -14,6 +14,8 @@ This is where Excom becomes fundamentally superior to Rocket.Chat, Chatwoot, and
 
 ## 6.1 Auto-Create Lead/Opportunity from Conversation
 
+> **Note — Partially covered by Phase 3.5:** Phase 3.5's CRM sync service (`crm_sync_service.py`) already handles automatic `CRM Lead` creation and `CRM Deal` creation (when pipeline stage reaches Quotation), triggered on every pipeline stage advance. This section should focus on: (a) ERPNext `Lead` creation (if still relevant alongside CRM Lead), (b) the one-click `Opportunity` creation UI, and (c) configurable auto-creation toggle in Excom Settings.
+
 ### The Gap
 When a new unknown contact messages, agents must manually go to CRM and create a Lead. This breaks flow and loses context.
 
@@ -38,6 +40,8 @@ Add "Create Opportunity" button in `OmniIdentityPanel.tsx`:
 ---
 
 ## 6.2 Customer Lifecycle Tracking
+
+> **Note -- Partially covered by Phase 3.5:** Phase 3.5's pipeline system tracks the sales journey from New through Won/Lost on the Omni Identity level, with CRM Lead and CRM Deal auto-creation. The `ERPLifecycleTimeline.tsx` component below is still needed to visualize the ERPNext document chain (Lead to Opportunity to Quotation to Sales Order to Customer) with amounts and statuses. The Transactions tab (Phase 3 work) already shows individual documents; this timeline adds the chronological journey view.
 
 ### The Vision
 Show the complete business journey inline in the conversation sidebar:

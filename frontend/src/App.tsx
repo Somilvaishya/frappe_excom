@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { FrappeProvider } from "frappe-react-sdk";
 import { Toaster } from "sonner";
 import { LeftSidebar } from "./components/LeftSidebar";
@@ -8,11 +8,28 @@ import { OmniIdentityPanel } from "./components/OmniIdentityPanel";
 import { AIAssistantDrawer } from "./components/AIAssistantDrawer";
 import { MobileApp } from "./components/mobile/MobileApp";
 import { useThreads } from "./hooks/useContacts";
+import { useRealtimeThreads } from "./hooks/useRealtimeThreads";
 import type { UnifiedContact, Conversation } from "./types";
 
-const getSiteName = () => {
-  // @ts-expect-error frappe boot object
-  return window.frappe?.boot?.sitename ?? import.meta.env.VITE_SITE_NAME;
+const getSiteName = (): string => {
+  // Priority: frappe boot → env var → current hostname
+  const fromBoot = (window as any).frappe?.boot?.sitename;
+  if (fromBoot) return fromBoot;
+
+  const fromEnv = import.meta.env.VITE_SITE_NAME;
+  if (fromEnv) return fromEnv;
+
+  return window.location.hostname;
+};
+
+const getSocketPort = (): string | undefined => {
+  const fromEnv = import.meta.env.VITE_SOCKET_PORT;
+  if (fromEnv) return String(fromEnv);
+
+  const fromBoot = (window as any).frappe?.boot?.socketio_port;
+  if (fromBoot != null) return String(fromBoot);
+
+  return undefined;
 };
 
 function ExcomDashboard() {
@@ -27,7 +44,12 @@ function ExcomDashboard() {
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  const { unifiedContacts } = useThreads(searchQuery);
+  const { unifiedContacts, refresh: refreshThreads } = useThreads(searchQuery);
+
+  const handleThreadUpdate = useCallback(() => {
+    refreshThreads();
+  }, [refreshThreads]);
+  useRealtimeThreads(handleThreadUpdate);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -127,6 +149,8 @@ function ExcomDashboard() {
           <ChannelTabsView
             contact={selectedContact}
             onOpenAIAssistant={() => setIsAIAssistantOpen(true)}
+            activeAccountId={selectedAccountId || selectedContact.activeAccountId}
+            onAccountSwitch={handleAccountSwitch}
           />
 
           {!isAIAssistantOpen && unifiedConversation && (
@@ -140,6 +164,7 @@ function ExcomDashboard() {
             isOpen={isAIAssistantOpen}
             onClose={() => setIsAIAssistantOpen(false)}
             contactName={selectedContact.contactName}
+            threadId={selectedAccountId || selectedContact.activeAccountId}
           />
         </>
       ) : (
@@ -178,14 +203,7 @@ function App() {
   return (
     <FrappeProvider
       url={import.meta.env.VITE_FRAPPE_PATH ?? ""}
-      socketPort={
-        import.meta.env.VITE_SOCKET_PORT
-          ? import.meta.env.VITE_SOCKET_PORT
-          : typeof window !== "undefined" &&
-            (window as any).frappe?.boot?.socketio_port != null
-          ? String((window as any).frappe.boot.socketio_port)
-          : undefined
-      }
+      socketPort={getSocketPort()}
       siteName={getSiteName()}
     >
       <Toaster

@@ -108,3 +108,14 @@ The immediate objective is to establish a coherent architecture and language bef
 - Mobile experience ensures operators can respond from any device without losing context.
 - Architectural intent: UI now matches the backend's omnichannel ambition (Omni Identity, Excom Thread, Channel Accounts).
 
+### 2026-02-24 — Phase 2: Frontend Completion
+
+- **Reduce cognitive load**: Realtime updates eliminate the mental overhead of "is this data current?" — operators see messages appear instantly without refreshing.
+- **Contact enrichment** populates the identity panel with real data (avatar, email, company). Operators no longer need to context-switch to ERP to understand who they're talking to.
+- **File attachments** bridge the gap between "chat tool" and "work tool" — operators can send documents, images, and media without leaving the conversation.
+- **AI suggestions from real data** (not hardcoded) establish the pattern for LLM integration. Even the stub creates value: recent outbound messages as reply templates, ERP-linked action items.
+- **Quick actions** (View in ERPNext, Send Email, Schedule Meeting, Take Over) directly connect communication to business workflow. This is the core product thesis: communication is not separate from work.
+- **Account switching fix** ensures that the conversation timeline follows the account, not the UI state. The principle: data determines view, not the other way around.
+- **Optimistic send** creates the perception of speed even when the backend is processing. Error recovery restores the message to input, preserving the operator's work.
+- **Mobile contacts and calls tabs** complete the bottom navigation. "Coming Soon" for calls is honest about scope while establishing the navigation pattern.
+

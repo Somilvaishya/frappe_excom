@@ -8,26 +8,29 @@ Master index for all implementation phases. Derived from competitive analysis of
 
 | Phase | Name | Effort | Priority | Status |
 |---|---|---|---|---|
-| 0 | Critical Fixes and Stabilization | 1-2 days | IMMEDIATE | Not Started |
-| 1 | Schema, Validation, Backend Hardening | 5-8 days | HIGH | Not Started |
-| 2 | Frontend Completion and Real-Time UX | 7-10 days | HIGH | Not Started |
-| 3 | Omnichannel Expansion | 15-20 days | MEDIUM-HIGH | Not Started |
+| 0 | Critical Fixes and Stabilization | 1-2 days | IMMEDIATE | COMPLETED |
+| 1 | Schema, Validation, Backend Hardening | 5-8 days | HIGH | COMPLETED |
+| 2 | Frontend Completion and Real-Time UX | 7-10 days | HIGH | COMPLETED |
+| 3 | Omnichannel Expansion | 15-20 days | MEDIUM-HIGH | Partial (3.3, 3.5 done) |
+| 3.5 | Pipeline, Teams, CRM Sync | 10-14 days | MEDIUM-HIGH | Not Started |
 | 4 | Routing, Queues, SLA, Workflow | 12-15 days | MEDIUM | Not Started |
 | 5 | AI Integration | 12-18 days | MEDIUM | Not Started |
 | 6 | Deep ERPNext Integration | 10-14 days | MEDIUM | Not Started |
 | 7 | Security, Permissions, Access Control | 8-12 days | HIGH | Not Started |
 | 8 | Analytics, Reporting, Governance | 8-12 days | MEDIUM | Not Started |
 
-Total estimated effort: 78-117 days
+Total estimated effort: 88-131 days
 
 ---
 
 ## Dependency Graph
 
-Phase 0 (Critical Fixes)
-  -> Phase 1 (Backend Hardening)
-    -> Phase 2 (Frontend) -> Phase 5 (AI)
+Phase 0 (Critical Fixes) [DONE]
+  -> Phase 1 (Backend Hardening) [DONE]
+    -> Phase 2 (Frontend) [DONE] -> Phase 5 (AI)
     -> Phase 3 (Omnichannel) -> Phase 4 (Routing/SLA)
+    -> Phase 3.5 (Pipeline/Teams/CRM) -> Phase 4 (builds on 3.5 teams + assignment)
+    -> Phase 3.5 (Pipeline/Teams/CRM) -> Phase 6 (builds on 3.5 CRM sync)
     -> Phase 7 (Security) runs parallel with Phases 3-6
     -> Phase 6 (ERPNext) -> Phase 8 (Analytics)
 
@@ -39,6 +42,7 @@ Phase 0 (Critical Fixes)
 - phase_1_backend_hardening.md - Schema, validation, indexes, service layer, event bus
 - phase_2_frontend_completion.md - Realtime, enrichment, attachments, AI stubs, mobile nav
 - phase_3_omnichannel_expansion.md - Email, web chat, canned responses, tags, internal notes
+- phase_3.5_pipeline_teams_crm.md - Pipeline stages, team management, assignment engine, CRM sync
 - phase_4_routing_queues_sla.md - Departments, routing, queues, SLA, priorities, transfers
 - phase_5_ai_integration.md - Profiling, suggestions, summaries, sentiment, translation
 - phase_6_erpnext_integration.md - Lead auto-create, lifecycle, tickets, invoices, products
@@ -54,6 +58,9 @@ Phase 0 (Critical Fixes)
 | Excom Canned Response | 3 | Pre-defined response templates |
 | Excom Tag | 3 | Conversation categorization labels |
 | Excom Thread Tag | 3 | Child table linking tags to threads |
+| Excom Team | 3.5 | Team grouping for agents |
+| Excom Team Member | 3.5 | Child table: user-team membership |
+| Excom Assignment Log | 3.5 | Audit trail for thread assignments |
 | Excom Department | 4 | Organizational units for routing |
 | Excom Department Member | 4 | Agent-department assignments |
 | Excom Routing Rule | 4 | Routing conditions and actions |

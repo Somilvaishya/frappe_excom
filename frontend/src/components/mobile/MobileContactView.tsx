@@ -1,9 +1,15 @@
-import { X, User, Building2, Mail, Phone, FileText, Clock, MessageCircle, Link2, ExternalLink, Loader2, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { X, User, Building2, Mail, Phone, FileText, Clock, MessageCircle, Link2, ExternalLink, Loader2, ArrowUpRight, ArrowDownLeft, DollarSign, Receipt } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Separator } from "../ui/separator";
 import { useLinkedEntities } from "../../hooks/useLinkedEntities";
 import { useConversationStats, formatResponseTime } from "../../hooks/useConversationStats";
+import {
+  useRelatedDocuments,
+  getDocDate,
+  getDocPartyName,
+  type ERPDocument,
+} from "../../hooks/useRelatedInvoices";
 import type { UnifiedContact } from "../../types";
 
 interface MobileContactViewProps {
@@ -29,6 +35,21 @@ export function MobileContactView({ contact, onClose }: MobileContactViewProps) 
 
   const { linkedEntities, isLoading: linkedLoading } = useLinkedEntities(contact.id);
   const { stats, isLoading: statsLoading } = useConversationStats(contact.id);
+  const { documents, isLoading: docsLoading } = useRelatedDocuments(contact.id);
+
+  const mobileSections: { key: keyof typeof documents; label: string; icon: React.ReactElement; doctype: string }[] = [
+    { key: "quotations", label: "Quotation", icon: <FileText className="w-3.5 h-3.5 text-indigo-400" />, doctype: "Quotation" },
+    { key: "sales_orders", label: "Sales Order", icon: <FileText className="w-3.5 h-3.5 text-cyan-400" />, doctype: "Sales Order" },
+    { key: "delivery_notes", label: "Delivery Note", icon: <FileText className="w-3.5 h-3.5 text-teal-400" />, doctype: "Delivery Note" },
+    { key: "sales_invoices", label: "Sales Invoice", icon: <DollarSign className="w-3.5 h-3.5 text-green-400" />, doctype: "Sales Invoice" },
+    { key: "rfqs", label: "RFQ", icon: <FileText className="w-3.5 h-3.5 text-violet-400" />, doctype: "Request for Quotation" },
+    { key: "purchase_orders", label: "Purchase Order", icon: <FileText className="w-3.5 h-3.5 text-sky-400" />, doctype: "Purchase Order" },
+    { key: "purchase_receipts", label: "Purchase Receipt", icon: <Receipt className="w-3.5 h-3.5 text-amber-400" />, doctype: "Purchase Receipt" },
+    { key: "purchase_invoices", label: "Purchase Invoice", icon: <Receipt className="w-3.5 h-3.5 text-blue-400" />, doctype: "Purchase Invoice" },
+  ];
+
+  const totalDocs = Object.values(documents).reduce((s, arr) => s + arr.length, 0);
+  const hasDocs = totalDocs > 0;
 
   return (
     <div className="fixed inset-0 z-40 bg-zinc-950 flex flex-col overflow-hidden">
@@ -221,15 +242,104 @@ export function MobileContactView({ contact, onClose }: MobileContactViewProps) 
             )}
           </div>
 
+          {/* Transactions Section */}
+          {(docsLoading || hasDocs) && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-white flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-green-400" />
+                Transactions
+                {totalDocs > 0 && (
+                  <Badge className="ml-auto text-[9px] px-1.5 h-4 bg-blue-500/20 text-blue-300 border-0">{totalDocs}</Badge>
+                )}
+              </h4>
+              {docsLoading ? (
+                <div className="bg-zinc-900/50 rounded-xl p-4 flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+                  <span className="text-xs text-zinc-500">Loading transactions...</span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {mobileSections
+                    .filter((sec) => documents[sec.key].length > 0)
+                    .map((sec) => (
+                      <div key={sec.key} className="space-y-1.5">
+                        <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
+                          {sec.icon}
+                          {sec.label}s ({documents[sec.key].length})
+                        </div>
+                        {documents[sec.key].map((doc: ERPDocument) => (
+                          <a
+                            key={doc.name}
+                            href={getFormUrl(sec.doctype, doc.name)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block p-3 rounded-xl bg-zinc-900/50 border border-zinc-800 active:bg-zinc-800/50 transition-colors"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-medium text-white truncate">{doc.name}</span>
+                              <Badge className={`text-[9px] px-1.5 h-4 border ${
+                                doc.status === "Completed" || doc.status === "Paid" || doc.status === "Delivered"
+                                  ? "bg-green-500/10 text-green-400 border-green-500/20"
+                                : doc.status === "Overdue" || doc.status === "Cancelled"
+                                  ? "bg-red-500/10 text-red-400 border-red-500/20"
+                                : doc.status === "Draft"
+                                  ? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
+                                : "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                              }`}>
+                                {doc.status}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="text-zinc-500">{getDocDate(doc)}</span>
+                              <span className="text-zinc-300 font-medium">{doc.currency} {(doc.grand_total || 0).toLocaleString()}</span>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2 pb-6">
             <h4 className="text-sm font-medium text-white mb-3">Quick Actions</h4>
-            <Button variant="outline" className="w-full justify-start border-zinc-700 hover:bg-zinc-800 h-12">
+            <Button
+              variant="outline"
+              className="w-full justify-start border-zinc-700 hover:bg-zinc-800 h-12"
+              onClick={() => {
+                const entity = linkedEntities[0];
+                if (entity) {
+                  window.open(getFormUrl(entity.linked_doctype, entity.linked_name), "_blank");
+                } else {
+                  window.open(getFormUrl("Omni Identity", contact.id), "_blank");
+                }
+              }}
+            >
               <FileText className="w-5 h-5 mr-3" />View in ERPNext
             </Button>
-            <Button variant="outline" className="w-full justify-start border-zinc-700 hover:bg-zinc-800 h-12">
+            <Button
+              variant="outline"
+              className="w-full justify-start border-zinc-700 hover:bg-zinc-800 h-12"
+              onClick={() => {
+                if (contactInfo.email) window.open(`mailto:${contactInfo.email}`, "_blank");
+              }}
+              disabled={!contactInfo.email}
+            >
               <Mail className="w-5 h-5 mr-3" />Send Email
             </Button>
-            <Button variant="outline" className="w-full justify-start border-zinc-700 hover:bg-zinc-800 h-12">
+            <Button
+              variant="outline"
+              className="w-full justify-start border-zinc-700 hover:bg-zinc-800 h-12"
+              onClick={() => {
+                const base = window.location.origin;
+                const contactLink = linkedEntities.find((e) => e.linked_doctype === "Contact");
+                const params = contactLink
+                  ? `?party_type=Contact&party=${encodeURIComponent(contactLink.linked_name)}`
+                  : "";
+                window.open(`${base}/app/event/new${params}`, "_blank");
+              }}
+            >
               <Clock className="w-5 h-5 mr-3" />Schedule Meeting
             </Button>
           </div>

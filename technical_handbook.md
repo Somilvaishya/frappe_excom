@@ -702,3 +702,229 @@ Complete implementation of Phase 1 from the roadmap: schema improvements, valida
 - `bench --site <site> migrate` required to apply all schema changes (new fields on WhatsApp Message, Account, Templates, Notification, Bulk WhatsApp Message) and run the index patch.
 - All new fields are additive — no existing data is broken.
 - The `token`, `url`, `version`, `phone_id` fields on WhatsApp Account are now required. Existing accounts missing these values will need to be updated before they can be saved again.
+
+---
+
+## Phase 2: Frontend Completion and Real-Time UX (2026-02-24)
+
+### What Changed
+
+#### 2.1 Realtime Message Updates
+- Created `useRealtimeMessages(threadId, onNewMessage)` hook — subscribes to `excom:message_received`, `excom:message_sent`, `excom:message_status_updated` via `useFrappeEventListener`.
+- Created `useRealtimeThreads(onThreadUpdate)` hook — subscribes to `excom:thread_updated` to auto-refresh thread list.
+- Wired into `App.tsx` (thread list), `ChannelTabsView.tsx` and `MobileChannelView.tsx` (message list). Messages and threads now update in realtime without polling.
+
+#### 2.2 Contact Data Enrichment
+- Extended `get_threads` API to JOIN `tabOmni Identity` (for `primary_email`, `image/avatar_url`) and `tabUser` (for `assigned_to_name`, `assigned_to_avatar`).
+- Added `_enrich_company()` helper that batch-fetches company names from linked Contact/Lead/Customer via `Omni Identity Link`.
+- `ExcomThread` type extended with `primary_email`, `avatar_url`, `company`, `assigned_to_name`, `assigned_to_avatar`.
+- `useContacts.ts` now populates `contactAvatar`, `contactInfo.email`, `contactInfo.company`, `assignedTo.name/avatar` from API data instead of hardcoded empty strings.
+
+#### 2.3 File Attachment Support
+- Extended `send_message` API with `message_type` and `media_url` parameters.
+- Created `useFileUpload` hook using `useFrappeFileUpload` — handles file picker, drag-and-drop, upload progress.
+- Wired Paperclip and Image buttons in `ChannelTabsView.tsx` (with drag-and-drop zone) and `MobileChannelView.tsx`.
+- Media messages (image, document, video, audio) are uploaded via Frappe File API then sent via `send_outbound_message`.
+
+#### 2.4 AI Assistant — Stub API
+- Created `get_ai_suggestions(thread_id)` API that computes data from message history:
+  - `suggested_replies`: Last 3 unique outbound messages as suggestions.
+  - `summary`: Message count + last activity timestamp.
+  - `next_actions`: Derived from linked ERP entity statuses (Lead follow-ups, Customer reviews).
+  - `insights`: Average response time, engagement ratio, best contact time from inbound message timestamps.
+- Created `useAISuggestions` hook.
+- Replaced all hardcoded data in `AIAssistantDrawer.tsx` and `MobileAIDrawer.tsx` with live API data.
+- "Generate More Suggestions" button calls `refresh()`.
+- Suggested reply click calls `onUseSuggestion` callback.
+- "Start" on actions opens relevant Frappe form in new tab.
+
+#### 2.5 Quick Action Buttons
+- **View in ERPNext**: Opens first linked entity's form (or Omni Identity if none linked).
+- **Send Email**: Opens `mailto:` link using `contactInfo.email`.
+- **Schedule Meeting**: Opens `/app/event/new` with `party_type=Contact&party=<name>` if a Contact link exists.
+- **Take Over**: Created `assign_thread(thread_id, user)` API. Wired button in both `ChannelTabsView.tsx` and `MobileChannelView.tsx`.
+
+#### 2.6 Mobile Navigation Completion
+- Added `MobileContactsList.tsx` component — searchable alphabetical list of all Omni Identities with channel badges.
+- Added "Calls" tab placeholder with "Coming Soon" empty state.
+- Updated `MobileApp.tsx` with `activeTab` state and `handleTabSwitch` for Chats/Calls/Contacts bottom navigation.
+- Added view types `contacts_tab` and `calls_tab`.
+
+#### 2.7 Account Switching
+- Fixed sync issue: `ChannelTabsView` now accepts `activeAccountId` prop from parent and syncs internal state via `useEffect`.
+- When an account card is clicked in `OmniIdentityPanel`, the parent's `selectedAccountId` updates, which propagates to `ChannelTabsView`, which updates its internal state and triggers `useMessages` re-fetch.
+- Channel tab also switches to match the selected account's channel.
+
+#### 2.8 Response Time Calculation
+- Created `get_response_metrics(omni_identity)` API (dedicated endpoint).
+- `get_conversation_stats` already returns `avg_response_time_seconds` computed from actual message timestamps.
+- `formatResponseTime` utility already formats seconds into "~Xm" / "~Xh" strings.
+- Verified wiring in `OmniIdentityPanel` and `MobileContactView`.
+
+#### 2.9 Message Input UX Polish
+- **Optimistic Send**: Messages appear immediately in the chat with "Sending..." indicator. Removed on API success (real message replaces via refresh) or restored to input on failure.
+- **Error Recovery**: On send failure, message text is restored to input field and error toast shown.
+- **Enter/Shift+Enter**: Enter sends, Shift+Enter preserved for newline. `e.preventDefault()` added to stop form submission.
+- **Character Limit**: WhatsApp 4096 character limit enforced. Counter appears when >90% of limit reached, turns red at limit.
+
+### New Files
+- `frontend/src/hooks/useRealtimeMessages.ts`
+- `frontend/src/hooks/useRealtimeThreads.ts`
+- `frontend/src/hooks/useFileUpload.ts`
+- `frontend/src/hooks/useAISuggestions.ts`
+- `frontend/src/components/mobile/MobileContactsList.tsx`
+
+### Modified Files
+- `excom/excom/api/chat.py` — extended `get_threads`, `send_message`; added `get_ai_suggestions`, `assign_thread`, `get_response_metrics`
+- `frontend/src/App.tsx` — realtime thread updates, account switching props
+- `frontend/src/types/index.ts` — extended `ExcomThread` interface
+- `frontend/src/hooks/useContacts.ts` — enriched contact data mapping
+- `frontend/src/components/ChannelTabsView.tsx` — realtime, file upload, optimistic send, char count, account sync, take over
+- `frontend/src/components/mobile/MobileChannelView.tsx` — realtime, file upload, optimistic send, take over
+- `frontend/src/components/AIAssistantDrawer.tsx` — live AI data
+- `frontend/src/components/mobile/MobileAIDrawer.tsx` — live AI data
+- `frontend/src/components/mobile/MobileApp.tsx` — tab navigation, contacts/calls views
+- `frontend/src/components/OmniIdentityPanel.tsx` — functional quick action buttons
+- `frontend/src/components/mobile/MobileContactView.tsx` — functional quick action buttons
+
+### Migration Implications
+- No schema migrations required. All changes are API and frontend.
+- New API endpoints are additive and backward-compatible.
+
+---
+
+## Phase 3: Core Data Structures & Productivity Tools (2026-02-28)
+
+### 3.1 Canned Responses
+
+**New DocType: `Excom Canned Response`**
+- Fields: `title` (Data, reqd), `shortcode` (Data, reqd, unique), `content` (Small Text, reqd), `category` (Select: General/Sales/Support/Billing), `channel` (Select: All/WhatsApp/Email/Instagram), `is_global` (Check, default 1)
+- Controller validates shortcode: strips leading `/`, lowercases, replaces spaces with `_`
+- Permissions: System Manager (full CRUD), All (create, read, write for personal responses)
+
+**New API: `get_canned_responses(search, channel)`**
+- Returns global responses + current user's personal responses (is_global=0 && owner=session.user)
+- Filters by channel (includes "All" responses) and search (matches title, shortcode, content)
+
+**Frontend Integration:**
+- `useCannedResponses(search, channel)` hook — fetches when popover is open (null search = skip)
+- `CannedResponsePopover` component — appears above input when user types `/`, supports arrow key navigation + Enter/Tab to select + Esc to close
+- Wired into `ChannelTabsView` and `MobileChannelView` input areas
+- Selecting a canned response replaces the entire input text with the response content
+
+### 3.2 Internal Notes
+
+**DocType Change: `Excom Message`**
+- Added `is_internal` (Check, default 0) field — marks messages as internal team-only notes
+
+**New API: `send_internal_note(thread_id, content)`**
+- Creates an Excom Message with `is_internal=1`, `direction=Outbound`, `delivery_status=Read`
+- Does NOT trigger any outbound channel delivery (no WhatsApp/email sent)
+- Publishes `excom:message_received` realtime event with `is_internal: True`
+
+**Backend Change: `get_messages`**
+- Now includes `m.is_internal` in SELECT — all notes returned inline with regular messages
+
+**Frontend Integration:**
+- `Message` interface extended with `isInternal?: boolean`
+- `useMessages` hook maps `is_internal` → `isInternal`
+- Message/Note toggle added to input area (both desktop and mobile)
+- Note mode: amber-themed UI, Lock icon, "Only visible to your team" indicator
+- Internal notes render as centered amber-colored cards with "Internal Note" badge
+- Send button changes to amber StickyNote icon in note mode
+
+### 3.3 ERP Invoices Tab
+
+**New API: `get_related_invoices(omni_identity)`**
+- Fetches `Omni Identity Link` to find linked Customers and Suppliers
+- Queries `Sales Invoice` (for Customers) and `Purchase Invoice` (for Suppliers)
+- Returns `{sales_invoices: [...], purchase_invoices: [...]}` with posting_date, grand_total, outstanding_amount, status, currency
+- Excludes cancelled invoices (docstatus != 2), limits to 20 most recent per type
+
+**Frontend Integration:**
+- `useRelatedInvoices(omniIdentity)` hook
+- `OmniIdentityPanel`: converted to tabbed interface ("Profile" + "Invoices" tabs)
+  - Profile tab contains all existing content
+  - Invoices tab shows Sales and Purchase Invoices with status badges (Paid=green, Overdue=red, Unpaid=orange)
+  - Each invoice links to ERPNext form, shows outstanding amounts
+  - Tab badge shows total invoice count
+- `MobileContactView`: invoices section added before Quick Actions (flat list, no tabs)
+
+### New Files (Phase 3)
+- `excom/excom/doctype/excom_canned_response/excom_canned_response.json`
+- `excom/excom/doctype/excom_canned_response/excom_canned_response.py`
+- `excom/excom/doctype/excom_canned_response/__init__.py`
+- `excom/excom/doctype/excom_canned_response/test_excom_canned_response.py`
+- `frontend/src/hooks/useCannedResponses.ts`
+- `frontend/src/hooks/useRelatedInvoices.ts`
+- `frontend/src/components/CannedResponsePopover.tsx`
+
+### Modified Files (Phase 3)
+- `excom/excom/doctype/excom_message/excom_message.json` — added `is_internal` field
+- `excom/excom/api/chat.py` — added `get_canned_responses`, `send_internal_note`, `get_related_invoices`; updated `get_messages` SELECT
+- `frontend/src/types/index.ts` — added `isInternal` to Message, `is_internal` to ExcomMessage
+- `frontend/src/hooks/useMessages.ts` — maps `is_internal`
+- `frontend/src/components/ChannelTabsView.tsx` — canned response popover, note mode toggle, internal note rendering
+- `frontend/src/components/mobile/MobileChannelView.tsx` — canned response popover, note mode toggle, internal note rendering
+- `frontend/src/components/OmniIdentityPanel.tsx` — tabbed Profile/Invoices UI
+- `frontend/src/components/mobile/MobileContactView.tsx` — invoices section
+
+### Migration Implications (Phase 3)
+- `bench migrate` required — creates `tabExcom Canned Response` table and adds `is_internal` column to `tabExcom Message`
+- All new APIs are additive and backward-compatible
+- No existing data affected
+
+---
+
+## Phase 3.1: Email Channel Integration (Gmail API)
+
+### What Changed
+Added full email channel integration using Gmail API as the storage backend. Email bodies are NEVER stored in the Frappe database. Only lightweight metadata pointers are persisted locally.
+
+### Why It Changed
+Email is a critical communication channel for B2B and customer support workflows. The Gmail API approach was chosen over IMAP/POP because:
+1. Bodies remain in Gmail, eliminating DB bloat and storage costs
+2. Gmail's search syntax is vastly superior to local full-text search
+3. OAuth2 via Connected App provides secure, token-refreshing authentication
+4. History API enables efficient incremental sync (no re-scanning)
+
+### Architecture Decisions
+- **Gmail as storage backend** — Excom only stores metadata (Message-ID, Thread-ID, From, Subject, Date, 150-char snippet)
+- **On-demand body fetch** — Full body retrieved from Gmail API when agent opens an email, cached in session memory only
+- **Deleted email handling** — Stored metadata shown with "no longer available" notice if Gmail returns 404
+- **Search delegation** — All search goes through Gmail API query syntax, no local full-text indexing
+- **Thread key format** — `email:{account_name}:{gmail_thread_id}` maps Gmail threads to Excom Threads
+
+### Impacted Modules
+- `Excom Channel Account` DocType — new email/Gmail OAuth2 fields
+- `Excom Message` DocType — added "Email" to message_type options
+- `thread_service.py` — email channel guard on `send_outbound_message()`
+- `hooks.py` — email polling added to scheduler_events["all"]
+
+### New Files (Phase 3.1)
+- `excom/excom/services/gmail_service.py` — Gmail API wrapper (OAuth2, metadata, body, send, history, search)
+- `excom/excom/channels/email/__init__.py`
+- `excom/excom/channels/email/inbound.py` — Polling job (incremental + initial sync)
+- `excom/excom/channels/email/outbound.py` — Send via Gmail API
+- `excom/excom/api/email.py` — API endpoints (get_email_body, search_emails, send_email, etc.)
+- `excom/patches/v1_0/seed_email_channel.py` — Seed email Excom Channel record
+- `frontend/src/components/EmailMessageCard.tsx` — Expandable email card component
+- `frontend/src/components/EmailCompose.tsx` — Email compose form
+- `frontend/src/hooks/useEmailBody.ts` — On-demand body fetch hook
+
+### Modified Files (Phase 3.1)
+- `excom/excom/doctype/excom_channel_account/excom_channel_account.json` — email OAuth2 fields
+- `excom/excom/doctype/excom_channel_account/excom_channel_account.js` — authorize button handler
+- `excom/excom/doctype/excom_message/excom_message.json` — "Email" added to message_type
+- `excom/excom/services/thread_service.py` — email channel guard
+- `excom/excom/api/chat.py` — content_json in get_messages for email
+- `excom/hooks.py` — email polling scheduler
+- `excom/patches.txt` — seed_email_channel patch registered
+- `frontend/src/types/index.ts` — isEmail, contentJson, rawDirection fields
+- `frontend/src/hooks/useMessages.ts` — email type mapping
+- `frontend/src/components/ChannelTabsView.tsx` — EmailMessageCard + EmailCompose integration
+
+### Migration Implications (Phase 3.1)
+- `bench migrate` required — adds email fields to `tabExcom Channel Account`, "Email" option to message_type, seeds email channel
+- Patch `seed_email_channel` creates the `Excom Channel` record for email
+- No existing data affected — all changes are additive

@@ -14,6 +14,8 @@ Build the operational backbone: intelligent routing, queue management, SLA enfor
 
 ## 4.1 Department System
 
+> **Note — Builds on Phase 3.5:** Phase 3.5 introduces `Excom Team` as a lightweight User-based team system with members, round-robin assignment, and channel defaults. `Excom Department` should be built as a higher-level organizational unit that _groups_ multiple Excom Teams (e.g., "Sales Department" contains "Telesales Team" + "Field Sales Team"), rather than duplicating team/member logic. Department-level features (fallback routing, business hours, channel restrictions) layer on top of the team foundation.
+
 ### Excom Department DocType
 - department_name (Data), description, is_enabled (Check)
 - channels (Table MultiSelect to Excom Channel)
@@ -42,6 +44,9 @@ Create `excom/excom/services/routing_service.py`:
 Rules evaluate in priority order. First match wins.
 
 ### 4.2.3 Auto-Assignment on Inbound
+
+> **Note — Foundation in Phase 3.5:** Phase 3.5 already implements channel-default-team auto-assignment with round-robin via `team_service.reassign_thread()`. This section should build _on top_ of that with rule-based routing: evaluate routing rules first, and if a rule matches, override the default team assignment. The round-robin function from `team_service.py` should be reused rather than reimplemented.
+
 In thread_service.ingest_inbound_message():
 1. If thread has no assigned_to, evaluate routing rules
 2. Determine target department
@@ -118,6 +123,8 @@ Complexity: Medium
 ---
 
 ## 4.7 Conversation Transfer
+
+> **Note — Foundation in Phase 3.5:** Phase 3.5's `team_service.reassign_thread()` already covers agent-to-agent transfers, team-to-team transfers (with round-robin or queue), and take-over flows, including assignment logging. This section should focus on the _additional_ transfer capabilities not covered by Phase 3.5: `return_to_queue()` (unassign and put back in department queue), escalation transfers (triggered by SLA breach), hop counting, and the transfer comment/system message insertion.
 
 ### Transfer Service
 `excom/excom/services/transfer_service.py`:

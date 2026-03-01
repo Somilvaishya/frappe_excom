@@ -31,7 +31,8 @@
   "template",
   "column_break_rel",
   "reference_doctype",
-  "reference_name"
+  "reference_name",
+  "is_internal"
  ],
  "fields": [
   {
@@ -68,7 +69,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Type",
-   "options": "Text\nImage\nVideo\nAudio\nDocument\nLocation\nInteractive\nTemplate\nFlow\nReaction\nContact\nButton",
+   "options": "Text\nImage\nVideo\nAudio\nDocument\nLocation\nInteractive\nTemplate\nFlow\nReaction\nContact\nButton\nEmail",
    "reqd": 1
   },
   {
@@ -193,11 +194,18 @@
    "fieldtype": "Dynamic Link",
    "label": "Reference Name",
    "options": "reference_doctype"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_internal",
+   "fieldtype": "Check",
+   "label": "Internal Note",
+   "description": "Internal notes are visible only to agents, not sent to the customer"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-23 00:00:00.000000",
+ "modified": "2026-02-28 19:00:00.000000",
  "modified_by": "Administrator",
  "module": "Excom",
  "name": "Excom Message",

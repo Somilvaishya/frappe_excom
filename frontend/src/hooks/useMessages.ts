@@ -25,6 +25,10 @@ export function useMessages(threadId: string) {
       status: mapDeliveryStatus(msg.delivery_status),
       type: mapMessageType(msg.message_type),
       mediaUrl: msg.media_file || undefined,
+      isInternal: Boolean(msg.is_internal),
+      isEmail: msg.message_type === "Email",
+      contentJson: msg.content_json || undefined,
+      rawDirection: msg.direction,
       sentBy: msg.sender_name
         ? { name: msg.sender_name, avatar: "" }
         : undefined,
@@ -53,12 +57,13 @@ function mapDeliveryStatus(
 
 function mapMessageType(
   type: string
-): "text" | "image" | "document" | "audio" | undefined {
-  const map: Record<string, "text" | "image" | "document" | "audio"> = {
+): "text" | "image" | "document" | "audio" | "email" | undefined {
+  const map: Record<string, "text" | "image" | "document" | "audio" | "email"> = {
     Text: "text",
     Image: "image",
     Document: "document",
     Audio: "audio",
+    Email: "email",
   };
   return map[type] || "text";
 }

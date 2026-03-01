@@ -53,9 +53,9 @@ export function useThreads(search: string = "") {
           contactName: latestThread.display_name,
           contactAvatar: "",
           contactInfo: {
-            email: "",
+            email: latestThread.primary_email || "",
             phone: latestThread.primary_phone || "",
-            company: "",
+            company: latestThread.company || "",
             erpEntity: undefined,
           },
           status: "offline",
@@ -64,7 +64,10 @@ export function useThreads(search: string = "") {
           totalUnreadCount: totalUnread,
           aiStatus: undefined,
           assignedTo: latestThread.assigned_to
-            ? { name: latestThread.assigned_to, avatar: "" }
+            ? {
+                name: latestThread.assigned_to_name || latestThread.assigned_to,
+                avatar: latestThread.assigned_to_avatar || "",
+              }
             : undefined,
           allAccounts,
           activeAccountId: allAccounts[0]?.id || "",

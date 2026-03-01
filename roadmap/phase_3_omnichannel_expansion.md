@@ -6,47 +6,45 @@ Dependency: Phase 1 (service layer, event bus), Phase 2 (frontend functional)
 
 ---
 
+## Implementation Status
+
+| Section | Status |
+|---------|--------|
+| 3.1 Email Channel (Gmail API) | COMPLETED |
+| 3.2 Web Chat Widget | Not Started |
+| 3.3 Canned Responses | COMPLETED |
+| 3.4 Conversation Tags | Not Started |
+| 3.5 Internal Notes | COMPLETED |
+| 3.6 Message Features | Not Started |
+
+---
+
 ## Objective
 
 Expand Excom beyond WhatsApp-only into a true omnichannel platform. Add Email and Web Chat as conversation channels, and build agent productivity tools (canned responses, tags, internal notes) that work across all channels.
 
 ---
 
-## 3.1 Email Channel Integration
+## 3.1 Email Channel Integration (Gmail API) — COMPLETED
 
-### What Rocket.Chat Has
-`IEmailInbox` with full SMTP/IMAP config, department routing, sender info, and bidirectional email conversations.
+> **Architecture:** Gmail is the storage backend. Email bodies are NEVER stored in Frappe DB. Only metadata pointers (Message-ID, Thread-ID, From, Subject, Date, 150-char snippet) are persisted. Full body fetched on-demand from Gmail API. Deleted emails handled gracefully. Search delegates to Gmail query syntax.
 
-### Excom Implementation
+### Implementation Details
 
-#### 3.1.1 Excom Channel — Seed Email Channel
-- Add patch to seed `Excom Channel` record: `name=email`, `channel_label=Email`, `is_enabled=1`.
-- **Complexity:** Low
+#### Backend
+- **`Excom Channel Account`** extended with Gmail OAuth2 fields (`email_address`, `email_connected_app`, `email_connected_user`, `email_last_history_id`, sync settings)
+- **`gmail_service.py`** — Gmail API wrapper using Frappe Connected App OAuth2 (auto-refresh). Methods: `get_message_metadata()`, `get_message_full()`, `send_email()`, `get_history()`, `search_messages()`
+- **`channels/email/inbound.py`** — Polling via Gmail History API (incremental) with fallback to `messages.list` (initial sync). Resolves Omni Identity from sender email, upserts thread with `thread_key=email:{account}:{gmail_thread_id}`
+- **`channels/email/outbound.py`** — Sends via Gmail API, creates metadata-only Excom Message stub
+- **`api/email.py`** — Endpoints: `get_email_body` (on-demand fetch), `search_emails` (Gmail delegation), `send_email`, `check_gmail_connection`, `manual_sync`
+- **Scheduler:** `poll_all_email_accounts` added to `all` scheduler events in hooks.py
+- **Patch:** `seed_email_channel.py` seeds the `email` Excom Channel record
 
-#### 3.1.2 Email Account DocType (or Reuse)
-Frappe already has `Email Account` DocType. Evaluate reuse:
-- If sufficient: create `Excom Channel Account` link to `Email Account`.
-- If insufficient: add wrapper fields for Excom-specific config (department routing, auto-thread matching).
-- **Complexity:** Medium
-
-#### 3.1.3 Email Connector Adapter
-Create `excom/excom/channels/email/` adapter:
-- `inbound.py`: Hook into Frappe's email pulling to ingest incoming emails as `Excom Message` records via `thread_service.ingest_inbound_message()`.
-- `outbound.py`: Send outbound emails via Frappe's email API, record as `Excom Message`.
-- `utils.py`: Email-to-thread matching (by In-Reply-To header, subject line, or sender identity).
-
-Key design decisions:
-- Thread key for email: `email:{account}:{conversation_id}` where `conversation_id` is derived from email thread headers.
-- Direction mapping: `from` address determines inbound vs outbound.
-- Omni Identity resolution: match sender email against `normalized_email` or `Omni Identity Alias`.
-
-- **Complexity:** High
-
-#### 3.1.4 Email in Frontend
-- Add "Email" tab to `ChannelTabsView.tsx` channel tabs.
-- Render email messages with subject line, HTML body preview, attachment list.
-- Email compose: rich text editor for outbound emails (subject, body, CC/BCC).
-- **Complexity:** High
+#### Frontend
+- **`EmailMessageCard.tsx`** — Expandable email card: shows subject + snippet collapsed, loads full body from Gmail on expand, handles deleted emails with notice
+- **`EmailCompose.tsx`** — Compose form with To, Cc, Subject, body; supports reply threading
+- **`useEmailBody.ts`** — Hook for on-demand body fetching
+- Integrated into `ChannelTabsView.tsx` — email messages render as cards, compose button appears for email channels
 
 ---
 
@@ -98,7 +96,9 @@ When no agents are available:
 
 ---
 
-## 3.3 Canned Responses
+## 3.3 Canned Responses — COMPLETED
+
+> **Status:** Implemented during Phase 3 work. DocType `Excom Canned Response` created with shortcode, title, content, category, channel, and is_global fields. Backend API `get_canned_responses(search, channel)` added to `chat.py`. Frontend `CannedResponsePopover` component built with `/` trigger, search, category filtering, and keyboard navigation. Integrated into both `ChannelTabsView.tsx` and `MobileChannelView.tsx`.
 
 ### What Rocket.Chat Has
 `IOmnichannelCannedResponse`: shortcut codes, rich text, scoped to user/department/global, tagged.
@@ -164,7 +164,9 @@ Add `Excom Thread Tag` child table on `Excom Thread`:
 
 ---
 
-## 3.5 Internal Notes
+## 3.5 Internal Notes — COMPLETED
+
+> **Status:** Implemented during Phase 3 work. `is_internal` (Check) field added to `Excom Message` DocType. Backend API `send_internal_note(thread_id, content)` added to `chat.py`. Frontend Message/Note toggle built into both `ChannelTabsView.tsx` and `MobileChannelView.tsx` with amber styling for notes. Internal notes are never sent to customers via any channel.
 
 ### Excom Psychological Handbook Requirement
 "Internal notes and customer-facing messages must be impossible to confuse."
@@ -208,9 +210,56 @@ Add `Excom Thread Tag` child table on `Excom Thread`:
 - [ ] Emails arrive as Excom Messages and appear in the inbox
 - [ ] Outbound emails sent from chat UI are delivered
 - [ ] Web chat widget loads on external page and connects to backend
-- [ ] Canned responses trigger with `/` prefix and insert content
+- [x] Canned responses trigger with `/` prefix and insert content
 - [ ] Tags can be added/removed from threads and filtered in sidebar
-- [ ] Internal notes are visually distinct and never sent to customers
+- [x] Internal notes are visually distinct and never sent to customers
+- [ ] Message reactions render correctly
+- [ ] Pinned messages appear in dedicated section
+
+---
+
+## Handbook Updates Required
+
+- `technical_handbook.md`: Document email adapter, web chat architecture, new DocTypes
+- `whatsapp_handbook.md`: No changes (WhatsApp unaffected)
+- `psychological_handbook.md`: Note omnichannel vision becoming reality
+tomer messages in thread preview.
+
+- **Complexity:** Medium
+
+---
+
+## 3.6 Message Features
+
+### 3.6.1 Message Reactions
+- Add `reactions` JSON field on `Excom Message`.
+- Agents can react with emoji to messages (internal-only for now).
+- Store as `{"emoji": ["user_id1", "user_id2"]}`.
+- UI: reaction bar below message bubble, emoji picker on hover/long-press.
+- **Complexity:** Medium
+
+### 3.6.2 Message Pinning
+- Add `is_pinned` (Check) and `pinned_by` (Link to User) on `Excom Message`.
+- Pinned messages section at top of conversation view.
+- Pin/unpin action in message context menu.
+- **Complexity:** Low
+
+### 3.6.3 Reply/Quote
+- `reply_to` field already exists on `Excom Message`.
+- UI: show quoted message preview above the reply in message list.
+- Long-press or swipe to reply on mobile.
+- **Complexity:** Medium
+
+---
+
+## Validation Checklist
+
+- [ ] Emails arrive as Excom Messages and appear in the inbox
+- [ ] Outbound emails sent from chat UI are delivered
+- [ ] Web chat widget loads on external page and connects to backend
+- [x] Canned responses trigger with `/` prefix and insert content
+- [ ] Tags can be added/removed from threads and filtered in sidebar
+- [x] Internal notes are visually distinct and never sent to customers
 - [ ] Message reactions render correctly
 - [ ] Pinned messages appear in dedicated section
 

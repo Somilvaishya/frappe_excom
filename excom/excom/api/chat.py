@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import flt, now_datetime
 
 from excom.excom.services.thread_service import send_outbound_message
 
@@ -9,33 +9,78 @@ from excom.excom.services.thread_service import send_outbound_message
 def get_threads(search: str = "", limit: int = 50, offset: int = 0):
     """
     Inbox query: returns threads ordered by last_message_at.
-    Zero joins, zero subqueries -- reads directly from Excom Thread.
+    Enriches each thread with contact data from Omni Identity and User.
     """
     limit = int(limit)
     offset = int(offset)
 
-    conditions = "status != 'Closed'"
+    conditions = "t.status != 'Closed'"
     params = {"limit": limit, "offset": offset}
 
     if search:
-        conditions += " AND (display_name LIKE %(search)s OR primary_phone LIKE %(search)s)"
+        conditions += " AND (t.display_name LIKE %(search)s OR t.primary_phone LIKE %(search)s)"
         params["search"] = f"%{search}%"
 
     threads = frappe.db.sql(
         f"""
-        SELECT name, display_name, primary_phone, last_message_at,
-               last_message_preview, last_message_direction, unread_count,
-               status, assigned_to, omni_identity, channel, account
-        FROM `tabExcom Thread`
+        SELECT t.name, t.display_name, t.primary_phone, t.last_message_at,
+               t.last_message_preview, t.last_message_direction, t.unread_count,
+               t.status, t.assigned_to, t.omni_identity, t.channel, t.account,
+               oi.primary_email,
+               u.full_name AS assigned_to_name, u.user_image AS assigned_to_avatar
+        FROM `tabExcom Thread` t
+        LEFT JOIN `tabOmni Identity` oi ON oi.name = t.omni_identity
+        LEFT JOIN `tabUser` u ON u.name = t.assigned_to
         WHERE {conditions}
-        ORDER BY last_message_at DESC
+        ORDER BY t.last_message_at DESC
         LIMIT %(limit)s OFFSET %(offset)s
         """,
         params,
         as_dict=True,
     )
 
+    if threads:
+        _enrich_company(threads)
+
     return threads
+
+
+def _enrich_company(threads: list):
+    """
+    Batch-fetch company from linked Contact/Lead for each unique omni_identity.
+    Avoids N+1 by fetching all at once.
+    """
+    identity_names = list({t.omni_identity for t in threads if t.get("omni_identity")})
+    if not identity_names:
+        return
+
+    links = frappe.db.sql(
+        """
+        SELECT parent, linked_doctype, linked_name
+        FROM `tabOmni Identity Link`
+        WHERE parent IN %(ids)s AND linked_doctype IN ('Contact', 'Lead', 'Customer')
+        ORDER BY parent, creation ASC
+        """,
+        {"ids": identity_names},
+        as_dict=True,
+    )
+
+    identity_company = {}
+    for link in links:
+        if link.parent in identity_company:
+            continue
+        company = None
+        if link.linked_doctype == "Customer":
+            company = frappe.db.get_value("Customer", link.linked_name, "customer_name")
+        elif link.linked_doctype == "Lead":
+            company = frappe.db.get_value("Lead", link.linked_name, "company_name")
+        elif link.linked_doctype == "Contact":
+            company = frappe.db.get_value("Contact", link.linked_name, "company_name")
+        if company:
+            identity_company[link.parent] = company
+
+    for t in threads:
+        t["company"] = identity_company.get(t.get("omni_identity"), "")
 
 
 @frappe.whitelist()
@@ -54,7 +99,9 @@ def get_messages(thread_id: str, limit: int = 50, before: str = ""):
         SELECT m.name, m.direction, m.message_type, m.content_text,
                m.media_file, m.delivery_status, m.creation,
                m.provider_message_id, m.reply_to,
-               m.created_by_user, u.full_name AS sender_name
+               m.created_by_user, m.is_internal,
+               CASE WHEN m.message_type = 'Email' THEN m.content_json ELSE NULL END AS content_json,
+               u.full_name AS sender_name
         FROM `tabExcom Message` m
         LEFT JOIN `tabUser` u ON u.name = m.created_by_user
         WHERE {conditions}
@@ -69,13 +116,23 @@ def get_messages(thread_id: str, limit: int = 50, before: str = ""):
 
 
 @frappe.whitelist()
-def send_message(thread_id: str, message: str):
-    """Send a text message on an existing thread."""
+def send_message(thread_id: str, message: str = "", message_type: str = "Text",
+                 media_url: str = ""):
+    """
+    Send a message on an existing thread.
+
+    Args:
+        thread_id: Excom Thread name
+        message: Text content (required for Text, optional caption for media)
+        message_type: Text | Image | Video | Audio | Document
+        media_url: Frappe file URL for media messages
+    """
     try:
         msg_name = send_outbound_message(
             thread_name=thread_id,
             content_text=message,
-            message_type="Text",
+            message_type=message_type,
+            media_file=media_url,
         )
         frappe.db.commit()
         return {"success": True, "message_name": msg_name}
@@ -222,3 +279,398 @@ def get_conversation_stats(omni_identity: str):
         "avg_response_time_seconds": avg_response,
         "channels": channels,
     }
+
+
+@frappe.whitelist()
+def get_ai_suggestions(thread_id: str, force_refresh: bool = False):
+    """
+    Returns AI suggestions for a thread.
+    Phase 2 stub: computes basic insights from message history.
+    Full LLM integration deferred to Phase 5.
+    """
+    if not thread_id or not frappe.db.exists("Excom Thread", thread_id):
+        return _empty_ai_response()
+
+    thread = frappe.db.get_value(
+        "Excom Thread", thread_id,
+        ["omni_identity", "last_message_at", "display_name"],
+        as_dict=True,
+    )
+
+    messages = frappe.db.sql(
+        """
+        SELECT direction, creation, content_text
+        FROM `tabExcom Message`
+        WHERE thread = %(thread)s
+        ORDER BY creation DESC
+        LIMIT 50
+        """,
+        {"thread": thread_id},
+        as_dict=True,
+    )
+
+    total = len(messages)
+    inbound = [m for m in messages if m.direction == "Inbound"]
+    outbound = [m for m in messages if m.direction == "Outbound"]
+
+    suggested_replies = []
+    if outbound:
+        seen = set()
+        for m in outbound[:10]:
+            text = (m.content_text or "").strip()
+            if text and len(text) > 10 and text not in seen:
+                seen.add(text)
+                suggested_replies.append({"text": text, "confidence": 0.7})
+            if len(suggested_replies) >= 3:
+                break
+
+    summary_text = f"{total} messages exchanged"
+    if thread.last_message_at:
+        summary_text += f". Last activity: {thread.last_message_at}"
+
+    response_times = []
+    sorted_msgs = sorted(messages, key=lambda m: m.creation)
+    last_inbound_at = None
+    for m in sorted_msgs:
+        if m.direction == "Inbound":
+            last_inbound_at = m.creation
+        elif m.direction == "Outbound" and last_inbound_at:
+            response_times.append((m.creation - last_inbound_at).total_seconds())
+            last_inbound_at = None
+
+    avg_rt = sum(response_times) / len(response_times) if response_times else None
+    best_time = "Unknown"
+    if inbound:
+        hours = [m.creation.hour for m in inbound]
+        from collections import Counter
+        most_common_hour = Counter(hours).most_common(1)[0][0]
+        best_time = f"{most_common_hour}:00 - {most_common_hour + 1}:00"
+
+    next_actions = _get_next_actions(thread.omni_identity)
+
+    return {
+        "suggested_replies": suggested_replies,
+        "summary": {
+            "text": summary_text,
+            "updated_at": str(now_datetime()),
+            "sentiment": "neutral",
+        },
+        "next_actions": next_actions,
+        "insights": {
+            "response_pattern": f"~{int(avg_rt / 60)}m avg reply time" if avg_rt else "Not enough data",
+            "engagement_rate": round(len(outbound) / max(len(inbound), 1), 2) if inbound else 0,
+            "best_contact_time": best_time,
+        },
+    }
+
+
+def _empty_ai_response():
+    return {
+        "suggested_replies": [],
+        "summary": {"text": "No data available", "updated_at": "", "sentiment": "neutral"},
+        "next_actions": [],
+        "insights": {"response_pattern": "—", "engagement_rate": 0, "best_contact_time": "—"},
+    }
+
+
+def _get_next_actions(omni_identity: str):
+    """Derive next actions from linked ERP entity statuses."""
+    actions = []
+    if not omni_identity:
+        return actions
+
+    links = frappe.get_all(
+        "Omni Identity Link",
+        filters={"parent": omni_identity},
+        fields=["linked_doctype", "linked_name"],
+        limit=5,
+    )
+
+    for link in links:
+        dt, dn = link.linked_doctype, link.linked_name
+        if dt == "Lead":
+            status = frappe.db.get_value("Lead", dn, "status")
+            if status in ("Lead", "Open"):
+                actions.append({"action": f"Follow up on Lead {dn}", "priority": "high", "due": ""})
+        elif dt == "Customer":
+            actions.append({"action": f"Review Customer {dn} account", "priority": "low", "due": ""})
+
+    return actions[:3]
+
+
+@frappe.whitelist()
+def assign_thread(thread_id: str, user: str = ""):
+    """
+    Assign a thread to the current user or a specified user.
+    Used by the "Take Over" button.
+    """
+    if not user:
+        user = frappe.session.user
+
+    frappe.db.set_value("Excom Thread", thread_id, "assigned_to", user)
+    frappe.publish_realtime(
+        "excom:thread_updated",
+        {"thread": thread_id, "event": "assigned"},
+        after_commit=True,
+    )
+    return {"success": True, "assigned_to": user}
+
+
+@frappe.whitelist()
+def get_response_metrics(omni_identity: str):
+    """
+    Calculates average response time for an Omni Identity.
+    Time between last inbound and next outbound per thread.
+    """
+    if not omni_identity:
+        return {"avg_response_time_seconds": None}
+
+    thread_names = frappe.get_all(
+        "Excom Thread",
+        filters={"omni_identity": omni_identity},
+        pluck="name",
+    )
+    if not thread_names:
+        return {"avg_response_time_seconds": None}
+
+    messages = frappe.db.sql(
+        """
+        SELECT direction, creation, thread
+        FROM `tabExcom Message`
+        WHERE thread IN %(threads)s
+        ORDER BY thread, creation ASC
+        """,
+        {"threads": thread_names},
+        as_dict=True,
+    )
+
+    response_times = []
+    last_inbound_at = None
+    current_thread = None
+    for m in messages:
+        if m.thread != current_thread:
+            current_thread = m.thread
+            last_inbound_at = None
+        if m.direction == "Inbound":
+            last_inbound_at = m.creation
+        elif m.direction == "Outbound" and last_inbound_at:
+            response_times.append((m.creation - last_inbound_at).total_seconds())
+            last_inbound_at = None
+
+    avg = flt(sum(response_times) / len(response_times), 0) if response_times else None
+    return {"avg_response_time_seconds": avg}
+
+
+@frappe.whitelist()
+def get_canned_responses(search: str = "", channel: str = ""):
+    """
+    Returns canned responses filtered by search text and channel.
+    Includes global responses and current user's personal ones.
+    """
+    filters = [
+        ["is_global", "=", 1],
+    ]
+
+    user_filters = [
+        ["is_global", "=", 0],
+        ["owner", "=", frappe.session.user],
+    ]
+
+    fields = ["name", "title", "shortcode", "content", "category", "channel"]
+
+    global_responses = frappe.get_all(
+        "Excom Canned Response",
+        filters=filters,
+        fields=fields,
+        order_by="title asc",
+        limit=50,
+    )
+
+    personal_responses = frappe.get_all(
+        "Excom Canned Response",
+        filters=user_filters,
+        fields=fields,
+        order_by="title asc",
+        limit=50,
+    )
+
+    all_responses = global_responses + personal_responses
+
+    if channel and channel != "All":
+        all_responses = [
+            r for r in all_responses
+            if r.channel in ("All", channel)
+        ]
+
+    if search:
+        q = search.lower()
+        all_responses = [
+            r for r in all_responses
+            if q in (r.title or "").lower()
+            or q in (r.shortcode or "").lower()
+            or q in (r.content or "").lower()
+        ]
+
+    return all_responses
+
+
+@frappe.whitelist()
+def send_internal_note(thread_id: str, content: str):
+    """
+    Creates an internal note on a thread visible only to agents.
+    Does NOT send anything to the customer via any channel.
+
+    Args:
+        thread_id: Excom Thread name
+        content: Note text
+    """
+    if not content or not content.strip():
+        frappe.throw(_("Note content cannot be empty"))
+
+    thread = frappe.get_doc("Excom Thread", thread_id)
+
+    msg = frappe.get_doc({
+        "doctype": "Excom Message",
+        "thread": thread_id,
+        "omni_identity": thread.omni_identity,
+        "direction": "Outbound",
+        "message_type": "Text",
+        "channel": thread.channel,
+        "account_doctype": thread.account_doctype,
+        "account": thread.account,
+        "delivery_status": "Read",
+        "content_text": content.strip(),
+        "is_internal": 1,
+        "created_by_user": frappe.session.user,
+    })
+    msg.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+    frappe.publish_realtime(
+        "excom:message_received",
+        {
+            "thread": thread_id,
+            "message": msg.name,
+            "omni_identity": thread.omni_identity,
+            "direction": "Outbound",
+            "preview": content.strip()[:100],
+            "is_internal": True,
+        },
+        after_commit=True,
+    )
+
+    return {"success": True, "message_name": msg.name}
+
+
+@frappe.whitelist()
+def get_related_documents(omni_identity: str):
+    """
+    Returns all transaction documents linked to an Omni Identity.
+
+    Customer-side: Quotation, Sales Order, Delivery Note, Sales Invoice.
+    Supplier-side: Request for Quotation, Purchase Order, Purchase Receipt, Purchase Invoice.
+    """
+    result = {
+        "quotations": [],
+        "sales_orders": [],
+        "delivery_notes": [],
+        "sales_invoices": [],
+        "rfqs": [],
+        "purchase_orders": [],
+        "purchase_receipts": [],
+        "purchase_invoices": [],
+    }
+
+    if not omni_identity:
+        return result
+
+    links = frappe.get_all(
+        "Omni Identity Link",
+        filters={"parent": omni_identity},
+        fields=["linked_doctype", "linked_name"],
+    )
+
+    customer_names = [
+        l.linked_name for l in links if l.linked_doctype == "Customer"
+    ]
+    supplier_names = [
+        l.linked_name for l in links if l.linked_doctype == "Supplier"
+    ]
+
+    common_fields = ["name", "grand_total", "status", "currency"]
+    date_field_map = {
+        "Quotation": "transaction_date",
+        "Sales Order": "transaction_date",
+        "Delivery Note": "posting_date",
+        "Sales Invoice": "posting_date",
+        "Request for Quotation": "transaction_date",
+        "Purchase Order": "transaction_date",
+        "Purchase Receipt": "posting_date",
+        "Purchase Invoice": "posting_date",
+    }
+
+    if customer_names:
+        customer_doctypes = {
+            "Quotation": ("quotations", "party_name", "customer_name"),
+            "Sales Order": ("sales_orders", "customer", "customer_name"),
+            "Delivery Note": ("delivery_notes", "customer", "customer_name"),
+            "Sales Invoice": ("sales_invoices", "customer", "customer_name"),
+        }
+        for dt, (key, filter_field, name_field) in customer_doctypes.items():
+            date_field = date_field_map[dt]
+            fields = common_fields + [date_field, name_field]
+            if dt == "Sales Invoice":
+                fields.append("outstanding_amount")
+            try:
+                filters = {filter_field: ["in", customer_names], "docstatus": ["!=", 2]}
+                if dt == "Quotation":
+                    filters["quotation_to"] = "Customer"
+                result[key] = frappe.get_all(
+                    dt, filters=filters, fields=fields,
+                    order_by=f"{date_field} desc", limit=15,
+                )
+            except Exception:
+                pass
+
+    if supplier_names:
+        supplier_doctypes = {
+            "Request for Quotation": ("rfqs", None, None),
+            "Purchase Order": ("purchase_orders", "supplier", "supplier_name"),
+            "Purchase Receipt": ("purchase_receipts", "supplier", "supplier_name"),
+            "Purchase Invoice": ("purchase_invoices", "supplier", "supplier_name"),
+        }
+        for dt, (key, filter_field, name_field) in supplier_doctypes.items():
+            date_field = date_field_map[dt]
+            if dt == "Request for Quotation":
+                try:
+                    rfq_names = frappe.get_all(
+                        "Request for Quotation Supplier",
+                        filters={"supplier": ["in", supplier_names]},
+                        pluck="parent",
+                    )
+                    if rfq_names:
+                        result[key] = frappe.get_all(
+                            dt,
+                            filters={"name": ["in", list(set(rfq_names))], "docstatus": ["!=", 2]},
+                            fields=common_fields + [date_field],
+                            order_by=f"{date_field} desc",
+                            limit=15,
+                        )
+                except Exception:
+                    pass
+            else:
+                fields = common_fields + [date_field, name_field]
+                if dt == "Purchase Invoice":
+                    fields.append("outstanding_amount")
+                try:
+                    result[key] = frappe.get_all(
+                        dt,
+                        filters={filter_field: ["in", supplier_names], "docstatus": ["!=", 2]},
+                        fields=fields,
+                        order_by=f"{date_field} desc",
+                        limit=15,
+                    )
+                except Exception:
+                    pass
+
+    return result
