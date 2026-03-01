@@ -9,12 +9,11 @@ def execute():
 	doc = frappe.get_doc(
 		{
 			"doctype": "Excom Channel",
+			"__newname": "whatsapp",
 			"channel_label": "WhatsApp",
-			"channel_key": "whatsapp",
-			"account_doctype": "WhatsApp Account",
 			"allows_multiple_accounts": 1,
-			"is_active": 1,
-			"description": "System channel mapped to WhatsApp accounts from legacy WhatsApp module.",
+			"is_enabled": 1,
+			"description": "WhatsApp Business API channel.",
 		}
 	)
 	doc.insert(ignore_permissions=True)

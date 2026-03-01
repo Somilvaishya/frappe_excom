@@ -41,5 +41,7 @@ def _is_system_write_context() -> bool:
 			frappe.flags.in_install,
 			frappe.flags.in_migrate,
 			frappe.flags.in_patch,
+			frappe.flags.in_setup_wizard,
+			getattr(frappe.flags, "in_install_app", False),
 		)
 	)

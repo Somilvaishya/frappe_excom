@@ -2,7 +2,7 @@
 # For license information, please see license.txt
 import json
 import frappe
-from frappe import _, throw
+from frappe import _
 from frappe.model.document import Document
 from frappe.integrations.utils import make_post_request
 
@@ -46,7 +46,7 @@ class WhatsAppMessage(Document):
             account_type = 'outgoing' if self.type == 'Outgoing' else 'incoming'
             default_whatsapp_account = get_whatsapp_account(account_type=account_type)
             if not default_whatsapp_account:
-                throw(_("Please set a default outgoing WhatsApp Account or Select available WhatsApp Account"))
+                frappe.throw(_("Please set a default outgoing WhatsApp Account or Select available WhatsApp Account"))
             else:
                 self.whatsapp_account = default_whatsapp_account.name
 

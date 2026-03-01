@@ -47,7 +47,7 @@
  "modified_by": "Administrator",
  "module": "Excom",
  "name": "Excom Channel",
- "naming_rule": "By fieldname",
+ "naming_rule": "Set by user",
  "owner": "Administrator",
  "permissions": [
   {

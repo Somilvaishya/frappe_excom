@@ -84,8 +84,8 @@ website_route_rules = [
 # Installation
 # ------------
 
-# before_install = "excom.install.before_install"
-# after_install = "excom.install.after_install"
+after_install = "excom.setup.after_install"
+after_migrate = ["excom.setup.after_migrate"]
 
 # Uninstallation
 # ------------
