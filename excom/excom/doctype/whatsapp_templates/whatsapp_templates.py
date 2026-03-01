@@ -4,8 +4,6 @@
 # For license information, please see license.txt
 import os
 import json
-import mimetypes
-
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -60,9 +58,13 @@ class WhatsAppTemplates(Document):
         """Upload media."""
         self.get_settings()
         file_path = self.get_absolute_path(self.sample)
-        file_type, _ = mimetypes.guess_type(file_path)
-        if not file_type:
-            file_type = "application/octet-stream"
+        try:
+            import magic
+            mime = magic.Magic(mime=True)
+            file_type = mime.from_file(file_path)
+        except ImportError:
+            import mimetypes
+            file_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
 
         payload = {
             'file_length': os.path.getsize(file_path),
