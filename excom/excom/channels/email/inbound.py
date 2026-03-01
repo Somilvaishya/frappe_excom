@@ -22,7 +22,8 @@ from excom.excom.doctype.omni_identity.omni_identity import resolve_identity
 def poll_all_email_accounts():
     """
     Scheduler entry point: polls all enabled email accounts for new messages.
-    Called from hooks.py scheduler_events.
+    Called from hooks.py scheduler_events every minute.
+    Respects each account's poll_interval_minutes setting via cache-based throttle.
     """
     accounts = frappe.get_all(
         "Excom Channel Account",
@@ -31,20 +32,34 @@ def poll_all_email_accounts():
             "status": "Active",
             "email_authorized": 1,
         },
-        pluck="name",
+        fields=["name", "email_poll_interval_minutes"],
     )
 
-    for account_name in accounts:
+    now = now_datetime()
+
+    for account in accounts:
+        interval = max(int(account.email_poll_interval_minutes or 2), 1)
+
+        cache_key = f"excom_email_last_poll:{account.name}"
+        last_poll = frappe.cache.get_value(cache_key)
+        if last_poll:
+            minutes_since = (now - get_datetime(last_poll)).total_seconds() / 60
+            if minutes_since < interval:
+                continue
+
+        frappe.cache.set_value(cache_key, str(now), expires_in_sec=interval * 120)
+
         try:
             frappe.enqueue(
                 "excom.excom.channels.email.inbound.poll_single_account",
-                account_name=account_name,
+                account_name=account.name,
                 queue="short",
                 is_async=True,
+                deduplicate=True,
             )
         except Exception:
             frappe.log_error(
-                title=f"Email poll enqueue failed: {account_name}",
+                title=f"Email poll enqueue failed: {account.name}",
             )
 
 

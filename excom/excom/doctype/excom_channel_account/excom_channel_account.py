@@ -1,10 +1,46 @@
 import frappe
+from frappe import _
 from frappe.model.document import Document
 
 
 class ExcomChannelAccount(Document):
 	def on_update(self):
 		self.ensure_single_default()
+		if self.channel == "email":
+			self._sync_email_authorized()
+
+	def _sync_email_authorized(self):
+		"""Check if a valid OAuth2 token exists and update email_authorized."""
+		if not self.email_connected_app or not self.email_connected_user:
+			if self.email_authorized:
+				frappe.db.set_value(self.doctype, self.name, "email_authorized", 0)
+			return
+
+		from frappe.integrations.doctype.connected_app.connected_app import has_token
+		token_exists = has_token(self.email_connected_app, self.email_connected_user)
+
+		new_val = 1 if token_exists else 0
+		if self.email_authorized != new_val:
+			frappe.db.set_value(self.doctype, self.name, "email_authorized", new_val)
+
+	@frappe.whitelist()
+	def check_email_authorization(self):
+		"""Called from client script to refresh authorization status after OAuth callback."""
+		if self.channel != "email":
+			return {"authorized": False}
+
+		if not self.email_connected_app or not self.email_connected_user:
+			return {"authorized": False}
+
+		from frappe.integrations.doctype.connected_app.connected_app import has_token
+		token_exists = has_token(self.email_connected_app, self.email_connected_user)
+
+		new_val = 1 if token_exists else 0
+		if self.email_authorized != new_val:
+			frappe.db.set_value(self.doctype, self.name, "email_authorized", new_val)
+			frappe.db.commit()
+
+		return {"authorized": bool(token_exists)}
 
 	def ensure_single_default(self):
 		"""Only one default incoming and one default outgoing per channel."""

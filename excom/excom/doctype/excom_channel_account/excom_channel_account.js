@@ -26,6 +26,15 @@ frappe.ui.form.on("Excom Channel Account", {
 		}
 
 		if (frm.doc.channel === "email" && !frm.is_new()) {
+			frm.call("check_email_authorization").then((r) => {
+				if (r && r.message) {
+					const wasAuthorized = frm.doc.email_authorized;
+					if (r.message.authorized && !wasAuthorized) {
+						frm.reload_doc();
+					}
+				}
+			});
+
 			if (frm.doc.email_authorized) {
 				frm.add_custom_button(__("Check Gmail Connection"), function () {
 					frappe.call({
@@ -33,13 +42,46 @@ frappe.ui.form.on("Excom Channel Account", {
 						args: { account_name: frm.doc.name },
 						callback(r) {
 							if (r.message && r.message.success) {
-								frappe.msgprint(__("Gmail connection is active. Email: {0}", [r.message.email]));
+								frappe.msgprint(
+									__("Gmail connection active. Email: {0}, Messages: {1}", [
+										r.message.email,
+										r.message.messagesTotal,
+									])
+								);
 							} else {
-								frappe.msgprint(__("Gmail connection failed. Please re-authorize."));
+								frappe.msgprint({
+									title: __("Connection Failed"),
+									message: r.message ? r.message.error : __("Unknown error"),
+									indicator: "red",
+								});
 							}
 						},
 					});
-				});
+				}, __("Email"));
+
+				frm.add_custom_button(__("Sync Now"), function () {
+					frappe.call({
+						method: "excom.excom.api.email.manual_sync",
+						args: { account_name: frm.doc.name },
+						freeze: true,
+						freeze_message: __("Syncing emails from Gmail..."),
+						callback(r) {
+							if (r.message && r.message.success) {
+								frappe.show_alert({
+									message: __("Email sync completed"),
+									indicator: "green",
+								});
+								frm.reload_doc();
+							} else {
+								frappe.msgprint({
+									title: __("Sync Failed"),
+									message: r.message ? r.message.error : __("Unknown error"),
+									indicator: "red",
+								});
+							}
+						},
+					});
+				}, __("Email"));
 			}
 		}
 	},

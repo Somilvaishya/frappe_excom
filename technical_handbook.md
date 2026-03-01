@@ -928,3 +928,30 @@ Email is a critical communication channel for B2B and customer support workflows
 - `bench migrate` required — adds email fields to `tabExcom Channel Account`, "Email" option to message_type, seeds email channel
 - Patch `seed_email_channel` creates the `Excom Channel` record for email
 - No existing data affected — all changes are additive
+
+---
+
+## Email Authorization & Sync Fix (2026-02-24)
+
+### What Changed
+Fixed the email channel account authorization and sync flow — after OAuth2 authorization via Google, the `email_authorized` flag was never being set to `1`, causing the scheduler to skip the account entirely.
+
+### Root Cause
+1. **`email_authorized` never updated** — The OAuth2 callback stores the token in Frappe's Token Cache, but nothing detected this and set `email_authorized = 1` on the Excom Channel Account.
+2. **Redirect URI had port 8002** — The Connected App's `redirect_uri` included `:8002`, which doesn't work through the Cloudflare tunnel (`dev.mevabite.com` maps to `localhost:8002` without exposing the port).
+3. **No manual sync trigger** — After authorization, the user had to wait for the scheduler with no way to trigger an immediate sync.
+
+### What Was Fixed
+- **`ExcomChannelAccount.check_email_authorization()`** — New whitelisted method that checks Frappe's `has_token()` API and updates `email_authorized` field. Called from client script on form refresh to auto-detect authorization after OAuth callback.
+- **`ExcomChannelAccount._sync_email_authorized()`** — Called from `on_update` to keep `email_authorized` in sync with actual token state.
+- **Client script** — Auto-calls `check_email_authorization` on `refresh` for email accounts. If authorization is newly detected, reloads the form. Added "Check Gmail Connection" and "Sync Now" buttons under "Email" button group.
+- **`poll_all_email_accounts()`** — Uses `frappe.cache` for rate-limiting instead of unreliable `modified` timestamp. Respects `email_poll_interval_minutes` setting per account.
+- **Connected App redirect URI** — Fixed from `https://dev.mevabite.com:8002/...` to `https://dev.mevabite.com/...`.
+
+### Impacted Modules
+- `excom/excom/doctype/excom_channel_account/excom_channel_account.py`
+- `excom/excom/doctype/excom_channel_account/excom_channel_account.js`
+- `excom/excom/channels/email/inbound.py`
+
+### Important: Google Cloud Console
+The redirect URI must also be updated in Google Cloud Console OAuth2 credentials to match: `https://dev.mevabite.com/api/method/frappe.integrations.doctype.connected_app.connected_app.callback/<connected_app_name>`
