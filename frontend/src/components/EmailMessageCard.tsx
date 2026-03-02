@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Mail,
   ChevronDown,
@@ -187,15 +187,10 @@ export function EmailMessageCard({
                     )}
                   </div>
 
-                  {/* Email body */}
+                  {/* Email body — rendered in a light-themed iframe for style isolation */}
                   <div className="p-4">
                     {bodyData.body_html ? (
-                      <div
-                        className="text-sm text-zinc-200 prose prose-invert prose-sm max-w-none
-                          [&_a]:text-blue-400 [&_img]:max-w-full [&_img]:rounded
-                          [&_table]:text-xs [&_td]:p-1 [&_th]:p-1"
-                        dangerouslySetInnerHTML={{ __html: bodyData.body_html }}
-                      />
+                      <EmailBodyFrame html={bodyData.body_html} />
                     ) : (
                       <pre className="text-sm text-zinc-200 whitespace-pre-wrap font-sans">
                         {bodyData.body_text || "(Empty email)"}
@@ -282,5 +277,64 @@ export function EmailMessageCard({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Renders HTML email content inside an iframe with a light background
+ * so that inline styles from Gmail (black text, white bg) remain readable
+ * against the app's dark theme.
+ */
+function EmailBodyFrame({ html }: { html: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(200);
+
+  const resizeFrame = useCallback(() => {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc?.body) return;
+    const h = doc.body.scrollHeight;
+    if (h > 0) setHeight(Math.min(h + 24, 2000));
+  }, []);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const handleLoad = () => {
+      resizeFrame();
+      const observer = new ResizeObserver(resizeFrame);
+      if (iframe.contentDocument?.body) {
+        observer.observe(iframe.contentDocument.body);
+      }
+      return () => observer.disconnect();
+    };
+
+    iframe.addEventListener("load", handleLoad);
+    return () => iframe.removeEventListener("load", handleLoad);
+  }, [resizeFrame]);
+
+  const srcdoc = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html, body { margin: 0; padding: 12px; background: #ffffff; color: #1a1a1a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; line-height: 1.6; word-break: break-word; }
+  img { max-width: 100%; height: auto; border-radius: 4px; }
+  a { color: #2563eb; }
+  table { border-collapse: collapse; max-width: 100%; }
+  td, th { padding: 4px 8px; }
+  pre, code { white-space: pre-wrap; font-size: 13px; }
+  blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid #d1d5db; color: #4b5563; }
+</style></head><body>${html}</body></html>`;
+
+  return (
+    <iframe
+      ref={iframeRef}
+      srcDoc={srcdoc}
+      sandbox="allow-same-origin"
+      className="w-full border-0 rounded-lg bg-white"
+      style={{ height: `${height}px`, minHeight: "60px" }}
+      title="Email content"
+    />
   );
 }

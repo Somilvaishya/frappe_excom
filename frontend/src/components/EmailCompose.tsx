@@ -77,7 +77,7 @@ export function EmailCompose({
             value={to}
             onChange={(e) => setTo(e.target.value)}
             placeholder="recipient@example.com"
-            className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-600"
+            className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-500"
           />
           {!showCc && (
             <button
@@ -97,7 +97,7 @@ export function EmailCompose({
               value={cc}
               onChange={(e) => setCc(e.target.value)}
               placeholder="cc@example.com"
-              className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-600"
+              className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-500"
             />
           </div>
         )}
@@ -109,7 +109,7 @@ export function EmailCompose({
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder="Subject"
-            className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-600"
+            className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-500"
           />
         </div>
       </div>
@@ -121,7 +121,7 @@ export function EmailCompose({
           onChange={(e) => setBodyHtml(e.target.value)}
           placeholder="Write your message..."
           rows={6}
-          className="w-full bg-zinc-800/50 rounded-lg p-3 text-sm text-white outline-none resize-none placeholder-zinc-600 border border-zinc-700/50 focus:border-blue-500/30"
+          className="w-full bg-zinc-800/50 rounded-lg p-3 text-sm text-white outline-none resize-none placeholder-zinc-500 border border-zinc-700/50 focus:border-blue-500/30"
         />
       </div>
 
