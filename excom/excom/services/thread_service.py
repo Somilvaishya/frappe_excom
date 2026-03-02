@@ -131,8 +131,6 @@ def ingest_inbound_message(
         {"now": now, "preview": preview, "thread": thread_name},
     )
 
-    frappe.db.commit()
-
     frappe.publish_realtime(
         "excom:message_received",
         {
@@ -142,11 +140,15 @@ def ingest_inbound_message(
             "direction": "Inbound",
             "preview": preview,
         },
+        after_commit=True,
     )
     frappe.publish_realtime(
         "excom:thread_updated",
         {"thread": thread_name, "event": "new_inbound"},
+        after_commit=True,
     )
+
+    frappe.db.commit()
 
     return msg.name
 
@@ -285,7 +287,6 @@ def update_delivery_status(provider_message_id: str, status: str, conversation_i
     mapped = status_map.get(status, status)
 
     frappe.db.set_value("Excom Message", msg.name, "delivery_status", mapped)
-    frappe.db.commit()
 
     frappe.publish_realtime(
         "excom:message_status_updated",
@@ -295,7 +296,10 @@ def update_delivery_status(provider_message_id: str, status: str, conversation_i
             "status": mapped,
             "provider_message_id": provider_message_id,
         },
+        after_commit=True,
     )
+
+    frappe.db.commit()
 
 
 

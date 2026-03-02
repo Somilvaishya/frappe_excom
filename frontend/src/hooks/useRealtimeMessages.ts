@@ -1,6 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useFrappeEventListener } from "frappe-react-sdk";
-import type { Message } from "../types";
 
 interface MessageReceivedEvent {
   thread: string;
@@ -17,30 +16,35 @@ interface MessageStatusEvent {
   provider_message_id: string;
 }
 
+const POLL_INTERVAL_MS = 10_000;
+
 /**
  * Subscribes to realtime message events for a given thread.
- * Calls onNewMessage when a message arrives on the active thread,
- * and onStatusUpdate when delivery status changes.
+ * Includes a polling fallback (every 10s) to catch events that
+ * might be missed if the Socket.IO connection drops.
  */
 export function useRealtimeMessages(
   threadId: string | null,
   onNewMessage: () => void,
   onStatusUpdate?: (messageId: string, status: string) => void,
 ) {
+  const onNewMessageRef = useRef(onNewMessage);
+  onNewMessageRef.current = onNewMessage;
+
   const handleMessageReceived = useCallback(
     (data: MessageReceivedEvent) => {
       if (!threadId || data.thread !== threadId) return;
-      onNewMessage();
+      onNewMessageRef.current();
     },
-    [threadId, onNewMessage],
+    [threadId],
   );
 
   const handleMessageSent = useCallback(
     (data: MessageReceivedEvent) => {
       if (!threadId || data.thread !== threadId) return;
-      onNewMessage();
+      onNewMessageRef.current();
     },
-    [threadId, onNewMessage],
+    [threadId],
   );
 
   const handleStatusUpdate = useCallback(
@@ -54,4 +58,13 @@ export function useRealtimeMessages(
   useFrappeEventListener("excom:message_received", handleMessageReceived);
   useFrappeEventListener("excom:message_sent", handleMessageSent);
   useFrappeEventListener("excom:message_status_updated", handleStatusUpdate);
+
+  // Polling fallback: refresh messages periodically when a thread is active
+  useEffect(() => {
+    if (!threadId) return;
+    const id = setInterval(() => {
+      onNewMessageRef.current();
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [threadId]);
 }

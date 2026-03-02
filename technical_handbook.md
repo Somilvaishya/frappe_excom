@@ -1078,3 +1078,26 @@ Even a single outbound message from any Frappe user to an Omni Identity (on any 
 ### Migration Requirements
 - `bench migrate` — creates `Excom Tag`, `Excom Thread Tag`, `Excom Visitor Session` DocTypes, adds fields to `Excom Message`, `Excom Thread`, `Excom Channel Account`
 - `bench migrate` seeds the `webchat` channel
+
+---
+
+## Realtime Fix & Widget Upgrade (Post-Phase 3)
+
+### What Changed
+1. **`publish_realtime` ordering** — All `publish_realtime` calls across `thread_service.py`, `chat.py`, `webchat.py`, and `email/inbound.py` now use `after_commit=True` and are placed **before** the explicit `frappe.db.commit()`. This guarantees that the commit triggers the realtime broadcast, fixing silent failures in background-job contexts (RQ workers) where publish-after-commit didn't properly reach Socket.IO via Redis pubsub.
+
+2. **Frontend polling fallback** — `useRealtimeMessages` (10s) and `useRealtimeThreads` (15s) now include interval-based polling so messages and thread lists stay current even if Socket.IO is temporarily disconnected.
+
+3. **Preact web chat widget** — The vanilla JS IIFE widget has been replaced with a proper Preact + esbuild build. Source lives in `excom/public/widget/src/` with `build.mjs` for bundling. The output remains `excom-chat.js` with Shadow DOM isolation.
+
+### Why It Changed
+Inbound messages processed in background jobs (via `frappe.enqueue`) were not reliably publishing realtime events. The root cause was `publish_realtime` being called after `frappe.db.commit()` without `after_commit=True`, which in background workers could fail silently. Moving the publish before the commit with `after_commit=True` ensures the commit itself triggers the broadcast.
+
+### Impacted Modules
+- `excom/services/thread_service.py` — inbound ingestion + delivery status updates
+- `excom/api/chat.py` — internal notes
+- `excom/api/webchat.py` — visitor messages
+- `excom/channels/email/inbound.py` — email ingestion
+- `frontend/src/hooks/useRealtimeMessages.ts` — polling fallback
+- `frontend/src/hooks/useRealtimeThreads.ts` — polling fallback
+- `excom/public/widget/` — Preact source + build tooling

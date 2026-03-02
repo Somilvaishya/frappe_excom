@@ -592,7 +592,6 @@ def send_internal_note(thread_id: str, content: str):
         "created_by_user": frappe.session.user,
     })
     msg.insert(ignore_permissions=True)
-    frappe.db.commit()
 
     frappe.publish_realtime(
         "excom:message_received",
@@ -606,6 +605,8 @@ def send_internal_note(thread_id: str, content: str):
         },
         after_commit=True,
     )
+
+    frappe.db.commit()
 
     return {"success": True, "message_name": msg.name}
 

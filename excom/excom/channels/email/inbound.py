@@ -343,8 +343,6 @@ def _ingest_email_metadata(account_name: str, account, meta: dict):
             {"now": now, "preview": preview, "thread": thread_name},
         )
 
-    frappe.db.commit()
-
     frappe.publish_realtime(
         "excom:message_received",
         {
@@ -354,11 +352,15 @@ def _ingest_email_metadata(account_name: str, account, meta: dict):
             "direction": direction,
             "preview": preview,
         },
+        after_commit=True,
     )
     frappe.publish_realtime(
         "excom:thread_updated",
         {"thread": thread_name, "event": "new_email"},
+        after_commit=True,
     )
+
+    frappe.db.commit()
 
 
 def _parse_email_address(raw: str) -> tuple:

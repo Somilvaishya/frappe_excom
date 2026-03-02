@@ -187,7 +187,6 @@ def send_visitor_message(
         """,
         {"now": now, "preview": preview, "thread": session.thread},
     )
-    frappe.db.commit()
 
     frappe.publish_realtime(
         "excom:message_received",
@@ -200,6 +199,8 @@ def send_visitor_message(
         },
         after_commit=True,
     )
+
+    frappe.db.commit()
 
     return {"success": True, "message_id": msg.name}
 
