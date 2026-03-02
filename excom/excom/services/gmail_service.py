@@ -213,9 +213,14 @@ def send_email(
     bcc: str = "",
     in_reply_to: str = "",
     references: str = "",
+    thread_id: str = "",
 ) -> dict:
     """
     Send an email via Gmail API.
+
+    Args:
+        thread_id: Gmail thread ID — required for replies so Gmail
+                   places the sent message in the same thread.
 
     Returns:
         {"id": "...", "threadId": "...", "labelIds": [...]}
@@ -244,10 +249,14 @@ def send_email(
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")
 
+    body = {"raw": raw}
+    if thread_id:
+        body["threadId"] = thread_id
+
     resp = requests.post(
         f"{GMAIL_API_BASE}/messages/send",
         headers=_headers(account_name),
-        json={"raw": raw},
+        json=body,
         timeout=30,
     )
     resp.raise_for_status()

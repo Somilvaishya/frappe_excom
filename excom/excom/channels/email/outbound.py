@@ -61,6 +61,13 @@ def send_email_reply(
             except (json.JSONDecodeError, TypeError):
                 pass
 
+    gmail_thread_id = ""
+    thread_key = thread.thread_key or ""
+    if thread_key.startswith("email:"):
+        parts = thread_key.split(":", 2)
+        if len(parts) == 3:
+            gmail_thread_id = parts[2]
+
     result = gmail_service.send_email(
         account_name=account_name,
         to=to,
@@ -70,6 +77,7 @@ def send_email_reply(
         bcc=bcc,
         in_reply_to=in_reply_to_header,
         references=references_header,
+        thread_id=gmail_thread_id,
     )
 
     gmail_msg_id = result.get("id", "")
