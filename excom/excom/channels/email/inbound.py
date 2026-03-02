@@ -243,20 +243,26 @@ def _ingest_email_metadata(account_name: str, account, meta: dict):
             ["display_name", "primary_phone"], as_dict=True,
         )
 
-        thread_doc = frappe.get_doc({
-            "doctype": "Excom Thread",
-            "omni_identity": identity_name,
-            "channel": "email",
-            "account_doctype": "Excom Channel Account",
-            "account": account_name,
-            "thread_key": thread_key,
-            "status": "Open",
-            "display_name": oi.display_name if oi else contact_name,
-            "primary_phone": oi.primary_phone if oi else "",
-            "unread_count": 0,
-        })
-        thread_doc.insert(ignore_permissions=True)
-        thread_name = thread_doc.name
+        try:
+            thread_doc = frappe.get_doc({
+                "doctype": "Excom Thread",
+                "omni_identity": identity_name,
+                "channel": "email",
+                "account_doctype": "Excom Channel Account",
+                "account": account_name,
+                "thread_key": thread_key,
+                "status": "Open",
+                "display_name": oi.display_name if oi else contact_name,
+                "primary_phone": oi.primary_phone if oi else "",
+                "unread_count": 0,
+            })
+            thread_doc.insert(ignore_permissions=True)
+            thread_name = thread_doc.name
+        except frappe.DuplicateEntryError:
+            frappe.clear_last_message()
+            thread_name = frappe.db.get_value(
+                "Excom Thread", {"thread_key": thread_key}, "name"
+            )
 
     internal_date = meta.get("internalDate", "")
     if internal_date:
