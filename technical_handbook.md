@@ -955,3 +955,42 @@ Fixed the email channel account authorization and sync flow — after OAuth2 aut
 
 ### Important: Google Cloud Console
 The redirect URI must also be updated in Google Cloud Console OAuth2 credentials to match: `https://dev.mevabite.com/api/method/frappe.integrations.doctype.connected_app.connected_app.callback/<connected_app_name>`
+
+---
+
+## Auto-Cleanup of Stale Inbound-Only Omni Identities (2026-02-24)
+
+### What Changed
+Added a configurable daily cleanup job that removes Omni Identities created by email sync when no Frappe user has ever replied to them. This prevents the database from accumulating noise from inbound-only contacts that were never engaged.
+
+### Architecture Decision: Why Threads Stay
+Excom Thread is the CRM entity — it carries status, assignment, priority, unread count, and drives the thread list sidebar. Removing it would break assignment tracking, the conversation list, real-time notifications, and Phase 3.5/4 features (teams, routing, SLA). The storage overhead per thread is ~500 bytes. Message stubs (~200 bytes each, no body) enable dedup during sync, local search, unread count, and internal notes (which don't exist in Gmail). Bodies remain in Gmail and are fetched on-demand via the API.
+
+### New DocType
+- **Excom Settings** (Single) — `auto_cleanup_enabled` (Check), `cleanup_retention_days` (Int, default 30), `cleanup_channels` (Small Text, default "email")
+
+### New Files
+- `excom/excom/doctype/excom_settings/` — Single DocType definition and controller
+- `excom/excom/tasks/__init__.py`
+- `excom/excom/tasks/cleanup.py` — `cleanup_stale_identities()` daily job
+
+### Cleanup Logic
+1. Read Excom Settings — if `auto_cleanup_enabled` is off, return immediately
+2. Compute cutoff date = now − `cleanup_retention_days`
+3. Find Omni Identities where:
+   - Has an `Omni Identity Channel` with `channel_type` in the configured cleanup channels
+   - `creation < cutoff`
+   - `status = 'Active'`
+   - NO `Excom Message` exists with `direction = 'Outbound'` and `created_by_user` is set (agent reply)
+4. For each stale identity: delete messages → threads → identity (cascade order)
+5. On next email sync, Gmail recreates them if the source emails still exist
+
+### Protection Rule
+Even a single outbound message from any Frappe user to an Omni Identity (on any channel) permanently protects it from cleanup.
+
+### Impacted Modules
+- `hooks.py` — `cleanup_stale_identities` added to `scheduler_events["daily"]`
+
+### Migration Implications
+- `bench migrate` required — creates the `Excom Settings` Single DocType table
+- No existing data affected — cleanup is disabled by default

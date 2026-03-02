@@ -1,0 +1,71 @@
+{
+ "actions": [],
+ "creation": "2026-02-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cleanup_section",
+  "auto_cleanup_enabled",
+  "cleanup_retention_days",
+  "column_break_cleanup",
+  "cleanup_channels"
+ ],
+ "fields": [
+  {
+   "fieldname": "cleanup_section",
+   "fieldtype": "Section Break",
+   "label": "Auto-Cleanup"
+  },
+  {
+   "default": "0",
+   "description": "Automatically delete Omni Identities that have only inbound messages and no agent replies after the retention period.",
+   "fieldname": "auto_cleanup_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Auto-Cleanup"
+  },
+  {
+   "default": "30",
+   "depends_on": "auto_cleanup_enabled",
+   "description": "Days to keep inbound-only Omni Identities before cleanup. Minimum 1.",
+   "fieldname": "cleanup_retention_days",
+   "fieldtype": "Int",
+   "label": "Retention Days",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_cleanup",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "email",
+   "depends_on": "auto_cleanup_enabled",
+   "description": "Comma-separated list of channel names to clean up (e.g. email, whatsapp). Only Omni Identities whose sole channel matches one of these will be considered.",
+   "fieldname": "cleanup_channels",
+   "fieldtype": "Small Text",
+   "label": "Cleanup Channels"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-02-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Excom",
+ "name": "Excom Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
