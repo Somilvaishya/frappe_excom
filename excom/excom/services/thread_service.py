@@ -174,22 +174,8 @@ def send_outbound_message(
     thread = frappe.get_doc("Excom Thread", thread_name)
     identity = frappe.get_doc("Omni Identity", thread.omni_identity)
 
-    to_number = identity.primary_whatsapp or identity.primary_phone
-    if not to_number:
-        frappe.throw(_("No phone number on identity to send to"))
-
-    # Resolve account: prefer Excom Channel Account; fall back to legacy WhatsApp Account
     account_doctype = thread.account_doctype
     account_name = thread.account
-    if account_doctype == "WhatsApp Account" and frappe.db.exists("Excom Channel Account", account_name):
-        account = frappe.get_doc("Excom Channel Account", account_name)
-        frappe.db.set_value("Excom Thread", thread_name, "account_doctype", "Excom Channel Account")
-        account_doctype, account_name = "Excom Channel Account", account.name
-    else:
-        account = frappe.get_doc(account_doctype, account_name)
-
-    provider_message_id = ""
-    delivery_status = "Queued"
 
     if thread.channel == "email":
         frappe.throw(
@@ -197,7 +183,27 @@ def send_outbound_message(
               "The generic send_message endpoint is for chat channels only.")
         )
 
-    if thread.channel == "whatsapp":
+    # Resolve account: prefer Excom Channel Account; fall back to legacy WhatsApp Account
+    if account_doctype == "WhatsApp Account" and frappe.db.exists("Excom Channel Account", account_name):
+        frappe.db.set_value("Excom Thread", thread_name, "account_doctype", "Excom Channel Account")
+        account_doctype, account_name = "Excom Channel Account", account_name
+
+    provider_message_id = ""
+    delivery_status = "Queued"
+
+    if thread.channel == "webchat":
+        # Webchat: no external provider — visitor polls via get_visitor_messages
+        import secrets
+        provider_message_id = f"wc-agent-{secrets.token_hex(8)}"
+        delivery_status = "Delivered"
+
+    elif thread.channel == "whatsapp":
+        to_number = identity.primary_whatsapp or identity.primary_phone
+        if not to_number:
+            frappe.throw(_("No phone number on identity to send to"))
+
+        account = frappe.get_doc(account_doctype, account_name)
+
         from excom.excom.services.whatsapp_service import (
             send_text_message,
             send_media_message,
