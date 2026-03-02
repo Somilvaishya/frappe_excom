@@ -26,7 +26,7 @@ function Widget({ accountId, siteUrl }: { accountId: string; siteUrl: string }) 
 
   const color = cfg?.color || "#2563eb";
   const title = cfg?.title || "Chat with us";
-  const fields = cfg?.prechat_fields ? cfg.prechat_fields.split(",").map((f) => f.trim()) : ["name", "email"];
+  const fields = cfg?.prechat_fields ? cfg.prechat_fields.split(",").map((f) => f.trim()) : ["name", "email", "phone"];
   const isRight = cfg?.position !== "bottom-left";
 
   const handlePreChatSubmit = async (data: { name: string; email: string; phone: string }) => {

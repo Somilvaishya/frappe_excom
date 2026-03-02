@@ -304,7 +304,7 @@
    "options": "bottom-right\nbottom-left"
   },
   {
-   "default": "[\"name\",\"email\"]",
+   "default": "[\"name\",\"email\",\"phone\"]",
    "depends_on": "eval:doc.channel=='webchat'",
    "fieldname": "webchat_prechat_fields",
    "fieldtype": "Small Text",

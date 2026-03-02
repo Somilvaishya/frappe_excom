@@ -62,7 +62,7 @@ def get_config(account_id: str):
         "offline_message": config.webchat_offline_message or "We're currently offline. Leave a message!",
         "color": config.webchat_color or "#3b82f6",
         "position": config.webchat_position or "bottom-right",
-        "prechat_fields": config.webchat_prechat_fields or '["name","email"]',
+        "prechat_fields": config.webchat_prechat_fields or '["name","email","phone"]',
     }
 
 
