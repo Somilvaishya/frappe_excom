@@ -1,3 +1,5 @@
+import json
+
 import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
@@ -41,6 +43,7 @@ def get_threads(search: str = "", limit: int = 50, offset: int = 0):
 
     if threads:
         _enrich_company(threads)
+        _enrich_tags(threads)
 
     return threads
 
@@ -83,6 +86,36 @@ def _enrich_company(threads: list):
         t["company"] = identity_company.get(t.get("omni_identity"), "")
 
 
+def _enrich_tags(threads: list):
+    """Batch-fetch tags for all threads in one query."""
+    thread_names = [t.name for t in threads]
+    if not thread_names:
+        return
+
+    tag_rows = frappe.db.sql(
+        """
+        SELECT tt.parent, tt.tag, t.color, t.tag_name
+        FROM `tabExcom Thread Tag` tt
+        JOIN `tabExcom Tag` t ON t.name = tt.tag
+        WHERE tt.parent IN %(names)s
+        ORDER BY tt.added_on ASC
+        """,
+        {"names": thread_names},
+        as_dict=True,
+    )
+
+    thread_tags: dict = {}
+    for row in tag_rows:
+        thread_tags.setdefault(row.parent, []).append({
+            "tag": row.tag,
+            "tag_name": row.tag_name,
+            "color": row.color,
+        })
+
+    for t in threads:
+        t["tags"] = thread_tags.get(t.name, [])
+
+
 @frappe.whitelist()
 def get_messages(thread_id: str, limit: int = 50, before: str = ""):
     """Load messages for a thread, ordered chronologically."""
@@ -100,10 +133,16 @@ def get_messages(thread_id: str, limit: int = 50, before: str = ""):
                m.media_file, m.delivery_status, m.creation,
                m.provider_message_id, m.reply_to,
                m.created_by_user, m.is_internal,
+               m.is_pinned, m.pinned_by, m.reactions,
                CASE WHEN m.message_type = 'Email' THEN m.content_json ELSE NULL END AS content_json,
-               u.full_name AS sender_name
+               u.full_name AS sender_name,
+               rt.content_text AS reply_to_content,
+               rt.direction AS reply_to_direction,
+               ru.full_name AS reply_to_sender
         FROM `tabExcom Message` m
         LEFT JOIN `tabUser` u ON u.name = m.created_by_user
+        LEFT JOIN `tabExcom Message` rt ON rt.name = m.reply_to
+        LEFT JOIN `tabUser` ru ON ru.name = rt.created_by_user
         WHERE {conditions}
         ORDER BY m.creation ASC
         LIMIT %(limit)s
@@ -112,12 +151,19 @@ def get_messages(thread_id: str, limit: int = 50, before: str = ""):
         as_dict=True,
     )
 
+    for msg in messages:
+        if msg.reactions and isinstance(msg.reactions, str):
+            try:
+                msg.reactions = json.loads(msg.reactions)
+            except (json.JSONDecodeError, TypeError):
+                msg.reactions = {}
+
     return messages
 
 
 @frappe.whitelist()
 def send_message(thread_id: str, message: str = "", message_type: str = "Text",
-                 media_url: str = ""):
+                 media_url: str = "", reply_to: str = ""):
     """
     Send a message on an existing thread.
 
@@ -126,6 +172,7 @@ def send_message(thread_id: str, message: str = "", message_type: str = "Text",
         message: Text content (required for Text, optional caption for media)
         message_type: Text | Image | Video | Audio | Document
         media_url: Frappe file URL for media messages
+        reply_to: Excom Message name being replied to
     """
     try:
         msg_name = send_outbound_message(
@@ -133,6 +180,7 @@ def send_message(thread_id: str, message: str = "", message_type: str = "Text",
             content_text=message,
             message_type=message_type,
             media_file=media_url,
+            reply_to=reply_to,
         )
         frappe.db.commit()
         return {"success": True, "message_name": msg_name}
@@ -560,6 +608,159 @@ def send_internal_note(thread_id: str, content: str):
     )
 
     return {"success": True, "message_name": msg.name}
+
+
+@frappe.whitelist()
+def pin_message(message_name: str):
+    """Pin a message. Sets is_pinned=1 and pinned_by to current user."""
+    if not frappe.db.exists("Excom Message", message_name):
+        frappe.throw(_("Message not found"))
+    frappe.db.set_value("Excom Message", message_name, {
+        "is_pinned": 1,
+        "pinned_by": frappe.session.user,
+    })
+    thread = frappe.db.get_value("Excom Message", message_name, "thread")
+    frappe.publish_realtime("excom:message_pinned", {
+        "message": message_name, "thread": thread, "pinned": True,
+    }, after_commit=True)
+    return {"success": True}
+
+
+@frappe.whitelist()
+def unpin_message(message_name: str):
+    """Unpin a message."""
+    if not frappe.db.exists("Excom Message", message_name):
+        frappe.throw(_("Message not found"))
+    frappe.db.set_value("Excom Message", message_name, {
+        "is_pinned": 0,
+        "pinned_by": "",
+    })
+    thread = frappe.db.get_value("Excom Message", message_name, "thread")
+    frappe.publish_realtime("excom:message_pinned", {
+        "message": message_name, "thread": thread, "pinned": False,
+    }, after_commit=True)
+    return {"success": True}
+
+
+@frappe.whitelist()
+def get_pinned_messages(thread_id: str):
+    """Return all pinned messages for a thread."""
+    return frappe.db.sql(
+        """
+        SELECT m.name, m.content_text, m.direction, m.creation,
+               m.message_type, m.created_by_user,
+               u.full_name AS sender_name
+        FROM `tabExcom Message` m
+        LEFT JOIN `tabUser` u ON u.name = m.created_by_user
+        WHERE m.thread = %(thread)s AND m.is_pinned = 1
+        ORDER BY m.creation DESC
+        """,
+        {"thread": thread_id},
+        as_dict=True,
+    )
+
+
+@frappe.whitelist()
+def toggle_reaction(message_name: str, emoji: str):
+    """
+    Toggle the current user's reaction on a message.
+    Reactions stored as JSON: {"emoji": ["user1", "user2"]}.
+    """
+    if not frappe.db.exists("Excom Message", message_name):
+        frappe.throw(_("Message not found"))
+
+    raw = frappe.db.get_value("Excom Message", message_name, "reactions") or "{}"
+    try:
+        reactions = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    except (json.JSONDecodeError, TypeError):
+        reactions = {}
+
+    user = frappe.session.user
+    users_list = reactions.get(emoji, [])
+
+    if user in users_list:
+        users_list.remove(user)
+        if not users_list:
+            reactions.pop(emoji, None)
+    else:
+        users_list.append(user)
+        reactions[emoji] = users_list
+
+    frappe.db.set_value("Excom Message", message_name, "reactions", json.dumps(reactions))
+
+    thread = frappe.db.get_value("Excom Message", message_name, "thread")
+    frappe.publish_realtime("excom:message_reaction", {
+        "message": message_name, "thread": thread, "reactions": reactions,
+    }, after_commit=True)
+
+    return {"success": True, "reactions": reactions}
+
+
+@frappe.whitelist()
+def get_tags():
+    """Return all available Excom Tag records."""
+    return frappe.get_all(
+        "Excom Tag",
+        fields=["name", "tag_name", "color", "description"],
+        order_by="tag_name asc",
+        limit=100,
+    )
+
+
+@frappe.whitelist()
+def add_thread_tag(thread_id: str, tag_name: str):
+    """Add a tag to a thread. Creates the Excom Tag if it doesn't exist."""
+    if not frappe.db.exists("Excom Thread", thread_id):
+        frappe.throw(_("Thread not found"))
+
+    if not frappe.db.exists("Excom Tag", tag_name):
+        frappe.get_doc({
+            "doctype": "Excom Tag",
+            "tag_name": tag_name,
+        }).insert(ignore_permissions=True)
+
+    existing = frappe.db.exists(
+        "Excom Thread Tag", {"parent": thread_id, "tag": tag_name}
+    )
+    if existing:
+        return {"success": True, "already_exists": True}
+
+    thread = frappe.get_doc("Excom Thread", thread_id)
+    thread.append("tags", {
+        "tag": tag_name,
+        "added_by": frappe.session.user,
+        "added_on": now_datetime(),
+    })
+    thread.save(ignore_permissions=True)
+    return {"success": True}
+
+
+@frappe.whitelist()
+def remove_thread_tag(thread_id: str, tag_name: str):
+    """Remove a tag from a thread."""
+    if not frappe.db.exists("Excom Thread", thread_id):
+        frappe.throw(_("Thread not found"))
+
+    thread = frappe.get_doc("Excom Thread", thread_id)
+    thread.tags = [t for t in thread.tags if t.tag != tag_name]
+    thread.save(ignore_permissions=True)
+    return {"success": True}
+
+
+@frappe.whitelist()
+def get_thread_tags(thread_id: str):
+    """Return tags for a specific thread."""
+    return frappe.db.sql(
+        """
+        SELECT tt.tag, t.color, t.tag_name
+        FROM `tabExcom Thread Tag` tt
+        JOIN `tabExcom Tag` t ON t.name = tt.tag
+        WHERE tt.parent = %(thread_id)s
+        ORDER BY tt.added_on ASC
+        """,
+        {"thread_id": thread_id},
+        as_dict=True,
+    )
 
 
 @frappe.whitelist()

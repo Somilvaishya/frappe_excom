@@ -32,7 +32,12 @@
   "column_break_rel",
   "reference_doctype",
   "reference_name",
-  "is_internal"
+    "is_internal",
+    "pinning_section",
+    "is_pinned",
+    "pinned_by",
+    "reactions_section",
+    "reactions"
  ],
  "fields": [
   {
@@ -201,11 +206,41 @@
    "fieldtype": "Check",
    "label": "Internal Note",
    "description": "Internal notes are visible only to agents, not sent to the customer"
+  },
+  {
+   "fieldname": "pinning_section",
+   "fieldtype": "Section Break",
+   "label": "Pinning",
+   "collapsible": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_pinned",
+   "fieldtype": "Check",
+   "label": "Pinned"
+  },
+  {
+   "fieldname": "pinned_by",
+   "fieldtype": "Link",
+   "label": "Pinned By",
+   "options": "User"
+  },
+  {
+   "fieldname": "reactions_section",
+   "fieldtype": "Section Break",
+   "label": "Reactions",
+   "collapsible": 1
+  },
+  {
+   "default": "{}",
+   "fieldname": "reactions",
+   "fieldtype": "JSON",
+   "label": "Reactions"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-28 19:00:00.000000",
+ "modified": "2026-03-02 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Excom",
  "name": "Excom Message",

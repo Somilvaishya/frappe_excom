@@ -1,0 +1,157 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-03-02 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "session_section",
+  "session_token",
+  "status",
+  "channel_account",
+  "column_break_session",
+  "thread",
+  "omni_identity",
+  "visitor_section",
+  "visitor_name",
+  "visitor_email",
+  "column_break_visitor",
+  "visitor_phone",
+  "meta_section",
+  "user_agent",
+  "page_url",
+  "column_break_meta",
+  "started_at",
+  "ended_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "session_section",
+   "fieldtype": "Section Break",
+   "label": "Session"
+  },
+  {
+   "fieldname": "session_token",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Session Token",
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Active\nEnded"
+  },
+  {
+   "fieldname": "channel_account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Channel Account",
+   "options": "Excom Channel Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_session",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "thread",
+   "fieldtype": "Link",
+   "label": "Thread",
+   "options": "Excom Thread"
+  },
+  {
+   "fieldname": "omni_identity",
+   "fieldtype": "Link",
+   "label": "Omni Identity",
+   "options": "Omni Identity"
+  },
+  {
+   "fieldname": "visitor_section",
+   "fieldtype": "Section Break",
+   "label": "Visitor"
+  },
+  {
+   "fieldname": "visitor_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Visitor Name"
+  },
+  {
+   "fieldname": "visitor_email",
+   "fieldtype": "Data",
+   "label": "Visitor Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "column_break_visitor",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "visitor_phone",
+   "fieldtype": "Data",
+   "label": "Visitor Phone"
+  },
+  {
+   "fieldname": "meta_section",
+   "fieldtype": "Section Break",
+   "label": "Metadata",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "user_agent",
+   "fieldtype": "Small Text",
+   "label": "User Agent"
+  },
+  {
+   "fieldname": "page_url",
+   "fieldtype": "Data",
+   "label": "Page URL"
+  },
+  {
+   "fieldname": "column_break_meta",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At"
+  },
+  {
+   "fieldname": "ended_at",
+   "fieldtype": "Datetime",
+   "label": "Ended At"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-03-02 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Excom",
+ "name": "Excom Visitor Session",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

@@ -23,6 +23,13 @@ CHANNELS = [
 		"is_enabled": 1,
 		"description": "Email channel integrated via Gmail API (OAuth2). Bodies stored in Gmail, only metadata synced.",
 	},
+	{
+		"name": "webchat",
+		"channel_label": "Web Chat",
+		"allows_multiple_accounts": 1,
+		"is_enabled": 1,
+		"description": "Embeddable web chat widget for website visitors.",
+	},
 ]
 
 

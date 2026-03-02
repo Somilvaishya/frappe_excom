@@ -32,6 +32,16 @@ export function useMessages(threadId: string) {
       sentBy: msg.sender_name
         ? { name: msg.sender_name, avatar: "" }
         : undefined,
+      isPinned: Boolean(msg.is_pinned),
+      reactions: msg.reactions && typeof msg.reactions === "object" ? msg.reactions : undefined,
+      replyTo: msg.reply_to
+        ? {
+            id: msg.reply_to,
+            content: msg.reply_to_content || "",
+            sender: msg.reply_to_sender || "",
+            direction: msg.reply_to_direction || "",
+          }
+        : undefined,
     }));
   }, [rawMessages]);
 

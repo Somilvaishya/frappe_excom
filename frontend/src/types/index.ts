@@ -1,3 +1,9 @@
+export interface ThreadTag {
+  tag: string;
+  tag_name: string;
+  color: string;
+}
+
 export interface ExcomThread {
   name: string;
   display_name: string;
@@ -15,6 +21,7 @@ export interface ExcomThread {
   company?: string;
   assigned_to_name?: string;
   assigned_to_avatar?: string;
+  tags?: ThreadTag[];
 }
 
 export interface ExcomMessage {
@@ -31,6 +38,12 @@ export interface ExcomMessage {
   sender_name: string;
   is_internal?: number;
   content_json?: string;
+  is_pinned?: number;
+  pinned_by?: string;
+  reactions?: Record<string, string[]>;
+  reply_to_content?: string;
+  reply_to_direction?: string;
+  reply_to_sender?: string;
 }
 
 export interface Account {
@@ -65,6 +78,14 @@ export interface Message {
     identifier: string;
     channel?: string;
   };
+  isPinned?: boolean;
+  reactions?: Record<string, string[]>;
+  replyTo?: {
+    id: string;
+    content: string;
+    sender: string;
+    direction: string;
+  };
 }
 
 export interface ContactInfo {
@@ -96,6 +117,7 @@ export interface UnifiedContact {
   activeAccountId: string;
   allMessages: Message[];
   channels: string[];
+  tags?: ThreadTag[];
 }
 
 export interface Conversation {

@@ -11,11 +11,11 @@ Dependency: Phase 1 (service layer, event bus), Phase 2 (frontend functional)
 | Section | Status |
 |---------|--------|
 | 3.1 Email Channel (Gmail API) | COMPLETED |
-| 3.2 Web Chat Widget | Not Started |
+| 3.2 Web Chat Widget | COMPLETED |
 | 3.3 Canned Responses | COMPLETED |
-| 3.4 Conversation Tags | Not Started |
+| 3.4 Conversation Tags | COMPLETED |
 | 3.5 Internal Notes | COMPLETED |
-| 3.6 Message Features | Not Started |
+| 3.6 Message Features (Pinning, Reply/Quote, Reactions) | COMPLETED |
 
 ---
 

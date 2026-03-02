@@ -48,6 +48,11 @@ export function useThreads(search: string = "") {
           hasAccess: true,
         }));
 
+        const allTags = sortedThreads.flatMap((t) => t.tags || []);
+        const uniqueTags = allTags.filter(
+          (tag, idx, arr) => arr.findIndex((t) => t.tag === tag.tag) === idx
+        );
+
         const contact: UnifiedContact = {
           id: identityId,
           contactName: latestThread.display_name,
@@ -73,6 +78,7 @@ export function useThreads(search: string = "") {
           activeAccountId: allAccounts[0]?.id || "",
           allMessages: [],
           channels,
+          tags: uniqueTags.length > 0 ? uniqueTags : undefined,
         };
 
         return contact;

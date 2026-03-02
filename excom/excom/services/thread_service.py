@@ -157,6 +157,7 @@ def send_outbound_message(
     message_type: str = "Text",
     media_file: str = "",
     template: str = "",
+    reply_to: str = "",
 ) -> str:
     """
     Send an outbound message through the channel provider.
@@ -226,6 +227,7 @@ def send_outbound_message(
         "delivery_status": delivery_status,
         "created_by_user": frappe.session.user,
         "template": template or None,
+        "reply_to": reply_to or None,
     })
     msg.insert(ignore_permissions=True)
 

@@ -15,17 +15,25 @@ import {
   Loader2,
   Lock,
   StickyNote,
+  Pin,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Reply,
 } from "lucide-react";
 import { useFrappePostCall } from "frappe-react-sdk";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
-import type { UnifiedContact } from "../types";
+import type { UnifiedContact, Message } from "../types";
 import { useMessages } from "../hooks/useMessages";
 import { useRealtimeMessages } from "../hooks/useRealtimeMessages";
 import { useFileUpload } from "../hooks/useFileUpload";
+import { usePinnedMessages } from "../hooks/usePinnedMessages";
 import { CannedResponsePopover } from "./CannedResponsePopover";
+import { MessageContextMenu, ReactionBar } from "./MessageContextMenu";
+import { TagManager } from "./TagManager";
 import { EmailMessageCard } from "./EmailMessageCard";
 import { EmailCompose } from "./EmailCompose";
 import { useEmailBody } from "../hooks/useEmailBody";
@@ -108,6 +116,36 @@ export function ChannelTabsView({
   const [isNoteMode, setIsNoteMode] = useState(false);
   const [showCannedPopover, setShowCannedPopover] = useState(false);
   const [cannedSearch, setCannedSearch] = useState("");
+
+  const [contextMenu, setContextMenu] = useState<{
+    message: Message;
+    position: { x: number; y: number };
+  } | null>(null);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [showPinned, setShowPinned] = useState(false);
+
+  const {
+    pinnedMessages,
+    refresh: refreshPinned,
+  } = usePinnedMessages(selectedAccountId || "");
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, message: Message) => {
+      e.preventDefault();
+      setContextMenu({ message, position: { x: e.clientX, y: e.clientY } });
+    },
+    []
+  );
+
+  const handleReply = useCallback((message: Message) => {
+    setReplyingTo(message);
+    setIsNoteMode(false);
+  }, []);
+
+  const handleRefreshAll = useCallback(() => {
+    refresh();
+    refreshPinned();
+  }, [refresh, refreshPinned]);
 
   const isEmailChannel = selectedChannel === "email";
   const { bodies: emailBodies, loading: emailBodyLoading, fetchBody: fetchEmailBody } = useEmailBody();
@@ -193,14 +231,20 @@ export function ChannelTabsView({
     }
 
     const tempId = `opt_${Date.now()}`;
+    const currentReplyTo = replyingTo?.id || "";
     setMessageInput("");
+    setReplyingTo(null);
     setOptimisticMessages((prev) => [
       ...prev,
       { id: tempId, content: text, timestamp: new Date() },
     ]);
 
     try {
-      await sendMessageCall({ thread_id: selectedAccountId, message: text });
+      await sendMessageCall({
+        thread_id: selectedAccountId,
+        message: text,
+        reply_to: currentReplyTo,
+      });
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== tempId));
       await refresh();
     } catch (err) {
@@ -314,6 +358,7 @@ export function ChannelTabsView({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              <TagManager threadId={selectedAccountId || ""} />
               {contact.aiStatus === "active" ? (
                 <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 border">
                   <Bot className="w-3 h-3 mr-1" />
@@ -434,6 +479,36 @@ export function ChannelTabsView({
         className="hidden"
       />
 
+      {/* Pinned Messages */}
+      {pinnedMessages.length > 0 && (
+        <div className="shrink-0 border-b border-zinc-800">
+          <button
+            onClick={() => setShowPinned(!showPinned)}
+            className="w-full px-4 py-2 flex items-center gap-2 text-xs text-amber-400 hover:bg-zinc-800/50 transition-colors"
+          >
+            <Pin className="w-3.5 h-3.5" />
+            <span className="font-medium">{pinnedMessages.length} pinned message{pinnedMessages.length > 1 ? "s" : ""}</span>
+            {showPinned ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+          </button>
+          {showPinned && (
+            <div className="px-4 pb-2 space-y-2 max-h-48 overflow-y-auto">
+              {pinnedMessages.map((pm) => (
+                <div key={pm.name} className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-2">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Pin className="w-3 h-3 text-amber-400" />
+                    <span className="text-[10px] text-amber-400/70">{pm.sender_name || "Unknown"}</span>
+                    <span className="text-[10px] text-zinc-500 ml-auto">
+                      {format(new Date(pm.creation), "MMM d, h:mm a")}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-300 line-clamp-2">{pm.content_text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Messages - scrollable area */}
       <div
         className={`flex-1 min-h-0 overflow-y-auto p-6 ${isDragging ? "ring-2 ring-blue-500 ring-inset bg-blue-500/5" : ""}`}
@@ -521,6 +596,7 @@ export function ChannelTabsView({
                       className={`flex ${
                         isUser || isAI ? "justify-end" : "justify-start"
                       }`}
+                      onContextMenu={(e) => handleContextMenu(e, message)}
                     >
                       <div
                         className={`flex gap-2 max-w-[70%] ${
@@ -536,8 +612,21 @@ export function ChannelTabsView({
                         )}
 
                         <div>
+                          {message.replyTo && (
+                            <div className={`mb-1 rounded-lg p-2 border-l-2 ${
+                              message.replyTo.direction === "Outbound"
+                                ? "border-blue-500 bg-blue-500/10"
+                                : "border-zinc-500 bg-zinc-800/50"
+                            }`}>
+                              <p className="text-[10px] text-zinc-400 mb-0.5">
+                                {message.replyTo.sender || (message.replyTo.direction === "Outbound" ? "You" : contact.contactName)}
+                              </p>
+                              <p className="text-xs text-zinc-300 line-clamp-2">{message.replyTo.content}</p>
+                            </div>
+                          )}
+
                           <div
-                            className={`rounded-2xl p-3 shadow-lg ${
+                            className={`rounded-2xl p-3 shadow-lg relative ${
                               isAI
                                 ? "bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 text-white"
                                 : isUser
@@ -545,6 +634,9 @@ export function ChannelTabsView({
                                 : "bg-zinc-800 text-zinc-100"
                             }`}
                           >
+                            {message.isPinned && (
+                              <Pin className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 text-amber-400" />
+                            )}
                             {message.type === "document" && message.mediaUrl ? (
                               <div className="flex items-center gap-3 p-2">
                                 <div className="w-10 h-10 bg-zinc-700 rounded-lg flex items-center justify-center">
@@ -571,6 +663,14 @@ export function ChannelTabsView({
                               </p>
                             )}
                           </div>
+
+                          {message.reactions && Object.keys(message.reactions).length > 0 && (
+                            <ReactionBar
+                              reactions={message.reactions}
+                              messageId={message.id}
+                              onRefresh={handleRefreshAll}
+                            />
+                          )}
 
                           <div
                             className={`flex items-center gap-2 mt-1 text-xs ${
@@ -643,6 +743,38 @@ export function ChannelTabsView({
           onClose={() => setEmailCompose({ show: false, to: "", subject: "", inReplyToGmailId: "" })}
           onSent={() => refresh()}
         />
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <MessageContextMenu
+          message={contextMenu.message}
+          position={contextMenu.position}
+          onClose={() => setContextMenu(null)}
+          onReply={handleReply}
+          onRefresh={handleRefreshAll}
+        />
+      )}
+
+      {/* Reply Bar */}
+      {replyingTo && (
+        <div className="shrink-0 px-4 py-2 bg-zinc-900/80 border-t border-zinc-800">
+          <div className="max-w-4xl mx-auto flex items-center gap-3 rounded-lg bg-blue-500/10 border border-blue-500/20 p-2">
+            <Reply className="w-4 h-4 text-blue-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] text-blue-400 font-medium">
+                Replying to {replyingTo.sentBy?.name || (replyingTo.sender === "user" ? "You" : contact.contactName)}
+              </p>
+              <p className="text-xs text-zinc-400 truncate">{replyingTo.content}</p>
+            </div>
+            <button
+              onClick={() => setReplyingTo(null)}
+              className="p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Input Area */}

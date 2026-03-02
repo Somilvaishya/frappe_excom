@@ -43,6 +43,7 @@ function ExcomDashboard() {
   );
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const { unifiedContacts, refresh: refreshThreads } = useThreads(searchQuery);
 
@@ -63,9 +64,14 @@ function ExcomDashboard() {
       const matchesChannel =
         selectedChannel === "all" ||
         contact.channels.includes(selectedChannel);
-      return matchesChannel;
+      const matchesTags =
+        selectedTags.length === 0 ||
+        selectedTags.every((tagName) =>
+          contact.tags?.some((t) => t.tag === tagName)
+        );
+      return matchesChannel && matchesTags;
     });
-  }, [unifiedContacts, selectedChannel]);
+  }, [unifiedContacts, selectedChannel, selectedTags]);
 
   const channelCounts = useMemo(() => {
     const totalUnread = unifiedContacts.reduce(
@@ -132,6 +138,8 @@ function ExcomDashboard() {
         onSearchChange={setSearchQuery}
         totalConversations={channelCounts.totalConversations}
         totalUnread={channelCounts.totalUnread}
+        selectedTags={selectedTags}
+        onTagFilterChange={setSelectedTags}
       />
 
       <ChatThreadList

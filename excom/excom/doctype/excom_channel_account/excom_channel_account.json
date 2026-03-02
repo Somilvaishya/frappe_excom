@@ -36,7 +36,16 @@
   "email_sync_from_date",
   "column_break_email_sync",
   "email_label_filter",
-  "email_poll_interval_minutes"
+  "email_poll_interval_minutes",
+
+  "webchat_section",
+  "webchat_widget_title",
+  "webchat_welcome_message",
+  "webchat_offline_message",
+  "column_break_webchat",
+  "webchat_color",
+  "webchat_position",
+  "webchat_prechat_fields"
  ],
  "fields": [
   {
@@ -247,11 +256,65 @@
    "fieldtype": "Int",
    "label": "Poll Interval (minutes)",
    "description": "How often to check for new emails (minimum 1)"
+  },
+  {
+   "depends_on": "eval:doc.channel=='webchat'",
+   "fieldname": "webchat_section",
+   "fieldtype": "Section Break",
+   "label": "Web Chat Widget Configuration"
+  },
+  {
+   "default": "Chat with us",
+   "depends_on": "eval:doc.channel=='webchat'",
+   "fieldname": "webchat_widget_title",
+   "fieldtype": "Data",
+   "label": "Widget Title"
+  },
+  {
+   "depends_on": "eval:doc.channel=='webchat'",
+   "fieldname": "webchat_welcome_message",
+   "fieldtype": "Small Text",
+   "label": "Welcome Message",
+   "description": "Shown to visitors when they open the chat widget"
+  },
+  {
+   "default": "We're currently offline. Leave a message and we'll get back to you!",
+   "depends_on": "eval:doc.channel=='webchat'",
+   "fieldname": "webchat_offline_message",
+   "fieldtype": "Small Text",
+   "label": "Offline Message"
+  },
+  {
+   "fieldname": "column_break_webchat",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "#3b82f6",
+   "depends_on": "eval:doc.channel=='webchat'",
+   "fieldname": "webchat_color",
+   "fieldtype": "Color",
+   "label": "Widget Color"
+  },
+  {
+   "default": "bottom-right",
+   "depends_on": "eval:doc.channel=='webchat'",
+   "fieldname": "webchat_position",
+   "fieldtype": "Select",
+   "label": "Widget Position",
+   "options": "bottom-right\nbottom-left"
+  },
+  {
+   "default": "[\"name\",\"email\"]",
+   "depends_on": "eval:doc.channel=='webchat'",
+   "fieldname": "webchat_prechat_fields",
+   "fieldtype": "Small Text",
+   "label": "Pre-chat Fields",
+   "description": "JSON array of fields to collect before chat. Options: name, email, phone"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-23 00:00:00.000000",
+ "modified": "2026-03-02 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Excom",
  "name": "Excom Channel Account",

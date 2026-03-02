@@ -994,3 +994,87 @@ Even a single outbound message from any Frappe user to an Omni Identity (on any 
 ### Migration Implications
 - `bench migrate` required — creates the `Excom Settings` Single DocType table
 - No existing data affected — cleanup is disabled by default
+
+---
+
+## Phase 3 Remaining Features (2026-03-02)
+
+### A. Message Features (3.6)
+
+#### A1. Message Pinning
+- **Fields added to `Excom Message`**: `is_pinned` (Check), `pinned_by` (Link to User)
+- **API endpoints** (`chat.py`): `pin_message`, `unpin_message`, `get_pinned_messages`
+- **Frontend**: Right-click context menu on message bubbles, collapsible pinned messages section above message list, `usePinnedMessages` hook
+- **Realtime**: `excom:message_pinned` event
+
+#### A2. Reply/Quote
+- **API**: `send_message` now accepts `reply_to` parameter, `send_outbound_message` pipes it through
+- **`get_messages`**: SQL JOINs to `Excom Message` (as `rt`) and `User` (as `ru`) to return `reply_to_content`, `reply_to_direction`, `reply_to_sender`
+- **Frontend**: Reply bar above input showing quoted message, quoted block above message bubble, context menu "Reply" action
+
+#### A3. Message Reactions
+- **Field added to `Excom Message`**: `reactions` (JSON, default `{}`)
+- **API**: `toggle_reaction(message_name, emoji)` — stores as `{"emoji": ["user1", "user2"]}`
+- **Frontend**: `ReactionBar` component below message bubbles, emoji picker in context menu (8 common emojis)
+- **Realtime**: `excom:message_reaction` event
+
+#### Shared: `MessageContextMenu` component
+- Right-click (context menu) on any message bubble
+- Actions: React, Reply, Pin/Unpin
+- Emoji sub-picker for reactions
+
+### B. Conversation Tags (3.4)
+
+#### New DocTypes
+- **`Excom Tag`**: `tag_name` (Data, unique), `color` (Color), `description` (Small Text). Named by field `tag_name`.
+- **`Excom Thread Tag`**: Child table (`istable=1`): `tag` (Link to Excom Tag), `added_by` (Link to User), `added_on` (Datetime)
+- **`Excom Thread`**: Added `tags` (Table, Excom Thread Tag) field
+
+#### API endpoints (`chat.py`)
+- `get_tags()` — all Excom Tag records
+- `add_thread_tag(thread_id, tag_name)` — auto-creates tag if missing
+- `remove_thread_tag(thread_id, tag_name)`
+- `get_thread_tags(thread_id)`
+- `get_threads` enriched with `_enrich_tags` batch fetcher
+
+#### Frontend
+- **Tag chips on thread cards** (`ChatThreadList.tsx`): colored dots/badges with tag name
+- **`TagManager` component**: popover in `ChannelTabsView` header for adding/removing tags
+- **Tag filter in `LeftSidebar`**: click-to-toggle tag filter chips
+- **Hooks**: `useTags()`, `useThreadTags(threadId)` in `hooks/useTags.ts`
+- **Types**: `ThreadTag` interface added to `ExcomThread` and `UnifiedContact`
+
+### C. Web Chat Widget (3.2)
+
+#### C1. Backend
+- **Channel**: `webchat` added to `setup.py` CHANNELS seed list
+- **`Excom Visitor Session` DocType**: `session_token` (unique), `status`, `channel_account`, `thread`, `omni_identity`, visitor fields, metadata
+- **API** (`api/webchat.py`, all `allow_guest=True`):
+  - `get_config(account_id)` — widget branding/settings
+  - `create_session(account_id, visitor_name, ...)` — creates Omni Identity + Thread + Session, returns token
+  - `send_visitor_message(session_token, content)` — ingests as inbound message
+  - `get_visitor_messages(session_token, after)` — returns conversation history
+  - `end_session(session_token)` — marks session ended
+
+#### C2. Channel Account Config
+- **Fields added to `Excom Channel Account`** (depends_on `webchat`):
+  - `webchat_widget_title`, `webchat_welcome_message`, `webchat_offline_message`
+  - `webchat_color` (Color), `webchat_position` (Select)
+  - `webchat_prechat_fields` (JSON config)
+
+#### C3. Embeddable Widget
+- **Self-contained vanilla JS IIFE** at `excom/public/widget/excom-chat.js` (~14KB)
+- **Shadow DOM isolation** — all styles scoped, no conflicts with host page
+- **Embed code**:
+  ```html
+  <script src="{site}/assets/excom/widget/excom-chat.js"
+    data-account="{channel_account_name}"
+    data-site="{site_url}">
+  </script>
+  ```
+- **Features**: floating chat button, pre-chat form (name/email/phone), message list with timestamps, polling every 3s, optimistic message rendering, `localStorage` session persistence
+- **Architecture**: No build step required — plain JS with DOM manipulation and Shadow DOM
+
+### Migration Requirements
+- `bench migrate` — creates `Excom Tag`, `Excom Thread Tag`, `Excom Visitor Session` DocTypes, adds fields to `Excom Message`, `Excom Thread`, `Excom Channel Account`
+- `bench migrate` seeds the `webchat` channel
