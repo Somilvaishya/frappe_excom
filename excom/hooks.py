@@ -210,7 +210,7 @@ scheduler_events = {
 # Request Events
 # ----------------
 # before_request = ["excom.utils.before_request"]
-# after_request = ["excom.utils.after_request"]
+after_request = ["excom.excom.middleware.add_webchat_cors_headers"]
 
 # Job Events
 # ----------

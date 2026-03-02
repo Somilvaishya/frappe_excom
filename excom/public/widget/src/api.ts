@@ -8,9 +8,8 @@ async function call<T>(method: string, args: Record<string, string>): Promise<T>
   const url = `${siteUrl}/api/method/excom.excom.api.webchat.${method}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Frappe-CSRF-Token": "None" },
-    body: JSON.stringify(args),
-    credentials: "include",
+    body: new URLSearchParams(args),
+    credentials: "omit",
   });
   if (!res.ok) throw new Error(`API error ${res.status}`);
   const data = await res.json();
