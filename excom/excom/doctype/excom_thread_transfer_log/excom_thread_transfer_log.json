@@ -1,0 +1,107 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-03-09 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "thread",
+  "from_team",
+  "column_break_main",
+  "to_team",
+  "transferred_by",
+  "detail_section",
+  "note",
+  "column_break_detail",
+  "transferred_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "thread",
+   "fieldtype": "Link",
+   "label": "Thread",
+   "options": "Excom Thread",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "from_team",
+   "fieldtype": "Link",
+   "label": "From Team",
+   "options": "Excom Team",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "to_team",
+   "fieldtype": "Link",
+   "label": "To Team",
+   "options": "Excom Team",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "transferred_by",
+   "fieldtype": "Link",
+   "label": "Transferred By",
+   "options": "User",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "detail_section",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note"
+  },
+  {
+   "fieldname": "column_break_detail",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "transferred_at",
+   "fieldtype": "Datetime",
+   "label": "Transferred At",
+   "read_only": 1,
+   "in_list_view": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-03-09 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Excom",
+ "name": "Excom Thread Transfer Log",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "export": 1
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Excom Manager"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Excom User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

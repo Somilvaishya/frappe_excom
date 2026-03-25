@@ -4,6 +4,8 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "identity_sync_section",
+  "identity_sync_html",
   "cleanup_section",
   "auto_cleanup_enabled",
   "cleanup_retention_days",
@@ -11,6 +13,17 @@
   "cleanup_channels"
  ],
  "fields": [
+  {
+   "fieldname": "identity_sync_section",
+   "fieldtype": "Section Break",
+   "label": "Identity Sync"
+  },
+  {
+   "fieldname": "identity_sync_html",
+   "fieldtype": "HTML",
+   "label": "Identity Sync Actions",
+   "options": "<p class=\"text-muted\">Create Omni Identities from all existing Customers, Suppliers, Leads, and Contacts in ERPNext.</p>"
+  },
   {
    "fieldname": "cleanup_section",
    "fieldtype": "Section Break",
@@ -63,6 +76,15 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Excom Manager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Excom User"
   }
  ],
  "sort_field": "modified",

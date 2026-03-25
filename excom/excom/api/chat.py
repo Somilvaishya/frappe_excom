@@ -6,33 +6,76 @@ from frappe.utils import flt, now_datetime
 
 from excom.excom.services.thread_service import send_outbound_message
 
+EXCOM_ROLES = {"System Manager", "Excom Manager", "Excom User"}
+
+
+def _check_excom_access() -> None:
+    """Block users without any Excom role from accessing chat APIs."""
+    if not EXCOM_ROLES.intersection(frappe.get_roles(frappe.session.user)):
+        frappe.throw(_("You do not have access to Excom"), frappe.PermissionError)
+
 
 @frappe.whitelist()
-def get_threads(search: str = "", limit: int = 50, offset: int = 0):
+def get_threads(search: str = "", limit: int = 50, offset: int = 0, team: str = ""):
     """
     Inbox query: returns threads ordered by last_message_at.
     Enriches each thread with contact data from Omni Identity and User.
+
+    Team filtering:
+    - team="" (default): threads in user's teams + General (unassigned) + directly assigned
+    - team="__general__": only unassigned threads (assigned_team IS NULL)
+    - team="<team_name>": only threads assigned to that team
     """
+    _check_excom_access()
     limit = int(limit)
     offset = int(offset)
 
     conditions = "t.status != 'Closed'"
-    params = {"limit": limit, "offset": offset}
+    params: dict = {"limit": limit, "offset": offset, "current_user": frappe.session.user}
 
     if search:
         conditions += " AND (t.display_name LIKE %(search)s OR t.primary_phone LIKE %(search)s)"
         params["search"] = f"%{search}%"
 
+    user_roles = set(frappe.get_roles(frappe.session.user))
+    is_manager = bool(user_roles & {"System Manager", "Excom Manager"})
+
+    if team == "__general__":
+        if not is_manager:
+            from excom.excom.doctype.excom_team.excom_team import get_user_teams
+            if "General" not in get_user_teams():
+                frappe.throw(_("You do not have access to the General inbox"), frappe.PermissionError)
+        conditions += " AND t.assigned_team IS NULL"
+    elif team:
+        conditions += " AND t.assigned_team = %(team_filter)s"
+        params["team_filter"] = team
+    elif is_manager:
+        pass
+    else:
+        from excom.excom.doctype.excom_team.excom_team import get_user_teams
+        user_teams = get_user_teams()
+        if user_teams:
+            conditions += (
+                " AND (t.assigned_team IN %(user_teams)s"
+                " OR t.assigned_to = %(current_user)s)"
+            )
+            params["user_teams"] = user_teams
+        else:
+            conditions += " AND t.assigned_to = %(current_user)s"
+
     threads = frappe.db.sql(
         f"""
         SELECT t.name, t.display_name, t.primary_phone, t.last_message_at,
                t.last_message_preview, t.last_message_direction, t.unread_count,
-               t.status, t.assigned_to, t.omni_identity, t.channel, t.account,
+               t.status, t.assigned_to, t.assigned_team, t.omni_identity,
+               t.channel, t.account,
                oi.primary_email,
-               u.full_name AS assigned_to_name, u.user_image AS assigned_to_avatar
+               u.full_name AS assigned_to_name, u.user_image AS assigned_to_avatar,
+               et.team_name AS assigned_team_name
         FROM `tabExcom Thread` t
         LEFT JOIN `tabOmni Identity` oi ON oi.name = t.omni_identity
         LEFT JOIN `tabUser` u ON u.name = t.assigned_to
+        LEFT JOIN `tabExcom Team` et ON et.name = t.assigned_team
         WHERE {conditions}
         ORDER BY t.last_message_at DESC
         LIMIT %(limit)s OFFSET %(offset)s
@@ -465,6 +508,110 @@ def assign_thread(thread_id: str, user: str = ""):
 
 
 @frappe.whitelist()
+def transfer_thread(thread_id: str, target_team: str, note: str = "") -> dict:
+    """
+    Transfer a thread to another team.
+
+    Clears assigned_to, sets assigned_team, creates a transfer log entry,
+    and publishes a realtime event.
+    """
+    thread = frappe.db.get_value(
+        "Excom Thread", thread_id, ["assigned_team", "display_name"], as_dict=True
+    )
+    if not thread:
+        frappe.throw(_("Thread not found"))
+
+    from_team = thread.assigned_team or ""
+
+    frappe.db.set_value(
+        "Excom Thread",
+        thread_id,
+        {"assigned_team": target_team, "assigned_to": ""},
+    )
+
+    frappe.get_doc({
+        "doctype": "Excom Thread Transfer Log",
+        "thread": thread_id,
+        "from_team": from_team,
+        "to_team": target_team,
+        "transferred_by": frappe.session.user,
+        "note": note[:500] if note else "",
+        "transferred_at": now_datetime(),
+    }).insert(ignore_permissions=True)
+
+    frappe.publish_realtime(
+        "excom:thread_transferred",
+        {
+            "thread": thread_id,
+            "from_team": from_team,
+            "to_team": target_team,
+            "transferred_by": frappe.session.user,
+        },
+        after_commit=True,
+    )
+
+    frappe.db.commit()
+    return {"success": True, "from_team": from_team, "to_team": target_team}
+
+
+@frappe.whitelist()
+def claim_thread(thread_id: str, team: str = "") -> dict:
+    """
+    Claim a thread from the General inbox.
+
+    Sets assigned_team to the provided team (or user's first team)
+    and assigned_to to the current user.
+    """
+    if not team:
+        from excom.excom.doctype.excom_team.excom_team import get_user_teams
+        user_teams = get_user_teams()
+        if not user_teams:
+            frappe.throw(_("You are not a member of any team"))
+        team = user_teams[0]
+    else:
+        from excom.excom.doctype.excom_team.excom_team import get_user_teams
+        user_teams = get_user_teams()
+        if team not in user_teams:
+            frappe.throw(_("You are not a member of team {0}").format(team))
+
+    frappe.db.set_value(
+        "Excom Thread",
+        thread_id,
+        {"assigned_team": team, "assigned_to": frappe.session.user},
+    )
+
+    frappe.publish_realtime(
+        "excom:thread_updated",
+        {"thread": thread_id, "event": "claimed", "team": team},
+        after_commit=True,
+    )
+
+    return {"success": True, "team": team, "assigned_to": frappe.session.user}
+
+
+@frappe.whitelist()
+def get_transfer_history(thread_id: str) -> list:
+    """Return the transfer log for a thread."""
+    return frappe.db.sql(
+        """
+        SELECT tl.from_team, tl.to_team, tl.transferred_by, tl.note,
+               tl.transferred_at,
+               ft.team_name AS from_team_name,
+               tt.team_name AS to_team_name,
+               u.full_name AS transferred_by_name
+        FROM `tabExcom Thread Transfer Log` tl
+        LEFT JOIN `tabExcom Team` ft ON ft.name = tl.from_team
+        LEFT JOIN `tabExcom Team` tt ON tt.name = tl.to_team
+        LEFT JOIN `tabUser` u ON u.name = tl.transferred_by
+        WHERE tl.thread = %(thread)s
+        ORDER BY tl.transferred_at DESC
+        """,
+        {"thread": thread_id},
+        as_dict=True,
+    )
+
+
+@frappe.whitelist()
 def get_response_metrics(omni_identity: str):
     """
     Calculates average response time for an Omni Identity.
@@ -876,3 +1023,338 @@ def get_related_documents(omni_identity: str):
                     pass
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Initiate outbound conversation
+# ---------------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def get_channel_accounts(channel: str = "") -> list:
+    """Return active channel accounts, optionally filtered by channel type."""
+    _check_excom_access()
+    filters = {"status": "Active"}
+    if channel:
+        filters["channel"] = channel
+
+    return frappe.get_all(
+        "Excom Channel Account",
+        filters=filters,
+        fields=[
+            "name", "account_name", "channel",
+            "is_default_incoming", "is_default_outgoing",
+            "wa_phone_id", "email_address",
+        ],
+        order_by="is_default_outgoing desc, account_name asc",
+    )
+
+
+@frappe.whitelist()
+def initiate_outbound(
+    channel: str,
+    omni_identity: str = "",
+    display_name: str = "",
+    phone: str = "",
+    email: str = "",
+    account: str = "",
+) -> dict:
+    """
+    Start a new outbound conversation with an existing or new contact.
+
+    Either provide an existing omni_identity, or provide display_name + phone/email
+    to resolve/create one. Optionally specify an account; otherwise the default
+    outgoing account for the channel is used.
+    """
+    _check_excom_access()
+
+    if not channel:
+        frappe.throw(_("Channel is required"))
+
+    if channel not in ("whatsapp", "email"):
+        frappe.throw(_("Channel must be 'whatsapp' or 'email'"))
+
+    if not omni_identity and not phone and not email:
+        frappe.throw(_("Provide an existing identity or at least a phone/email"))
+
+    if channel == "whatsapp" and not phone and not omni_identity:
+        frappe.throw(_("Phone number is required for WhatsApp conversations"))
+
+    if channel == "email" and not email and not omni_identity:
+        frappe.throw(_("Email is required for email conversations"))
+
+    from excom.excom.doctype.omni_identity.omni_identity import resolve_identity
+    from excom.excom.services.thread_service import upsert_thread
+    from excom.excom.utils import get_channel_account
+
+    if omni_identity:
+        if not frappe.db.exists("Omni Identity", omni_identity):
+            frappe.throw(_("Identity not found"))
+        identity_name = omni_identity
+    else:
+        identity_name = resolve_identity(
+            phone=phone,
+            email=email,
+            channel=channel,
+            channel_user_id=phone or email,
+            display_name=display_name or phone or email,
+        )
+
+    if account:
+        account_doc = frappe.get_doc("Excom Channel Account", account)
+    else:
+        account_doc = get_channel_account(channel=channel, account_type="outgoing")
+
+    if not account_doc:
+        frappe.throw(_("No outgoing {0} account configured. Create one in Excom Channel Account.").format(channel))
+
+    thread_name = upsert_thread(identity_name, channel, account_doc.name)
+    frappe.db.commit()
+
+    return {"thread_id": thread_name, "omni_identity": identity_name}
+
+
+# ---------------------------------------------------------------------------
+# WhatsApp template messaging
+# ---------------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def get_whatsapp_templates(search: str = "") -> list:
+    """Return approved WhatsApp templates for the template picker."""
+    filters = {"status": "APPROVED"}
+    if search:
+        filters["template_name"] = ["like", f"%{search}%"]
+
+    templates = frappe.get_all(
+        "WhatsApp Templates",
+        filters=filters,
+        fields=[
+            "name", "template_name", "actual_name", "template",
+            "language_code", "category", "header_type",
+            "sample_values", "field_names", "header", "footer",
+        ],
+        order_by="template_name asc",
+        limit=50,
+    )
+
+    for t in templates:
+        variables = []
+        if t.sample_values:
+            variables = [v.strip() for v in t.sample_values.split(",") if v.strip()]
+        t["variable_count"] = len(variables)
+        t["sample_variables"] = variables
+
+    return templates
+
+
+@frappe.whitelist()
+def send_template_to_thread(
+    thread_id: str,
+    template_name: str,
+    variables: str = "[]",
+    header_media_url: str = "",
+) -> dict:
+    """
+    Send an approved WhatsApp template message on an existing thread.
+
+    Args:
+        thread_id: Excom Thread name
+        template_name: WhatsApp Templates document name
+        variables: JSON array of body variable values e.g. '["John", "INV-001"]'
+        header_media_url: Frappe file URL for IMAGE/DOCUMENT header attachments
+    """
+    _check_excom_access()
+
+    thread = frappe.db.get_value(
+        "Excom Thread", thread_id,
+        ["channel", "omni_identity", "account_doctype", "account"],
+        as_dict=True,
+    )
+    if not thread:
+        frappe.throw(_("Thread not found"))
+
+    if thread.channel != "whatsapp":
+        frappe.throw(_("Templates are only supported for WhatsApp"))
+
+    template_doc = frappe.get_doc("WhatsApp Templates", template_name)
+
+    if template_doc.header_type in ("IMAGE", "DOCUMENT") and not header_media_url:
+        frappe.throw(
+            _("This template requires a {0} attachment in the header").format(
+                template_doc.header_type.lower()
+            )
+        )
+
+    identity = frappe.get_doc("Omni Identity", thread.omni_identity)
+    to_number = identity.primary_whatsapp or identity.primary_phone
+    if not to_number:
+        frappe.throw(_("No phone number on identity"))
+
+    account = frappe.get_doc(thread.account_doctype, thread.account)
+
+    var_list = json.loads(variables) if isinstance(variables, str) else variables
+    components = _build_template_components(template_doc, var_list, header_media_url)
+
+    from excom.excom.services.whatsapp_service import send_template_message as wa_send_template
+
+    result = wa_send_template(
+        account=account,
+        to=to_number,
+        template_name=template_doc.actual_name or template_doc.template_name,
+        language_code=template_doc.language_code or "en_US",
+        components=components,
+    )
+
+    preview = _build_template_preview(template_doc, var_list)
+    now = now_datetime()
+
+    msg = frappe.get_doc({
+        "doctype": "Excom Message",
+        "thread": thread_id,
+        "omni_identity": thread.omni_identity,
+        "channel": "whatsapp",
+        "account_doctype": thread.account_doctype,
+        "account": thread.account,
+        "direction": "Outbound",
+        "message_type": "Template",
+        "provider_message_id": result.get("provider_message_id", ""),
+        "provider_timestamp": now,
+        "content_text": preview,
+        "media_file": header_media_url or None,
+        "delivery_status": result.get("status", "Sent"),
+        "created_by_user": frappe.session.user,
+        "template": template_name,
+    })
+    msg.insert(ignore_permissions=True)
+
+    frappe.db.sql(
+        """
+        UPDATE `tabExcom Thread`
+        SET last_message_at = %(now)s,
+            last_outbound_at = %(now)s,
+            last_message_preview = %(preview)s,
+            last_message_direction = 'Outbound',
+            modified = %(now)s
+        WHERE name = %(thread)s
+        """,
+        {"now": now, "preview": preview[:120], "thread": thread_id},
+    )
+
+    frappe.publish_realtime(
+        "excom:message_sent",
+        {"thread": thread_id, "message": msg.name, "direction": "Outbound", "preview": preview[:120]},
+        after_commit=True,
+    )
+
+    frappe.db.commit()
+    return {"success": True, "message_name": msg.name}
+
+
+@frappe.whitelist()
+def check_24h_window(thread_id: str) -> dict:
+    """
+    Check if the WhatsApp 24h messaging window is open for a thread.
+
+    Returns:
+        {"window_open": bool, "last_inbound_at": str or None, "hours_remaining": float or 0}
+    """
+    last_inbound = frappe.db.get_value("Excom Thread", thread_id, "last_inbound_at")
+    if not last_inbound:
+        return {"window_open": False, "last_inbound_at": None, "hours_remaining": 0}
+
+    from frappe.utils import time_diff_in_seconds
+    diff = time_diff_in_seconds(now_datetime(), last_inbound)
+    window_seconds = 24 * 60 * 60
+    remaining = max(0, window_seconds - diff)
+
+    return {
+        "window_open": diff < window_seconds,
+        "last_inbound_at": str(last_inbound),
+        "hours_remaining": round(remaining / 3600, 1),
+    }
+
+
+def _build_template_components(
+    template_doc, body_variables: list, header_media_url: str = ""
+) -> list:
+    """Build Meta WhatsApp template components from variables and media."""
+    components = []
+
+    if body_variables:
+        components.append({
+            "type": "body",
+            "parameters": [{"type": "text", "text": str(v)} for v in body_variables],
+        })
+
+    if template_doc.header_type == "TEXT" and template_doc.header:
+        components.append({
+            "type": "header",
+            "parameters": [{"type": "text", "text": template_doc.header}],
+        })
+    elif template_doc.header_type == "IMAGE" and header_media_url:
+        components.append({
+            "type": "header",
+            "parameters": [{
+                "type": "image",
+                "image": {"link": _to_absolute_url(header_media_url)},
+            }],
+        })
+    elif template_doc.header_type == "DOCUMENT" and header_media_url:
+        filename = header_media_url.rsplit("/", 1)[-1] if "/" in header_media_url else "document"
+        components.append({
+            "type": "header",
+            "parameters": [{
+                "type": "document",
+                "document": {
+                    "link": _to_absolute_url(header_media_url),
+                    "filename": filename,
+                },
+            }],
+        })
+
+    return components
+
+
+def _get_site_url() -> str:
+    """Derive public site URL from the current request or config.
+
+    Priority: request origin > host_name in site_config > frappe.utils.get_url()
+    """
+    if frappe.request:
+        scheme = frappe.request.headers.get("X-Forwarded-Proto", frappe.request.scheme)
+        host = frappe.request.headers.get("X-Forwarded-Host") or frappe.request.host
+        if host:
+            return f"{scheme}://{host}".rstrip("/")
+
+    return (frappe.conf.get("host_name") or frappe.utils.get_url()).rstrip("/")
+
+
+def _to_absolute_url(file_url: str) -> str:
+    """Convert a Frappe file URL to a publicly accessible absolute URL.
+
+    Private files are moved to public so Meta can download them.
+    """
+    if file_url.startswith("http"):
+        return file_url
+
+    site_url = _get_site_url()
+
+    if "/private/" in file_url:
+        file_name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+        if file_name:
+            file_doc = frappe.get_doc("File", file_name)
+            file_doc.is_private = 0
+            file_doc.save(ignore_permissions=True)
+            frappe.db.commit()
+            return f"{site_url}{file_doc.file_url}"
+
+    return f"{site_url}{file_url}"
+
+
+def _build_template_preview(template_doc, body_variables: list) -> str:
+    """Build a human-readable preview of the template with variables filled in."""
+    text = template_doc.template or ""
+    for i, val in enumerate(body_variables, 1):
+        text = text.replace(f"{{{{{i}}}}}", str(val))
+    return text[:500]

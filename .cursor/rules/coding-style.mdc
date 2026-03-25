@@ -1,0 +1,32 @@
+---
+description: Code style for Python, JavaScript, React, Tailwind
+globs:
+alwaysApply: true
+---
+
+# Coding Style
+
+## Python
+- Type hints on all public functions with return types
+- Docstrings on all public classes and methods
+- Max 500 lines per file, 50 lines per function — split if larger
+- Imports: stdlib → third-party → frappe → local
+- Never bare `except:` — catch specific exceptions
+- Prefer composition over inheritance for channel adapters
+
+## JavaScript / React
+- Functional components with hooks only — no class components
+- TypeScript preferred for new files
+- Named exports for shared components, default for page components
+- Props interface defined with TypeScript types
+
+## Tailwind
+- Use design tokens from tailwind.config.js
+- No arbitrary values like `w-[347px]` — use closest token
+- Mobile-first responsive: `sm:`, `md:`, `lg:` breakpoints
+- Dark mode via `dark:` prefix
+
+## General
+- Commit messages: imperative mood, under 72 chars
+- Branch naming: `feature/xxx`, `fix/xxx`, `refactor/xxx`
+- Never commit to main or develop directly

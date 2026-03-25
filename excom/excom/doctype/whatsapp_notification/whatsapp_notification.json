@@ -10,7 +10,9 @@
   "notification_name",
   "notification_type",
   "reference_doctype",
+  "recipient_source",
   "field_name",
+  "subscriber_list",
   "event_frequency",
   "doctype_event",
   "days_in_advance",
@@ -49,6 +51,22 @@
    "label": "Reference Document Type",
    "options": "DocType",
    "reqd": 1
+  },
+  {
+   "fieldname": "recipient_source",
+   "fieldtype": "Select",
+   "label": "Recipient Source",
+   "options": "DocType Field\nSubscriber List",
+   "default": "DocType Field",
+   "depends_on": "eval:doc.notification_type == 'DocType Event'"
+  },
+  {
+   "fieldname": "subscriber_list",
+   "fieldtype": "Link",
+   "label": "Subscriber List",
+   "options": "Excom Subscriber List",
+   "depends_on": "eval:doc.recipient_source == 'Subscriber List'",
+   "mandatory_depends_on": "eval:doc.recipient_source == 'Subscriber List'"
   },
   {
    "depends_on": "eval:doc.notification_type == \"Scheduler Event\"",

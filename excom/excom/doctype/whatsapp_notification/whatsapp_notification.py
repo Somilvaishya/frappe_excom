@@ -10,7 +10,7 @@ from frappe.integrations.utils import make_post_request
 from frappe.desk.form.utils import get_pdf_link
 from frappe.utils import add_to_date, nowdate, now_datetime, datetime
 
-from excom.excom.utils import get_whatsapp_account
+from excom.excom.utils import get_channel_account, get_wa_credentials
 
 
 class WhatsAppNotification(Document):
@@ -143,11 +143,14 @@ class WhatsAppNotification(Document):
 
         doc_data = doc.as_dict()
         if self.condition and not ignore_condition:
-            # check if condition satisfies
             if not frappe.safe_eval(
                 self.condition, get_safe_globals(), dict(doc=doc_data)
             ):
                 return
+
+        if self.recipient_source == "Subscriber List" and self.subscriber_list:
+            self._send_to_subscriber_list(doc, doc_data, default_template, force_send)
+            return
 
         template = default_template or frappe.get_doc("WhatsApp Templates", self.template)
 
@@ -284,26 +287,21 @@ class WhatsAppNotification(Document):
 
     def notify(self, data, doc_data=None, template_account=None, force_send=False):
         """Notify."""
-        # Use template's whatsapp account if available, otherwise use default outgoing account
         if template_account:
-            whatsapp_account = frappe.get_doc("WhatsApp Account", template_account)
+            account_doc = frappe.get_doc("Excom Channel Account", template_account)
         else:
-            whatsapp_account = get_whatsapp_account(account_type='outgoing')
+            account_doc = get_channel_account(channel='whatsapp', account_type='outgoing')
 
-        if not whatsapp_account:
-            frappe.throw(_("Please set a default outgoing WhatsApp Account"))
+        if not account_doc:
+            frappe.throw(_("Please set a default outgoing WhatsApp Channel Account"))
 
-        token = whatsapp_account.get_password("token")
+        creds = get_wa_credentials(account_doc)
 
-        headers = {
-            "authorization": f"Bearer {token}",
-            "content-type": "application/json"
-        }
         try:
             success = False
             response = make_post_request(
-                f"{whatsapp_account.url}/{whatsapp_account.version}/{whatsapp_account.phone_id}/messages",
-                headers=headers, data=json.dumps(data)
+                f"{creds['url']}/{creds['version']}/{creds['phone_id']}/messages",
+                headers=creds['headers'], data=json.dumps(data)
             )
 
             if not self.get("content_type"):
@@ -325,7 +323,7 @@ class WhatsAppNotification(Document):
                 "use_template": 1,
                 "template": self.template,
                 "template_parameters": parameters,
-                "whatsapp_account": whatsapp_account.name,
+                "whatsapp_account": account_doc.name,
             }
 
             if doc_data:
@@ -376,6 +374,36 @@ class WhatsAppNotification(Document):
                 "meta_data": meta
             }).insert(ignore_permissions=True)
 
+
+    def _send_to_subscriber_list(self, doc, doc_data, default_template=None, force_send=False):
+        """Send the template to all active subscribers in the linked list."""
+        subscribers = frappe.get_all(
+            "Excom Subscriber",
+            filters={
+                "subscriber_list": self.subscriber_list,
+                "status": "Subscribed",
+            },
+            fields=["omni_identity"],
+        )
+
+        for sub in subscribers:
+            try:
+                identity = frappe.get_doc("Omni Identity", sub.omni_identity)
+                phone = identity.primary_whatsapp or identity.primary_phone
+                if not phone:
+                    continue
+
+                self.send_template_message(
+                    doc,
+                    phone_no=phone,
+                    default_template=default_template,
+                    ignore_condition=True,
+                    force_send=force_send,
+                )
+            except Exception:
+                frappe.log_error(
+                    title=f"Subscriber list send failed: {sub.omni_identity}",
+                )
 
     def on_trash(self):
         """On delete remove from schedule."""

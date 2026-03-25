@@ -12,6 +12,7 @@ class OmniIdentity(Document):
 		self.normalize_aliases()
 		self.compute_fingerprint()
 		self.validate_merge_state()
+		self.validate_unique_links()
 
 	def normalize_identifiers(self):
 		if self.primary_phone:
@@ -49,6 +50,21 @@ class OmniIdentity(Document):
 			frappe.throw(_("A merged identity must reference the master it was merged into."))
 		if self.status == "Merged":
 			self.is_master = 0
+
+	def validate_unique_links(self):
+		"""Ensure no linked entity is already attached to a different Omni Identity."""
+		for ln in self.get("linked_entities", []):
+			existing_parent = frappe.db.get_value(
+				"Omni Identity Link",
+				{"linked_doctype": ln.linked_doctype, "linked_name": ln.linked_name},
+				"parent",
+			)
+			if existing_parent and existing_parent != self.name:
+				frappe.throw(
+					_("{0} {1} is already linked to Omni Identity {2}").format(
+						ln.linked_doctype, ln.linked_name, existing_parent
+					)
+				)
 
 	def add_channel(self, channel_type: str, channel_user_id: str, verified: bool = False):
 		"""Add a channel identifier if it doesn't already exist."""
@@ -100,12 +116,15 @@ class OmniIdentity(Document):
 
 		group_id = master_identity.merge_group_id or master_identity.name
 		master_identity.merge_group_id = group_id
+		master_identity.flags.ignore_validate = True
 		master_identity.save(ignore_permissions=True)
 
+		self.linked_entities = []
 		self.status = "Merged"
 		self.merged_into = master_identity.name
 		self.is_master = 0
 		self.merge_group_id = group_id
+		self.flags.ignore_validate = True
 		self.save(ignore_permissions=True)
 
 
@@ -322,7 +341,8 @@ def resolve_identity(phone: str = "", email: str = "", channel: str = "", channe
 	# Duplicate detection: flag if a similar identity is found by name or partial phone.
 	# The new record is still created — it is up to a supervisor to review and merge.
 	suspected_duplicate = _find_potential_duplicate(
-		display_name or phone or email, norm_phone
+		display_name or phone or email, norm_phone, norm_email,
+		normalize_phone(phone) if phone else "",
 	)
 	if suspected_duplicate:
 		doc.needs_review = 1
@@ -334,14 +354,16 @@ def resolve_identity(phone: str = "", email: str = "", channel: str = "", channe
 	return doc.name
 
 
-def _find_potential_duplicate(display_name: str, norm_phone: str) -> str:
+def _find_potential_duplicate(display_name: str, norm_phone: str, norm_email: str = "", primary_whatsapp: str = "") -> str:
 	"""
 	Lightweight duplicate check run before creating a new Omni Identity.
 
 	Checks:
 	  1. Exact display_name match on an existing Active identity.
-	  2. Last-10-digit phone match to catch different country-code representations
-	     (e.g. '919876500001' and '9876500001' refer to the same number).
+	  2. Last-10-digit phone match to catch different country-code representations.
+	  3. Exact normalized_email match on another Active identity.
+	  4. Exact primary_whatsapp match on another Active identity.
+	  5. Cross-check: phone/email appears in another identity's aliases.
 
 	Returns the name of a suspected duplicate, or empty string if none found.
 	"""
@@ -369,6 +391,40 @@ def _find_potential_duplicate(display_name: str, norm_phone: str) -> str:
 		)
 		if result:
 			return result[0].name
+
+	if norm_email:
+		email_match = frappe.db.get_value(
+			"Omni Identity",
+			{"normalized_email": norm_email, "status": "Active"},
+			"name",
+		)
+		if email_match:
+			return email_match
+
+	if primary_whatsapp:
+		wa_match = frappe.db.get_value(
+			"Omni Identity",
+			{"primary_whatsapp": primary_whatsapp, "status": "Active"},
+			"name",
+		)
+		if wa_match:
+			return wa_match
+
+	search_values = [v for v in [norm_phone, norm_email] if v]
+	if search_values:
+		alias_hit = frappe.db.sql(
+			"""
+			SELECT oia.parent FROM `tabOmni Identity Alias` oia
+			JOIN `tabOmni Identity` oi ON oi.name = oia.parent
+			WHERE oia.alias_value_normalized IN %(vals)s
+			AND oi.status = 'Active'
+			LIMIT 1
+			""",
+			{"vals": search_values},
+			as_dict=True,
+		)
+		if alias_hit:
+			return alias_hit[0].parent
 
 	return ""
 

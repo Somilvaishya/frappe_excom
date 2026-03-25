@@ -1,0 +1,154 @@
+{
+ "actions": [],
+ "autoname": "field:rule_name",
+ "creation": "2026-03-09 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "rule_name",
+  "enabled",
+  "column_break_basic",
+  "subscriber_list",
+  "description",
+  "trigger_section",
+  "reference_doctype",
+  "event",
+  "column_break_trigger",
+  "identity_field",
+  "identity_field_type",
+  "condition_section",
+  "condition"
+ ],
+ "fields": [
+  {
+   "fieldname": "rule_name",
+   "fieldtype": "Data",
+   "label": "Rule Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_basic",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "subscriber_list",
+   "fieldtype": "Link",
+   "label": "Subscriber List",
+   "options": "Excom Subscriber List",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "trigger_section",
+   "fieldtype": "Section Break",
+   "label": "Trigger"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference DocType",
+   "options": "DocType",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "event",
+   "fieldtype": "Select",
+   "label": "Event",
+   "options": "After Insert\nAfter Save\nAfter Submit",
+   "default": "After Insert",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_trigger",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "identity_field",
+   "fieldtype": "Data",
+   "label": "Identity Field",
+   "reqd": 1,
+   "description": "Field on the document that holds the entity name, e.g. 'customer' or 'contact_person'"
+  },
+  {
+   "fieldname": "identity_field_type",
+   "fieldtype": "Select",
+   "label": "Identity Field Type",
+   "options": "Customer\nSupplier\nLead\nContact",
+   "default": "Customer",
+   "reqd": 1
+  },
+  {
+   "fieldname": "condition_section",
+   "fieldtype": "Section Break",
+   "label": "Condition"
+  },
+  {
+   "fieldname": "condition",
+   "fieldtype": "Code",
+   "label": "Condition",
+   "options": "Python",
+   "description": "Python expression evaluated with 'doc' in scope. Must return True for the rule to fire."
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-03-09 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Excom",
+ "name": "Excom Subscriber Rule",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Excom Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Excom User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

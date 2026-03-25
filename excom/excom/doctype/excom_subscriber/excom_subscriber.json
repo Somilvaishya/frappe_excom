@@ -1,0 +1,116 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-03-09 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "subscriber_list",
+  "omni_identity",
+  "column_break_main",
+  "status",
+  "timestamps_section",
+  "subscribed_on",
+  "column_break_ts",
+  "unsubscribed_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "subscriber_list",
+   "fieldtype": "Link",
+   "label": "Subscriber List",
+   "options": "Excom Subscriber List",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "omni_identity",
+   "fieldtype": "Link",
+   "label": "Omni Identity",
+   "options": "Omni Identity",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Subscribed\nUnsubscribed",
+   "default": "Subscribed",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "timestamps_section",
+   "fieldtype": "Section Break",
+   "label": "Timestamps"
+  },
+  {
+   "fieldname": "subscribed_on",
+   "fieldtype": "Datetime",
+   "label": "Subscribed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ts",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "unsubscribed_on",
+   "fieldtype": "Datetime",
+   "label": "Unsubscribed On",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-03-09 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Excom",
+ "name": "Excom Subscriber",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Excom Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Excom User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

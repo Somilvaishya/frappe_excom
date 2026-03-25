@@ -271,22 +271,50 @@ def get_channel_account(phone_id=None, channel='whatsapp', account_type='incomin
 
 
 def get_whatsapp_account(phone_id=None, account_type='incoming'):
-    """Map whatsapp account with message (legacy – kept for backward compat)."""
-    if phone_id:
-        account_name = frappe.db.get_value('WhatsApp Account', {'phone_id': phone_id}, 'name')
-        if account_name:
-            return frappe.get_doc("WhatsApp Account", account_name)
+    """Get Excom Channel Account for WhatsApp (replaces legacy WhatsApp Account).
 
-    account_field_type = 'is_default_incoming' if account_type =='incoming' else 'is_default_outgoing' 
-    default_account_name = frappe.db.get_value('WhatsApp Account', {account_field_type: 1}, 'name')
-    if default_account_name:
-        return frappe.get_doc("WhatsApp Account", default_account_name)
+    Args:
+        phone_id: WhatsApp phone number ID.
+        account_type: 'incoming' or 'outgoing'.
 
-    return None
+    Returns:
+        Excom Channel Account doc or None.
+    """
+    return get_channel_account(phone_id=phone_id, channel='whatsapp', account_type=account_type)
 
-def format_number(number):
-    """Format number."""
+
+def get_wa_credentials(account_doc) -> dict:
+    """Extract WhatsApp API credentials from an Excom Channel Account doc.
+
+    Returns:
+        dict with keys: token, url, version, phone_id, business_id, app_id, headers
+    """
+    token = account_doc.get_password("wa_token")
+    if not token:
+        frappe.throw(f"No access token configured for account {account_doc.name}")
+
+    url = account_doc.wa_url or "https://graph.facebook.com"
+    version = account_doc.wa_version or "v21.0"
+    phone_id = account_doc.wa_phone_id
+    business_id = account_doc.wa_business_id or ""
+    app_id = account_doc.wa_app_id or ""
+
+    return {
+        "token": token,
+        "url": url,
+        "version": version,
+        "phone_id": phone_id,
+        "business_id": business_id,
+        "app_id": app_id,
+        "headers": {
+            "authorization": f"Bearer {token}",
+            "content-type": "application/json",
+        },
+    }
+
+
+def format_number(number: str) -> str:
+    """Strip leading '+' from phone numbers."""
     if number.startswith("+"):
-        number = number[1 : len(number)]
-
+        number = number[1:]
     return number

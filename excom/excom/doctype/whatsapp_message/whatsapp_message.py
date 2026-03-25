@@ -6,7 +6,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.integrations.utils import make_post_request
 
-from excom.excom.utils import get_whatsapp_account, format_number
+from excom.excom.utils import get_channel_account, get_wa_credentials, format_number
 
 class WhatsAppMessage(Document):
     def validate(self):
@@ -41,14 +41,14 @@ class WhatsAppMessage(Document):
             }).insert(ignore_permissions=True)
 
     def set_whatsapp_account(self):
-        """Set whatsapp account to default if missing"""
+        """Set channel account to default if missing."""
         if not self.whatsapp_account:
             account_type = 'outgoing' if self.type == 'Outgoing' else 'incoming'
-            default_whatsapp_account = get_whatsapp_account(account_type=account_type)
-            if not default_whatsapp_account:
-                frappe.throw(_("Please set a default outgoing WhatsApp Account or Select available WhatsApp Account"))
+            default_account = get_channel_account(channel='whatsapp', account_type=account_type)
+            if not default_account:
+                frappe.throw(_("Please set a default WhatsApp Channel Account"))
             else:
-                self.whatsapp_account = default_whatsapp_account.name
+                self.whatsapp_account = default_account.name
 
     """Send whats app messages."""
     def before_insert(self):
@@ -293,26 +293,19 @@ class WhatsAppMessage(Document):
         self.notify(data)
 
     def notify(self, data):
-        """Notify."""
-        whatsapp_account = frappe.get_doc(
-            "WhatsApp Account",
-            self.whatsapp_account,
-        )
-        token = whatsapp_account.get_password("token")
+        """Notify via WhatsApp Cloud API."""
+        account_doc = frappe.get_doc("Excom Channel Account", self.whatsapp_account)
+        creds = get_wa_credentials(account_doc)
 
-        headers = {
-            "authorization": f"Bearer {token}",
-            "content-type": "application/json",
-        }
         try:
             response = make_post_request(
-                f"{whatsapp_account.url}/{whatsapp_account.version}/{whatsapp_account.phone_id}/messages",
-                headers=headers,
+                f"{creds['url']}/{creds['version']}/{creds['phone_id']}/messages",
+                headers=creds['headers'],
                 data=json.dumps(data),
             )
             self.message_id = response["messages"][0]["id"]
 
-        except Exception as e:
+        except Exception:
             res = frappe.flags.integration_request.json().get("error", {})
             error_message = res.get("Error", res.get("message"))
             frappe.get_doc(
@@ -340,21 +333,13 @@ class WhatsAppMessage(Document):
             "message_id": self.message_id
         }
 
-        settings = frappe.get_doc(
-            "WhatsApp Account",
-            self.whatsapp_account,
-        )
+        account_doc = frappe.get_doc("Excom Channel Account", self.whatsapp_account)
+        creds = get_wa_credentials(account_doc)
 
-        token = settings.get_password("token")
-
-        headers = {
-            "authorization": f"Bearer {token}",
-            "content-type": "application/json",
-        }
         try:
             response = make_post_request(
-                f"{settings.url}/{settings.version}/{settings.phone_id}/messages",
-                headers=headers,
+                f"{creds['url']}/{creds['version']}/{creds['phone_id']}/messages",
+                headers=creds['headers'],
                 data=json.dumps(data),
             )
 
@@ -363,7 +348,7 @@ class WhatsAppMessage(Document):
                 self.save()
                 return response.get("success")
 
-        except Exception as e:
+        except Exception:
             res = frappe.flags.integration_request.json().get("error", {})
             error_message = res.get("Error", res.get("message"))
             frappe.log_error("WhatsApp API Error", f"{error_message}\n{res}")

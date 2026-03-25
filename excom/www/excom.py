@@ -18,6 +18,14 @@ def get_context(context):
     if frappe.session.user == "Guest":
         frappe.throw(_("Please login to access Excom"), frappe.AuthenticationError)
 
+    user_roles = frappe.get_roles(frappe.session.user)
+    allowed = {"System Manager", "Excom Manager", "Excom User"}
+    if not allowed.intersection(user_roles):
+        frappe.throw(
+            _("You do not have access to Excom. Contact your administrator to get the Excom User or Excom Manager role."),
+            frappe.PermissionError,
+        )
+
     try:
         boot = frappe.sessions.get()
     except Exception as e:

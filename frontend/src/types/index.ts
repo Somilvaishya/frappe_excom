@@ -14,6 +14,8 @@ export interface ExcomThread {
   unread_count: number;
   status: string;
   assigned_to: string;
+  assigned_team?: string;
+  assigned_team_name?: string;
   omni_identity: string;
   channel: string;
   account: string;
@@ -61,7 +63,7 @@ export interface Message {
   timestamp: Date;
   sender: "user" | "contact" | "ai";
   status?: "sent" | "delivered" | "read";
-  type?: "text" | "image" | "document" | "audio" | "email";
+  type?: "text" | "image" | "document" | "audio" | "email" | "template";
   mediaUrl?: string;
   channel?: string;
   isInternal?: boolean;

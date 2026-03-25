@@ -11,7 +11,7 @@ from frappe.model.document import Document
 from frappe.integrations.utils import make_post_request, make_request
 from frappe.desk.form.utils import get_pdf_link
 
-from excom.excom.utils import get_whatsapp_account
+from excom.excom.utils import get_channel_account, get_wa_credentials
 
 class WhatsAppTemplates(Document):
     """Create whatsapp template."""
@@ -47,17 +47,17 @@ class WhatsAppTemplates(Document):
             )
 
     def set_whatsapp_account(self):
-        """Set whatsapp account to default if missing"""
+        """Set channel account to default if missing."""
         if not self.whatsapp_account:
-            default_whatsapp_account = get_whatsapp_account()
-            if not default_whatsapp_account:
-                frappe.throw(_("Please set a default outgoing WhatsApp Account or Select available WhatsApp Account"))
+            default_account = get_channel_account(channel='whatsapp', account_type='outgoing')
+            if not default_account:
+                frappe.throw(_("Please set a default outgoing WhatsApp Channel Account"))
             else:
-                self.whatsapp_account = default_whatsapp_account.name
+                self.whatsapp_account = default_account.name
 
     def get_session_id(self):
-        """Upload media."""
-        self.get_settings()
+        """Upload media to Meta for template header sample."""
+        creds = self._get_creds()
         file_path = self.get_absolute_path(self.sample)
         mime = magic.Magic(mime=True)
         file_type = mime.from_file(file_path)
@@ -69,35 +69,30 @@ class WhatsAppTemplates(Document):
         }
 
         response = make_post_request(
-            f"{self._url}/{self._version}/{self._app_id}/uploads",
-            headers=self._headers,
+            f"{creds['url']}/{creds['version']}/{creds['app_id']}/uploads",
+            headers=creds['headers'],
             data=json.loads(json.dumps(payload))
         )
         self._session_id = response['id']
 
     def get_media_id(self):
-        self.get_settings()
-
-        headers = {
-                "authorization": f"OAuth {self._token}"
-            }
+        creds = self._get_creds()
+        headers = {"authorization": f"OAuth {creds['token']}"}
         file_name = self.get_absolute_path(self.sample)
-        with open(file_name, mode='rb') as file: # b is important -> binary
+        with open(file_name, mode='rb') as file:
             file_content = file.read()
 
-        payload = file_content
         response = make_post_request(
-            f"{self._url}/{self._version}/{self._session_id}",
+            f"{creds['url']}/{creds['version']}/{self._session_id}",
             headers=headers,
-            data=payload
+            data=file_content
         )
-
         self._media_id = response['h']
 
     def get_absolute_path(self, file_name):
-        if(file_name.startswith('/files/')):
+        if file_name.startswith('/files/'):
             file_path = f'{frappe.utils.get_bench_path()}/sites/{frappe.utils.get_site_base_path()[2:]}/public{file_name}'
-        if(file_name.startswith('/private/')):
+        if file_name.startswith('/private/'):
             file_path = f'{frappe.utils.get_bench_path()}/sites/{frappe.utils.get_site_base_path()[2:]}{file_name}'
         return file_path
 
@@ -106,7 +101,7 @@ class WhatsAppTemplates(Document):
         if self.template_name:
             self.actual_name = self.template_name.lower().replace(" ", "_")
 
-        self.get_settings()
+        creds = self._get_creds()
         data = {
             "name": self.actual_name,
             "language": self.language_code,
@@ -125,11 +120,9 @@ class WhatsAppTemplates(Document):
         if self.header_type:
             data["components"].append(self.get_header())
 
-        # add footer
         if self.footer:
             data["components"].append({"type": "FOOTER", "text": self.footer})
 
-        # add buttons
         if self.buttons:
             button_block = {"type": "BUTTONS", "buttons": []}
             for btn in self.buttons:
@@ -152,14 +145,14 @@ class WhatsAppTemplates(Document):
 
         try:
             response = make_post_request(
-                f"{self._url}/{self._version}/{self._business_id}/message_templates",
-                headers=self._headers,
+                f"{creds['url']}/{creds['version']}/{creds['business_id']}/message_templates",
+                headers=creds['headers'],
                 data=json.dumps(data),
             )
             self.id = response["id"]
             self.status = response["status"]
             self.db_update()
-        except Exception as e:
+        except Exception:
             res = frappe.flags.integration_request.json().get("error", {})
             error_message = res.get("error_user_msg", res.get("message"))
             frappe.throw(
@@ -168,8 +161,8 @@ class WhatsAppTemplates(Document):
             )
 
     def update_template(self):
-        """Update template to meta."""
-        self.get_settings()
+        """Update template on Meta."""
+        creds = self._get_creds()
         data = {"components": []}
 
         body = {
@@ -204,39 +197,24 @@ class WhatsAppTemplates(Document):
             data["components"].append(button_block)
 
         try:
-            # post template to meta for update
             make_post_request(
-                f"{self._url}/{self._version}/{self.id}",
-                headers=self._headers,
+                f"{creds['url']}/{creds['version']}/{self.id}",
+                headers=creds['headers'],
                 data=json.dumps(data),
             )
         except Exception as e:
             raise e
-            # res = frappe.flags.integration_request.json()['error']
-            # frappe.throw(
-            #     msg=res.get('error_user_msg', res.get("message")),
-            #     title=res.get("error_user_title", "Error"),
-            # )
 
-    def get_settings(self):
-        """Get whatsapp settings."""
-        settings = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
-        self._token = settings.get_password("token")
-        self._url = settings.url
-        self._version = settings.version
-        self._business_id = settings.business_id
-        self._app_id = settings.app_id
-
-        self._headers = {
-            "authorization": f"Bearer {self._token}",
-            "content-type": "application/json",
-        }
+    def _get_creds(self) -> dict:
+        """Get WhatsApp API credentials from the linked Excom Channel Account."""
+        account_doc = frappe.get_doc("Excom Channel Account", self.whatsapp_account)
+        return get_wa_credentials(account_doc)
 
     def on_trash(self):
-        self.get_settings()
-        url = f"{self._url}/{self._version}/{self._business_id}/message_templates?name={self.actual_name}"
+        creds = self._get_creds()
+        url = f"{creds['url']}/{creds['version']}/{creds['business_id']}/message_templates?name={self.actual_name}"
         try:
-            make_request("DELETE", url, headers=self._headers)
+            make_request("DELETE", url, headers=creds['headers'])
         except Exception:
             res = frappe.flags.integration_request.json().get("error", {})
             if res.get("error_user_title") == "Message Template Not Found":
@@ -269,16 +247,20 @@ class WhatsAppTemplates(Document):
 
 @frappe.whitelist()
 def fetch():
-    """Fetch templates from meta."""
-    """Later improve this code to pass a whatsapp account remove the js funcation so that it is called from whatsapp account doctype """
-    whatsapp_accounts = frappe.get_all('WhatsApp Account', filters={'status': 'Active'}, fields=['name', 'token', 'url', 'version', 'business_id'])
+    """Fetch templates from Meta for all active WhatsApp channel accounts."""
+    accounts = frappe.get_all(
+        'Excom Channel Account',
+        filters={'status': 'Active', 'channel': 'WhatsApp'},
+        fields=['name'],
+    )
 
-    for account in whatsapp_accounts:
-        # get credentials
-        token = frappe.get_doc("WhatsApp Account", account.name).get_password("token")
-        url = account.url
-        version = account.version
-        business_id = account.business_id
+    for acct in accounts:
+        account_doc = frappe.get_doc("Excom Channel Account", acct.name)
+        creds = get_wa_credentials(account_doc)
+        token = creds['token']
+        url = creds['url']
+        version = creds['version']
+        business_id = creds['business_id']
 
         headers = {"authorization": f"Bearer {token}", "content-type": "application/json"}
 
@@ -304,7 +286,7 @@ def fetch():
                 doc.language_code = template["language"]
                 doc.category = template["category"]
                 doc.id = template["id"]
-                doc.whatsapp_account = account.name
+                doc.whatsapp_account = acct.name
 
                 # update components
                 for component in template["components"]:

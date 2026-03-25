@@ -20,6 +20,8 @@ import {
   ChevronUp,
   X,
   Reply,
+  ArrowRightLeft,
+  FileText,
 } from "lucide-react";
 import { useFrappePostCall } from "frappe-react-sdk";
 import { Button } from "./ui/button";
@@ -36,6 +38,7 @@ import { MessageContextMenu, ReactionBar } from "./MessageContextMenu";
 import { TagManager } from "./TagManager";
 import { EmailMessageCard } from "./EmailMessageCard";
 import { EmailCompose } from "./EmailCompose";
+import { WhatsAppTemplatePicker } from "./WhatsAppTemplatePicker";
 import { useEmailBody } from "../hooks/useEmailBody";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -174,6 +177,32 @@ export function ChannelTabsView({
   const { call: assignThreadCall } = useFrappePostCall(
     "excom.excom.api.chat.assign_thread"
   );
+
+  const { call: transferThreadCall } = useFrappePostCall(
+    "excom.excom.api.chat.transfer_thread"
+  );
+
+  const { call: fetchAllTeams } = useFrappePostCall(
+    "excom.excom.api.teams.get_all_teams"
+  );
+
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferTeams, setTransferTeams] = useState<{ name: string; team_name: string }[]>([]);
+  const [transferTarget, setTransferTarget] = useState("");
+  const [transferNote, setTransferNote] = useState("");
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+
+  const openTransferModal = useCallback(async () => {
+    try {
+      const res = await fetchAllTeams({});
+      setTransferTeams((res as any)?.message || []);
+      setTransferTarget("");
+      setTransferNote("");
+      setShowTransferModal(true);
+    } catch {
+      toast.error("Failed to load teams");
+    }
+  }, [fetchAllTeams]);
 
   const handleFileReady = useCallback(
     async (fileUrl: string, messageType: string, _fileName: string) => {
@@ -371,6 +400,15 @@ export function ChannelTabsView({
                 </Badge>
               )}
               <Button
+                size="sm"
+                variant="outline"
+                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                onClick={openTransferModal}
+              >
+                <ArrowRightLeft className="w-4 h-4 mr-1.5" />
+                Transfer
+              </Button>
+              <Button
                 onClick={onOpenAIAssistant}
                 className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
               >
@@ -381,6 +419,71 @@ export function ChannelTabsView({
           </div>
         </div>
       </div>
+
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowTransferModal(false)}>
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-white mb-1">Transfer Conversation</h2>
+            <p className="text-xs text-zinc-400 mb-4">
+              Move this thread to another team. The current team will lose access.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">Target Team</label>
+                <select
+                  value={transferTarget}
+                  onChange={(e) => setTransferTarget(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
+                >
+                  <option value="">Select team...</option>
+                  {transferTeams.map((t) => (
+                    <option key={t.name} value={t.name}>
+                      {t.team_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">Note (optional)</label>
+                <Input
+                  value={transferNote}
+                  onChange={(e) => setTransferNote(e.target.value)}
+                  placeholder="Reason for transfer..."
+                  className="bg-zinc-800 border-zinc-700 text-white"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowTransferModal(false)}
+                className="border-zinc-700 text-zinc-300"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={!transferTarget}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={async () => {
+                  try {
+                    await transferThreadCall({
+                      thread_id: selectedAccountId,
+                      target_team: transferTarget,
+                      note: transferNote,
+                    });
+                    toast.success("Thread transferred");
+                    setShowTransferModal(false);
+                  } catch {
+                    toast.error("Transfer failed");
+                  }
+                }}
+              >
+                Transfer
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Channel Tabs */}
       <div className="shrink-0 bg-zinc-900/60 border-b border-zinc-800">
@@ -637,7 +740,40 @@ export function ChannelTabsView({
                             {message.isPinned && (
                               <Pin className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 text-amber-400" />
                             )}
-                            {message.type === "document" && message.mediaUrl ? (
+                            {message.type === "template" ? (
+                              <div className="space-y-2">
+                                {message.mediaUrl && (
+                                  /\.(jpg|jpeg|png|gif|webp)$/i.test(message.mediaUrl) ? (
+                                    <img
+                                      src={message.mediaUrl}
+                                      alt="Template media"
+                                      className="rounded-lg max-w-sm"
+                                    />
+                                  ) : (
+                                    <a
+                                      href={message.mediaUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-3 p-2 bg-zinc-700/50 rounded-lg hover:bg-zinc-700 transition-colors"
+                                    >
+                                      <div className="w-10 h-10 bg-zinc-600 rounded-lg flex items-center justify-center">
+                                        <FileText className="w-5 h-5 text-zinc-300" />
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-medium">Attachment</p>
+                                        <p className="text-xs text-zinc-400">Document</p>
+                                      </div>
+                                    </a>
+                                  )
+                                )}
+                                {message.content && (
+                                  <p className="text-sm leading-relaxed">{message.content}</p>
+                                )}
+                                <span className="inline-block text-[10px] text-zinc-400 bg-zinc-700/50 px-2 py-0.5 rounded-full">
+                                  Template
+                                </span>
+                              </div>
+                            ) : message.type === "document" && message.mediaUrl ? (
                               <div className="flex items-center gap-3 p-2">
                                 <div className="w-10 h-10 bg-zinc-700 rounded-lg flex items-center justify-center">
                                   <Paperclip className="w-5 h-5 text-zinc-300" />
@@ -753,6 +889,15 @@ export function ChannelTabsView({
           onClose={() => setContextMenu(null)}
           onReply={handleReply}
           onRefresh={handleRefreshAll}
+        />
+      )}
+
+      {/* WhatsApp Template Picker */}
+      {showTemplatePicker && selectedAccountId && (
+        <WhatsAppTemplatePicker
+          threadId={selectedAccountId}
+          onClose={() => setShowTemplatePicker(false)}
+          onSent={() => refresh()}
         />
       )}
 
@@ -879,6 +1024,17 @@ export function ChannelTabsView({
                 >
                   <ImageIcon className="w-5 h-5" />
                 </Button>
+                {selectedChannel === "whatsapp" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-green-400 hover:text-green-300"
+                    onClick={() => setShowTemplatePicker(true)}
+                    title="Send WhatsApp Template"
+                  >
+                    <FileText className="w-5 h-5" />
+                  </Button>
+                )}
               </div>
             )}
 

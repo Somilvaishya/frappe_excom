@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { ArrowLeft, Phone, Video, Info, Send, Paperclip, Smile, Check, CheckCheck, MessageCircle, Mail, Instagram, Bot, UserCheck, Loader2, Lock, StickyNote } from "lucide-react";
+import { ArrowLeft, Phone, Video, Info, Send, Paperclip, Smile, Check, CheckCheck, MessageCircle, Mail, Instagram, Bot, UserCheck, Loader2, Lock, StickyNote, FileText } from "lucide-react";
 import { useFrappePostCall } from "frappe-react-sdk";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -348,7 +348,22 @@ export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOp
                             : isUser ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white"
                             : "bg-zinc-800 text-zinc-100"
                           }`}>
-                            {message.type === "document" && message.mediaUrl ? (
+                            {message.type === "template" ? (
+                              <div className="space-y-1.5">
+                                {message.mediaUrl && (
+                                  /\.(jpg|jpeg|png|gif|webp)$/i.test(message.mediaUrl) ? (
+                                    <img src={message.mediaUrl} alt="Template media" className="rounded-lg max-w-[200px]" />
+                                  ) : (
+                                    <a href={message.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-1 bg-zinc-700/50 rounded-lg">
+                                      <div className="w-8 h-8 bg-zinc-600 rounded-lg flex items-center justify-center"><FileText className="w-4 h-4 text-zinc-300" /></div>
+                                      <div><p className="text-xs font-medium">Attachment</p><p className="text-[10px] text-zinc-400">Document</p></div>
+                                    </a>
+                                  )
+                                )}
+                                {message.content && <p className="text-sm leading-relaxed">{message.content}</p>}
+                                <span className="inline-block text-[10px] text-zinc-400 bg-zinc-700/50 px-1.5 py-0.5 rounded-full">Template</span>
+                              </div>
+                            ) : message.type === "document" && message.mediaUrl ? (
                               <div className="flex items-center gap-2 p-1">
                                 <div className="w-8 h-8 bg-zinc-700 rounded-lg flex items-center justify-center"><Paperclip className="w-4 h-4 text-zinc-300" /></div>
                                 <div><p className="text-xs font-medium">{message.mediaUrl}</p><p className="text-[10px] text-zinc-400">Document</p></div>

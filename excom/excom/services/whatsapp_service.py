@@ -85,7 +85,11 @@ def send_media_message(account, to: str, media_type: str, file_url: str,
         dict with keys: provider_message_id, status
     """
     to = _clean_phone(to)
-    link = file_url if file_url.startswith("http") else frappe.utils.get_url() + file_url
+    if file_url.startswith("http"):
+        link = file_url
+    else:
+        from excom.excom.api.chat import _get_site_url
+        link = _get_site_url() + file_url
     media_key = media_type.lower()
 
     media_obj = {"link": link}

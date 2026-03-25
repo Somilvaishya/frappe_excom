@@ -1,0 +1,20 @@
+---
+description: Frappe Framework conventions and patterns
+globs: ["**/*.py"]
+alwaysApply: true
+---
+
+# Frappe Conventions
+
+- Use `frappe.get_doc()`, `frappe.get_list()`, `frappe.db.get_value()` — never raw SQL unless joins/aggregation demand it
+- `@frappe.whitelist()` for all exposed APIs. `allow_guest=True` only for truly public endpoints
+- Always check `frappe.has_permission("Doctype", "write", throw=True)` before mutations
+- Background jobs: `frappe.enqueue()` — never spawn threads
+- Realtime: `frappe.publish_realtime("event", data, user=user)`
+- After bulk ops outside request context: `frappe.db.commit()`
+- Use `frappe.throw()` for user-facing errors, `frappe.log_error()` for background failures
+- Use `frappe.log()` — never `print()`
+- NEVER modify ERPNext core doctypes — extend via Custom Fields or child tables
+- All new doctypes prefixed with "Excom" to avoid namespace conflicts
+- Run `bench migrate` after any doctype JSON change
+- Clear cache in tests: `frappe.clear_cache()`

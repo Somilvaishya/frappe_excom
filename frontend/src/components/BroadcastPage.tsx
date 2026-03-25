@@ -1,0 +1,991 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useFrappePostCall, useFrappeFileUpload } from "frappe-react-sdk";
+import {
+  ArrowLeft,
+  Plus,
+  Search,
+  Radio,
+  Send,
+  Loader2,
+  ChevronRight,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  AlertTriangle,
+  Mail,
+  MessageSquare,
+  FileText,
+  Eye,
+  Users,
+  Image as ImageIcon,
+  Paperclip,
+  Upload,
+  Trash2,
+  X,
+} from "lucide-react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { toast } from "sonner";
+
+interface BroadcastItem {
+  name: string;
+  broadcast_name: string;
+  subscriber_list: string;
+  subscriber_list_name: string;
+  channel: string;
+  status: string;
+  docstatus: number;
+  wa_template: string;
+  email_subject: string;
+  total_recipients: number;
+  sent_count: number;
+  failed_count: number;
+  creation: string;
+  modified: string;
+}
+
+interface BroadcastLog {
+  omni_identity: string;
+  display_name: string;
+  status: string;
+  recipient_address: string;
+  error_message: string;
+  sent_at: string;
+  creation: string;
+}
+
+interface SubscriberListOption {
+  name: string;
+  list_name: string;
+  active_subscribers: number;
+}
+
+interface TemplateItem {
+  name: string;
+  template_name: string;
+  actual_name: string;
+  template: string;
+  language_code: string;
+  category: string;
+  header_type: string;
+  header: string;
+  footer: string;
+  sample_values: string;
+  field_names: string;
+  variable_count: number;
+  sample_variables: string[];
+}
+
+const STATUS_STYLES: Record<string, { bg: string; text: string; icon: typeof Clock }> = {
+  Draft: { bg: "bg-zinc-500/10", text: "text-zinc-400", icon: Clock },
+  Queued: { bg: "bg-blue-500/10", text: "text-blue-400", icon: Clock },
+  Sending: { bg: "bg-amber-500/10", text: "text-amber-400", icon: Loader2 },
+  Completed: { bg: "bg-green-500/10", text: "text-green-400", icon: CheckCircle2 },
+  "Partially Failed": { bg: "bg-orange-500/10", text: "text-orange-400", icon: AlertTriangle },
+  Failed: { bg: "bg-red-500/10", text: "text-red-400", icon: XCircle },
+};
+
+const HEADER_ACCEPT: Record<string, string> = {
+  IMAGE: "image/jpeg,image/png,image/webp",
+  DOCUMENT: "application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const style = STATUS_STYLES[status] || STATUS_STYLES.Draft;
+  const Icon = style.icon;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
+      <Icon className={`w-3 h-3 ${status === "Sending" ? "animate-spin" : ""}`} />
+      {status}
+    </span>
+  );
+}
+
+function ChannelIcon({ channel }: { channel: string }) {
+  if (channel === "WhatsApp") return <MessageSquare className="w-4 h-4 text-green-400" />;
+  return <Mail className="w-4 h-4 text-blue-400" />;
+}
+
+function BroadcastDetailView({
+  broadcastName,
+  onBack,
+}: {
+  broadcastName: string;
+  onBack: () => void;
+}) {
+  const [detail, setDetail] = useState<any>(null);
+  const [logs, setLogs] = useState<BroadcastLog[]>([]);
+  const [logFilter, setLogFilter] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const { call: fetchDetail } = useFrappePostCall("excom.excom.api.broadcast.get_broadcast_detail");
+  const { call: fetchLogs } = useFrappePostCall("excom.excom.api.broadcast.get_broadcast_logs");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetchDetail({ broadcast_name: broadcastName });
+      const data = (res as any)?.message;
+      setDetail(data);
+      setLogs(data?.recent_logs || []);
+    } catch {
+      toast.error("Failed to load broadcast");
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchDetail, broadcastName]);
+
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!detail || detail.status === "Sending") {
+      const interval = setInterval(load, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [detail, load]);
+
+  const loadFilteredLogs = useCallback(async () => {
+    try {
+      const res = await fetchLogs({ broadcast_name: broadcastName, status: logFilter, limit: 200 });
+      setLogs((res as any)?.message?.logs || []);
+    } catch {}
+  }, [fetchLogs, broadcastName, logFilter]);
+
+  useEffect(() => {
+    if (logFilter) loadFilteredLogs();
+    else if (detail) setLogs(detail.recent_logs || []);
+  }, [logFilter]);
+
+  if (loading && !detail) {
+    return (
+      <div className="h-full flex items-center justify-center bg-zinc-950">
+        <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!detail) return null;
+
+  const progress = detail.total_recipients > 0
+    ? Math.round(((detail.sent_count + detail.failed_count) / detail.total_recipients) * 100)
+    : 0;
+
+  return (
+    <div className="h-full w-full bg-zinc-950 flex flex-col">
+      <div className="shrink-0 px-6 py-4 border-b border-zinc-800">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <ChannelIcon channel={detail.channel} />
+              <div>
+                <h1 className="text-lg font-semibold text-white">{detail.broadcast_name}</h1>
+                <p className="text-xs text-zinc-500">
+                  {detail.subscriber_list} &middot; {new Date(detail.creation).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+          </div>
+          <StatusBadge status={detail.status} />
+        </div>
+
+        <div className="grid grid-cols-4 gap-4 mt-4">
+          <div className="bg-zinc-900 rounded-lg p-3 border border-zinc-800">
+            <div className="text-2xl font-semibold text-white">{detail.total_recipients}</div>
+            <div className="text-xs text-zinc-500">Recipients</div>
+          </div>
+          <div className="bg-zinc-900 rounded-lg p-3 border border-zinc-800">
+            <div className="text-2xl font-semibold text-green-400">{detail.sent_count}</div>
+            <div className="text-xs text-zinc-500">Sent</div>
+          </div>
+          <div className="bg-zinc-900 rounded-lg p-3 border border-zinc-800">
+            <div className="text-2xl font-semibold text-red-400">{detail.failed_count}</div>
+            <div className="text-xs text-zinc-500">Failed</div>
+          </div>
+          <div className="bg-zinc-900 rounded-lg p-3 border border-zinc-800">
+            <div className="text-2xl font-semibold text-blue-400">{progress}%</div>
+            <div className="text-xs text-zinc-500">Progress</div>
+          </div>
+        </div>
+
+        {detail.status === "Sending" && (
+          <div className="mt-3 h-2 bg-zinc-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="px-6 py-3 border-b border-zinc-800 flex items-center gap-3">
+        <span className="text-sm text-zinc-400 font-medium">Delivery Log</span>
+        <select
+          value={logFilter}
+          onChange={(e) => setLogFilter(e.target.value)}
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-300 focus:outline-none"
+        >
+          <option value="">All</option>
+          <option value="Sent">Sent</option>
+          <option value="Failed">Failed</option>
+          <option value="Skipped">Skipped</option>
+        </select>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {logs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 text-center">
+            <Clock className="w-10 h-10 text-zinc-600 mb-2" />
+            <p className="text-zinc-500 text-sm">
+              {detail.status === "Draft" ? "Submit the broadcast to start sending" : "No delivery logs yet"}
+            </p>
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-zinc-800 text-xs text-zinc-500 uppercase tracking-wider">
+                <th className="text-left px-6 py-3">Recipient</th>
+                <th className="text-left px-6 py-3">Address</th>
+                <th className="text-left px-6 py-3">Status</th>
+                <th className="text-left px-6 py-3">Error</th>
+                <th className="text-left px-6 py-3">Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log, idx) => (
+                <tr key={idx} className="border-b border-zinc-800/50 hover:bg-zinc-900/50">
+                  <td className="px-6 py-2.5 text-sm text-white">{log.display_name || log.omni_identity}</td>
+                  <td className="px-6 py-2.5 text-sm text-zinc-400">{log.recipient_address || "—"}</td>
+                  <td className="px-6 py-2.5">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      log.status === "Sent" ? "bg-green-500/10 text-green-400" :
+                      log.status === "Failed" ? "bg-red-500/10 text-red-400" :
+                      "bg-zinc-500/10 text-zinc-400"
+                    }`}>
+                      {log.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-2.5 text-xs text-red-400 max-w-xs truncate">{log.error_message || "—"}</td>
+                  <td className="px-6 py-2.5 text-xs text-zinc-500">
+                    {log.sent_at ? new Date(log.sent_at).toLocaleTimeString() : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ComposeDialog({
+  onCreated,
+  onClose,
+}: {
+  onCreated: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [name, setName] = useState("");
+  const [subscriberList, setSubscriberList] = useState("");
+  const [channel, setChannel] = useState<"WhatsApp" | "Email">("WhatsApp");
+  const [lists, setLists] = useState<SubscriberListOption[]>([]);
+  const [loadingLists, setLoadingLists] = useState(true);
+
+  // WhatsApp
+  const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [variables, setVariables] = useState<string[]>([]);
+  const [headerMediaUrl, setHeaderMediaUrl] = useState("");
+  const [headerFileName, setHeaderFileName] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Email
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+
+  const [submitting, setSubmitting] = useState(false);
+
+  const { call: fetchLists } = useFrappePostCall("excom.excom.api.broadcast.get_subscriber_lists_for_broadcast");
+  const { call: fetchTemplates } = useFrappePostCall("excom.excom.api.chat.get_whatsapp_templates");
+  const { call: createBroadcast } = useFrappePostCall("excom.excom.api.broadcast.create_broadcast");
+  const { call: submitBroadcast } = useFrappePostCall("excom.excom.api.broadcast.submit_broadcast");
+  const { upload } = useFrappeFileUpload();
+
+  useEffect(() => {
+    fetchLists({}).then((res) => {
+      setLists((res as any)?.message || []);
+    }).catch(() => toast.error("Failed to load subscriber lists"))
+    .finally(() => setLoadingLists(false));
+  }, []);
+
+  const loadTemplates = useCallback(async (search: string = "") => {
+    try {
+      const res = await fetchTemplates({ search });
+      setTemplates((res as any)?.message || []);
+    } catch {
+      toast.error("Failed to load templates");
+    }
+  }, [fetchTemplates]);
+
+  useEffect(() => {
+    if (step === 2 && channel === "WhatsApp") loadTemplates(templateSearch);
+  }, [step, channel, templateSearch, loadTemplates]);
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const result = await upload(file, { isPrivate: false });
+      setHeaderMediaUrl(result.file_url);
+      setHeaderFileName(file.name);
+      toast.success("File uploaded");
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [upload]);
+
+  const selectedListData = lists.find((l) => l.name === subscriberList);
+
+  const needsMedia = selectedTemplate?.header_type === "IMAGE" || selectedTemplate?.header_type === "DOCUMENT";
+
+  const canProceedStep1 = name.trim() && subscriberList;
+  const canProceedStep2 = channel === "WhatsApp"
+    ? selectedTemplate && (!needsMedia || headerMediaUrl)
+    : emailSubject.trim() && emailBody.trim();
+
+  const getPreview = (): string => {
+    if (!selectedTemplate) return "";
+    let text = selectedTemplate.template || "";
+    variables.forEach((val, i) => {
+      text = text.replace(`{{${i + 1}}}`, val || `{{${i + 1}}}`);
+    });
+    return text;
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const res = await createBroadcast({
+        broadcast_name: name.trim(),
+        subscriber_list: subscriberList,
+        channel,
+        wa_template: channel === "WhatsApp" ? selectedTemplate?.name : "",
+        wa_template_variables: channel === "WhatsApp" ? JSON.stringify(variables) : "[]",
+        wa_header_media: channel === "WhatsApp" ? headerMediaUrl : "",
+        email_subject: channel === "Email" ? emailSubject : "",
+        email_body: channel === "Email" ? emailBody : "",
+      });
+
+      const bcName = (res as any)?.message?.name;
+      if (!bcName) throw new Error("No broadcast name returned");
+
+      await submitBroadcast({ broadcast_name: bcName });
+      toast.success("Broadcast submitted — sending started");
+      onCreated(bcName);
+    } catch (err: any) {
+      let msg = "Failed to create broadcast";
+      try {
+        if (err?._server_messages) {
+          const parsed = JSON.parse(err._server_messages);
+          if (typeof parsed?.[0] === "string") {
+            const inner = JSON.parse(parsed[0]);
+            msg = inner?.message || parsed[0];
+          }
+        }
+      } catch {}
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const labels = selectedTemplate?.field_names
+    ? selectedTemplate.field_names.split(",").map((s: string) => s.trim())
+    : [];
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800 shrink-0">
+          <div className="flex items-center gap-3">
+            <Radio className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-lg font-semibold text-white">New Broadcast</h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              {[1, 2, 3].map((s) => (
+                <div
+                  key={s}
+                  className={`w-2 h-2 rounded-full transition-colors ${
+                    s === step ? "bg-emerald-400" : s < step ? "bg-emerald-600" : "bg-zinc-700"
+                  }`}
+                />
+              ))}
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={selectedTemplate ? HEADER_ACCEPT[selectedTemplate.header_type] || "" : ""}
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+
+        <div className="flex-1 min-h-0 overflow-y-auto p-5">
+          {step === 1 && (
+            <div className="space-y-5">
+              <div>
+                <label className="text-sm text-zinc-300 font-medium mb-2 block">Broadcast Name</label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. March Promo Blast"
+                  className="bg-zinc-800 border-zinc-700 text-white"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-zinc-300 font-medium mb-2 block">Subscriber List</label>
+                {loadingLists ? (
+                  <div className="flex items-center gap-2 text-zinc-500 text-sm py-3">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading lists...
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {lists.map((l) => (
+                      <button
+                        key={l.name}
+                        onClick={() => setSubscriberList(l.name)}
+                        className={`w-full text-left px-4 py-3 rounded-lg border transition-all ${
+                          subscriberList === l.name
+                            ? "border-emerald-500/50 bg-emerald-500/10"
+                            : "border-zinc-800 hover:border-zinc-600"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-white font-medium">{l.list_name}</span>
+                          <span className="text-xs text-zinc-500">
+                            <Users className="w-3 h-3 inline mr-1" />
+                            {l.active_subscribers} active
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-sm text-zinc-300 font-medium mb-2 block">Channel</label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setChannel("WhatsApp")}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg border transition-all ${
+                      channel === "WhatsApp"
+                        ? "border-green-500/50 bg-green-500/10 text-green-400"
+                        : "border-zinc-800 text-zinc-400 hover:border-zinc-600"
+                    }`}
+                  >
+                    <MessageSquare className="w-5 h-5" />
+                    <span className="text-sm font-medium">WhatsApp</span>
+                  </button>
+                  <button
+                    onClick={() => setChannel("Email")}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg border transition-all ${
+                      channel === "Email"
+                        ? "border-blue-500/50 bg-blue-500/10 text-blue-400"
+                        : "border-zinc-800 text-zinc-400 hover:border-zinc-600"
+                    }`}
+                  >
+                    <Mail className="w-5 h-5" />
+                    <span className="text-sm font-medium">Email</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && channel === "WhatsApp" && (
+            <div className="space-y-4">
+              {!selectedTemplate ? (
+                <>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <Input
+                      placeholder="Search templates..."
+                      value={templateSearch}
+                      onChange={(e) => setTemplateSearch(e.target.value)}
+                      className="pl-10 bg-zinc-800 border-zinc-700 text-white"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-2 max-h-72 overflow-y-auto">
+                    {templates.map((t) => (
+                      <button
+                        key={t.name}
+                        onClick={() => {
+                          setSelectedTemplate(t);
+                          setVariables(new Array(t.variable_count).fill(""));
+                          setHeaderMediaUrl("");
+                          setHeaderFileName("");
+                        }}
+                        className="w-full text-left rounded-lg border border-zinc-800 p-3.5 hover:border-green-500/40 hover:bg-green-500/5 transition-all group"
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-sm font-medium text-white group-hover:text-green-400">{t.template_name}</span>
+                          <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-green-400" />
+                        </div>
+                        <p className="text-xs text-zinc-400 line-clamp-2 mb-2">{t.template || "No preview"}</p>
+                        <div className="flex items-center gap-3 text-[10px] text-zinc-500">
+                          <span className="bg-zinc-800 px-1.5 py-0.5 rounded">{t.category}</span>
+                          {t.variable_count > 0 && (
+                            <span className="text-blue-400">{t.variable_count} variable{t.variable_count > 1 ? "s" : ""}</span>
+                          )}
+                          {t.header_type === "IMAGE" && (
+                            <span className="text-purple-400 flex items-center gap-0.5"><ImageIcon className="w-3 h-3" /> Photo</span>
+                          )}
+                          {t.header_type === "DOCUMENT" && (
+                            <span className="text-orange-400 flex items-center gap-0.5"><Paperclip className="w-3 h-3" /> Document</span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                    {templates.length === 0 && (
+                      <div className="text-center py-8 text-sm text-zinc-500">No approved templates found</div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setSelectedTemplate(null)}
+                    className="text-xs text-zinc-400 hover:text-white flex items-center gap-1"
+                  >
+                    <ChevronRight className="w-3 h-3 rotate-180" /> Change template
+                  </button>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
+                    <p className="text-xs text-zinc-400 mb-1 font-medium">{selectedTemplate.template_name}</p>
+                    <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">{getPreview()}</p>
+                    {selectedTemplate.footer && (
+                      <p className="text-[10px] text-zinc-500 mt-2 italic">{selectedTemplate.footer}</p>
+                    )}
+                  </div>
+
+                  {needsMedia && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        {selectedTemplate.header_type === "IMAGE" ? (
+                          <ImageIcon className="w-4 h-4 text-purple-400" />
+                        ) : (
+                          <Paperclip className="w-4 h-4 text-orange-400" />
+                        )}
+                        <p className="text-xs text-zinc-400 font-medium">
+                          {selectedTemplate.header_type === "IMAGE" ? "Attach Header Image" : "Attach Header Document"}
+                          <span className="text-red-400 ml-1">*</span>
+                        </p>
+                      </div>
+                      {headerMediaUrl ? (
+                        <div className="flex items-center gap-3 bg-zinc-800/70 border border-zinc-700 rounded-lg p-3">
+                          {selectedTemplate.header_type === "IMAGE" ? (
+                            <img src={headerMediaUrl} alt="Header" className="w-14 h-14 rounded-lg object-cover border border-zinc-600" />
+                          ) : (
+                            <div className="w-14 h-14 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
+                              <FileText className="w-6 h-6 text-orange-400" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white font-medium truncate">{headerFileName}</p>
+                            <p className="text-[10px] text-green-400">Uploaded</p>
+                          </div>
+                          <button
+                            onClick={() => { setHeaderMediaUrl(""); setHeaderFileName(""); }}
+                            className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-400 hover:text-red-400 shrink-0"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploading}
+                          className="w-full border-2 border-dashed border-zinc-700 hover:border-zinc-500 rounded-lg p-4 flex flex-col items-center gap-2 transition-colors group"
+                        >
+                          {uploading ? (
+                            <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                          ) : (
+                            <Upload className="w-6 h-6 text-zinc-500 group-hover:text-zinc-300" />
+                          )}
+                          <span className="text-xs text-zinc-500 group-hover:text-zinc-300">
+                            {uploading ? "Uploading..." :
+                              selectedTemplate.header_type === "IMAGE" ? "Click to upload image" : "Click to upload document"}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedTemplate.variable_count > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-zinc-400 font-medium">Fill template variables:</p>
+                      {variables.map((val, idx) => (
+                        <div key={idx}>
+                          <label className="text-xs text-zinc-500 mb-1 block">
+                            {labels[idx] || `Variable {{${idx + 1}}}`}
+                          </label>
+                          <Input
+                            placeholder={selectedTemplate.sample_variables?.[idx] || `Value for {{${idx + 1}}}`}
+                            value={val}
+                            onChange={(e) => {
+                              const next = [...variables];
+                              next[idx] = e.target.value;
+                              setVariables(next);
+                            }}
+                            className="bg-zinc-800 border-zinc-700 text-white"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {step === 2 && channel === "Email" && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-zinc-300 font-medium mb-2 block">Subject</label>
+                <Input
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  placeholder="e.g. Exciting news from us!"
+                  className="bg-zinc-800 border-zinc-700 text-white"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-sm text-zinc-300 font-medium mb-2 block">Email Body</label>
+                <textarea
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  placeholder={"Hello {{ subscriber.display_name }},\n\nWe have exciting news...\n\nBest regards"}
+                  rows={10}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-none"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Supports Jinja: {"{{ subscriber.display_name }}"}, {"{{ customer.customer_name }}"}, etc.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-5">
+              <div className="text-center mb-2">
+                <h3 className="text-lg font-semibold text-white">Review & Send</h3>
+                <p className="text-sm text-zinc-400">Confirm your broadcast details before sending</p>
+              </div>
+
+              <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg divide-y divide-zinc-700/50">
+                <div className="flex justify-between px-4 py-3">
+                  <span className="text-sm text-zinc-400">Name</span>
+                  <span className="text-sm text-white font-medium">{name}</span>
+                </div>
+                <div className="flex justify-between px-4 py-3">
+                  <span className="text-sm text-zinc-400">Subscriber List</span>
+                  <span className="text-sm text-white">{selectedListData?.list_name || subscriberList}</span>
+                </div>
+                <div className="flex justify-between px-4 py-3">
+                  <span className="text-sm text-zinc-400">Recipients</span>
+                  <span className="text-sm text-emerald-400 font-medium">{selectedListData?.active_subscribers || "—"} active</span>
+                </div>
+                <div className="flex justify-between px-4 py-3">
+                  <span className="text-sm text-zinc-400">Channel</span>
+                  <span className="text-sm text-white flex items-center gap-1.5">
+                    <ChannelIcon channel={channel} /> {channel}
+                  </span>
+                </div>
+                {channel === "WhatsApp" && selectedTemplate && (
+                  <div className="flex justify-between px-4 py-3">
+                    <span className="text-sm text-zinc-400">Template</span>
+                    <span className="text-sm text-white">{selectedTemplate.template_name}</span>
+                  </div>
+                )}
+                {channel === "Email" && (
+                  <div className="flex justify-between px-4 py-3">
+                    <span className="text-sm text-zinc-400">Subject</span>
+                    <span className="text-sm text-white">{emailSubject}</span>
+                  </div>
+                )}
+              </div>
+
+              {channel === "WhatsApp" && selectedTemplate && (
+                <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4">
+                  <p className="text-xs text-green-400 font-medium mb-1">Template Preview</p>
+                  {headerMediaUrl && (
+                    <div className="mb-2">
+                      {selectedTemplate.header_type === "IMAGE" ? (
+                        <img src={headerMediaUrl} alt="Header" className="w-20 h-20 rounded-lg object-cover" />
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs text-zinc-400">
+                          <FileText className="w-4 h-4" /> {headerFileName}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-sm text-zinc-300 whitespace-pre-wrap">{getPreview()}</p>
+                </div>
+              )}
+
+              <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-amber-400 font-medium">This action cannot be undone</p>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    The broadcast will be sent immediately to all active subscribers in the list.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-between gap-3 p-5 border-t border-zinc-800 shrink-0">
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (step === 1) onClose();
+              else setStep((step - 1) as 1 | 2);
+            }}
+            className="border-zinc-700 text-zinc-300"
+          >
+            {step === 1 ? "Cancel" : "Back"}
+          </Button>
+
+          {step < 3 ? (
+            <Button
+              disabled={step === 1 ? !canProceedStep1 : !canProceedStep2}
+              onClick={() => setStep((step + 1) as 2 | 3)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-32"
+            >
+              Next <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          ) : (
+            <Button
+              disabled={submitting}
+              onClick={handleSubmit}
+              className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white min-w-40"
+            >
+              {submitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-1.5" />
+                  Send Broadcast
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function BroadcastPage({ onNavigateBack }: { onNavigateBack: () => void }) {
+  const [viewMode, setViewMode] = useState<"list" | "detail">("list");
+  const [selectedBroadcast, setSelectedBroadcast] = useState<string | null>(null);
+  const [broadcasts, setBroadcasts] = useState<BroadcastItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [channelFilter, setChannelFilter] = useState("");
+  const [showCompose, setShowCompose] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const { call: fetchBroadcasts } = useFrappePostCall("excom.excom.api.broadcast.get_broadcasts");
+
+  const loadBroadcasts = useCallback(async () => {
+    try {
+      const res = await fetchBroadcasts({
+        search: searchQuery,
+        status: statusFilter,
+        channel: channelFilter,
+      });
+      setBroadcasts((res as any)?.message?.broadcasts || []);
+    } catch {
+      toast.error("Failed to load broadcasts");
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchBroadcasts, searchQuery, statusFilter, channelFilter]);
+
+  useEffect(() => { loadBroadcasts(); }, [loadBroadcasts]);
+
+  if (viewMode === "detail" && selectedBroadcast) {
+    return (
+      <BroadcastDetailView
+        broadcastName={selectedBroadcast}
+        onBack={() => {
+          setViewMode("list");
+          setSelectedBroadcast(null);
+          loadBroadcasts();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="h-full w-full bg-zinc-950 flex flex-col">
+      <div className="shrink-0 px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onNavigateBack}
+            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <Radio className="w-5 h-5 text-emerald-400" />
+          <h1 className="text-lg font-semibold text-white">Broadcasts</h1>
+        </div>
+        <Button
+          onClick={() => setShowCompose(true)}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
+        >
+          <Plus className="w-4 h-4 mr-1.5" />
+          New Broadcast
+        </Button>
+      </div>
+
+      <div className="px-6 py-3 border-b border-zinc-800 flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search broadcasts..."
+            className="pl-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 focus:outline-none"
+        >
+          <option value="">All Status</option>
+          <option value="Draft">Draft</option>
+          <option value="Queued">Queued</option>
+          <option value="Sending">Sending</option>
+          <option value="Completed">Completed</option>
+          <option value="Failed">Failed</option>
+        </select>
+        <select
+          value={channelFilter}
+          onChange={(e) => setChannelFilter(e.target.value)}
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 focus:outline-none"
+        >
+          <option value="">All Channels</option>
+          <option value="WhatsApp">WhatsApp</option>
+          <option value="Email">Email</option>
+        </select>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center h-48">
+            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+          </div>
+        ) : broadcasts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <Radio className="w-12 h-12 text-zinc-600 mb-3" />
+            <p className="text-zinc-400 text-sm">No broadcasts yet</p>
+            <p className="text-zinc-500 text-xs mt-1">Create your first broadcast to reach your subscribers</p>
+            <Button
+              onClick={() => setShowCompose(true)}
+              className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              New Broadcast
+            </Button>
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-zinc-800 text-xs text-zinc-500 uppercase tracking-wider">
+                <th className="text-left px-6 py-3">Broadcast</th>
+                <th className="text-left px-6 py-3">Channel</th>
+                <th className="text-left px-6 py-3">List</th>
+                <th className="text-left px-6 py-3">Status</th>
+                <th className="text-right px-6 py-3">Sent / Total</th>
+                <th className="text-right px-6 py-3">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {broadcasts.map((bc) => (
+                <tr
+                  key={bc.name}
+                  onClick={() => { setSelectedBroadcast(bc.name); setViewMode("detail"); }}
+                  className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors cursor-pointer group"
+                >
+                  <td className="px-6 py-3">
+                    <span className="text-sm text-white font-medium group-hover:text-emerald-400 transition-colors">
+                      {bc.broadcast_name}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <ChannelIcon channel={bc.channel} />
+                      <span className="text-sm text-zinc-400">{bc.channel}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-3 text-sm text-zinc-400">{bc.subscriber_list_name || bc.subscriber_list}</td>
+                  <td className="px-6 py-3"><StatusBadge status={bc.status} /></td>
+                  <td className="px-6 py-3 text-right">
+                    <span className="text-sm text-zinc-300">
+                      {bc.sent_count}
+                      {bc.failed_count > 0 && <span className="text-red-400"> (+{bc.failed_count} failed)</span>}
+                      <span className="text-zinc-500"> / {bc.total_recipients}</span>
+                    </span>
+                  </td>
+                  <td className="px-6 py-3 text-right text-xs text-zinc-500">
+                    {new Date(bc.creation).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {showCompose && (
+        <ComposeDialog
+          onCreated={(bcName) => {
+            setShowCompose(false);
+            setSelectedBroadcast(bcName);
+            setViewMode("detail");
+          }}
+          onClose={() => setShowCompose(false)}
+        />
+      )}
+    </div>
+  );
+}

@@ -18,6 +18,7 @@
   "state_section",
   "status",
   "assigned_to",
+  "assigned_team",
   "priority",
   "column_break_state",
   "unread_count",
@@ -120,6 +121,13 @@
    "options": "User"
   },
   {
+   "fieldname": "assigned_team",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Assigned Team",
+   "options": "Excom Team"
+  },
+  {
    "default": "Normal",
    "fieldname": "priority",
    "fieldtype": "Select",
@@ -206,6 +214,24 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Excom Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Excom User"
   }
  ],
  "search_fields": "display_name,primary_phone,channel",

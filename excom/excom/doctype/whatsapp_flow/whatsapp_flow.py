@@ -7,6 +7,14 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.integrations.utils import make_post_request, make_request
 
+from excom.excom.utils import get_wa_credentials
+
+
+def _flow_creds(account_name: str) -> dict:
+    """Get WhatsApp API credentials for a flow's channel account."""
+    account_doc = frappe.get_doc("Excom Channel Account", account_name)
+    return get_wa_credentials(account_doc)
+
 
 class WhatsAppFlow(Document):
     def before_save(self):
@@ -312,24 +320,17 @@ class WhatsAppFlow(Document):
         if self.flow_id:
             frappe.throw(_("Flow already exists on WhatsApp. Use update instead."))
 
-        account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
-        token = account.get_password("token")
+        creds = _flow_creds(self.whatsapp_account)
 
-        # Create the flow
-        url = f"{account.url}/{account.version}/{account.business_id}/flows"
+        url = f"{creds['url']}/{creds['version']}/{creds['business_id']}/flows"
 
         payload = {
             "name": self.flow_name,
             "categories": [self.category]
         }
 
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-
         try:
-            response = make_post_request(url, headers=headers, data=json.dumps(payload))
+            response = make_post_request(url, headers=creds['headers'], data=json.dumps(payload))
             self.flow_id = response.get("id")
             self.save()
 
@@ -347,17 +348,13 @@ class WhatsAppFlow(Document):
         if not self.flow_id:
             frappe.throw(_("Flow must be created on WhatsApp first"))
 
-        account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
-        token = account.get_password("token")
+        creds = _flow_creds(self.whatsapp_account)
 
-        url = f"{account.url}/{account.version}/{self.flow_id}/assets"
+        url = f"{creds['url']}/{creds['version']}/{self.flow_id}/assets"
 
-        # Generate fresh flow JSON
         flow_json = self.generate_flow_json()
 
-        headers = {
-            "Authorization": f"Bearer {token}"
-        }
+        headers = {"Authorization": f"Bearer {creds['token']}"}
 
         files = {
             "file": ("flow.json", json.dumps(flow_json), "application/json"),
@@ -392,19 +389,12 @@ class WhatsAppFlow(Document):
         if self.status == "Published":
             frappe.throw(_("Flow is already published"))
 
-        account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
-        token = account.get_password("token")
-
-        url = f"{account.url}/{account.version}/{self.flow_id}/publish"
-
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
+        creds = _flow_creds(self.whatsapp_account)
+        url = f"{creds['url']}/{creds['version']}/{self.flow_id}/publish"
 
         try:
             import requests
-            response = requests.post(url, headers=headers)
+            response = requests.post(url, headers=creds['headers'])
 
             if response.status_code != 200:
                 error_data = response.json()
@@ -425,18 +415,11 @@ class WhatsAppFlow(Document):
         if not self.flow_id:
             frappe.throw(_("Flow must be created on WhatsApp first"))
 
-        account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
-        token = account.get_password("token")
-
-        url = f"{account.url}/{account.version}/{self.flow_id}/deprecate"
-
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
+        creds = _flow_creds(self.whatsapp_account)
+        url = f"{creds['url']}/{creds['version']}/{self.flow_id}/deprecate"
 
         try:
-            response = make_post_request(url, headers=headers)
+            response = make_post_request(url, headers=creds['headers'])
             self.status = "Deprecated"
             self.save()
 
@@ -451,18 +434,12 @@ class WhatsAppFlow(Document):
         if not self.flow_id:
             frappe.throw(_("Flow does not exist on WhatsApp"))
 
-        account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
-        token = account.get_password("token")
-
-        url = f"{account.url}/{account.version}/{self.flow_id}"
-
-        headers = {
-            "Authorization": f"Bearer {token}"
-        }
+        creds = _flow_creds(self.whatsapp_account)
+        url = f"{creds['url']}/{creds['version']}/{self.flow_id}"
 
         try:
             import requests
-            response = requests.delete(url, headers=headers)
+            response = requests.delete(url, headers=creds['headers'])
             response.raise_for_status()
 
             self.flow_id = None
@@ -480,18 +457,12 @@ class WhatsAppFlow(Document):
         if not self.flow_id:
             frappe.throw(_("Flow must be created on WhatsApp first"))
 
-        account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
-        token = account.get_password("token")
-
-        url = f"{account.url}/{account.version}/{self.flow_id}?fields=preview.invalidate(false)"
-
-        headers = {
-            "Authorization": f"Bearer {token}"
-        }
+        creds = _flow_creds(self.whatsapp_account)
+        url = f"{creds['url']}/{creds['version']}/{self.flow_id}?fields=preview.invalidate(false)"
 
         try:
             import requests
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=creds['headers'])
             response.raise_for_status()
 
             data = response.json()
@@ -544,18 +515,12 @@ class WhatsAppFlow(Document):
         if not self.flow_id:
             frappe.throw(_("Flow must be created on WhatsApp first"))
 
-        account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
-        token = account.get_password("token")
-
-        url = f"{account.url}/{account.version}/{self.flow_id}?fields=id,name,status,categories,validation_errors,json_version,data_api_version,data_channel_uri,preview,whatsapp_business_account"
-
-        headers = {
-            "Authorization": f"Bearer {token}"
-        }
+        creds = _flow_creds(self.whatsapp_account)
+        url = f"{creds['url']}/{creds['version']}/{self.flow_id}?fields=id,name,status,categories,validation_errors,json_version,data_api_version,data_channel_uri,preview,whatsapp_business_account"
 
         try:
             import requests
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=creds['headers'])
             response.raise_for_status()
 
             data = response.json()
@@ -597,19 +562,12 @@ class WhatsAppFlow(Document):
         if not self.flow_id:
             frappe.throw(_("Flow ID is required to sync"))
 
-        account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
-        token = account.get_password("token")
-
-        # Get flow details
-        url = f"{account.url}/{account.version}/{self.flow_id}?fields=id,name,status,categories,json_version,preview"
-
-        headers = {
-            "Authorization": f"Bearer {token}"
-        }
+        creds = _flow_creds(self.whatsapp_account)
+        url = f"{creds['url']}/{creds['version']}/{self.flow_id}?fields=id,name,status,categories,json_version,preview"
 
         try:
             import requests
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=creds['headers'])
             response.raise_for_status()
 
             data = response.json()
@@ -642,14 +600,9 @@ class WhatsAppFlow(Document):
         if not self.flow_id:
             return None
 
-        account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
-        token = account.get_password("token")
-
-        url = f"{account.url}/{account.version}/{self.flow_id}/assets"
-
-        headers = {
-            "Authorization": f"Bearer {token}"
-        }
+        creds = _flow_creds(self.whatsapp_account)
+        url = f"{creds['url']}/{creds['version']}/{self.flow_id}/assets"
+        headers = {"Authorization": f"Bearer {creds['token']}"}
 
         try:
             import requests
@@ -659,7 +612,6 @@ class WhatsAppFlow(Document):
             data = response.json()
             assets = data.get("data", [])
 
-            # Find the flow.json asset
             for asset in assets:
                 if asset.get("name") == "flow.json":
                     # Download the asset
@@ -681,29 +633,22 @@ def get_whatsapp_flows(whatsapp_account):
     """Get list of all flows from WhatsApp Business Account.
 
     Args:
-        whatsapp_account: Name of WhatsApp Account document
+        whatsapp_account: Excom Channel Account name.
 
     Returns:
-        List of flows from WhatsApp
+        List of flows from WhatsApp.
     """
-    account = frappe.get_doc("WhatsApp Account", whatsapp_account)
-    token = account.get_password("token")
-
-    url = f"{account.url}/{account.version}/{account.business_id}/flows?fields=id,name,status,categories"
-
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
+    creds = _flow_creds(whatsapp_account)
+    url = f"{creds['url']}/{creds['version']}/{creds['business_id']}/flows?fields=id,name,status,categories"
 
     try:
         import requests
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=creds['headers'])
         response.raise_for_status()
 
         data = response.json()
         flows = data.get("data", [])
 
-        # Check which flows already exist locally
         for flow in flows:
             existing = frappe.db.exists("WhatsApp Flow", {"flow_id": flow["id"]})
             flow["exists_locally"] = bool(existing)
@@ -720,7 +665,7 @@ def import_flow_from_whatsapp(whatsapp_account, flow_id, flow_name=None):
     """Import a flow from WhatsApp into Frappe.
 
     Args:
-        whatsapp_account: Name of WhatsApp Account document
+        whatsapp_account: Excom Channel Account name
         flow_id: WhatsApp Flow ID to import
         flow_name: Optional name for the flow (uses WhatsApp name if not provided)
 
@@ -732,19 +677,12 @@ def import_flow_from_whatsapp(whatsapp_account, flow_id, flow_name=None):
     if existing:
         frappe.throw(_("Flow already exists: {0}").format(existing))
 
-    account = frappe.get_doc("WhatsApp Account", whatsapp_account)
-    token = account.get_password("token")
-
-    # Get flow details
-    url = f"{account.url}/{account.version}/{flow_id}?fields=id,name,status,categories,json_version,preview"
-
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
+    creds = _flow_creds(whatsapp_account)
+    url = f"{creds['url']}/{creds['version']}/{flow_id}?fields=id,name,status,categories,json_version,preview"
 
     try:
         import requests
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=creds['headers'])
         response.raise_for_status()
 
         data = response.json()
@@ -782,14 +720,9 @@ def import_flow_from_whatsapp(whatsapp_account, flow_id, flow_name=None):
 
 def fetch_flow_json_by_id(whatsapp_account, flow_id):
     """Fetch flow JSON by flow ID."""
-    account = frappe.get_doc("WhatsApp Account", whatsapp_account)
-    token = account.get_password("token")
-
-    url = f"{account.url}/{account.version}/{flow_id}/assets"
-
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
+    creds = _flow_creds(whatsapp_account)
+    url = f"{creds['url']}/{creds['version']}/{flow_id}/assets"
+    headers = {"Authorization": f"Bearer {creds['token']}"}
 
     try:
         import requests
@@ -821,25 +754,19 @@ def sync_all_flows(whatsapp_account):
     Imports new flows and updates existing ones.
 
     Args:
-        whatsapp_account: Name of WhatsApp Account document
+        whatsapp_account: Excom Channel Account name
 
     Returns:
         Dict with counts: imported, updated, skipped
     """
-    account = frappe.get_doc("WhatsApp Account", whatsapp_account)
-    token = account.get_password("token")
-
-    url = f"{account.url}/{account.version}/{account.business_id}/flows?fields=id,name,status,categories"
-
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
+    creds = _flow_creds(whatsapp_account)
+    url = f"{creds['url']}/{creds['version']}/{creds['business_id']}/flows?fields=id,name,status,categories"
 
     result = {"imported": 0, "updated": 0, "skipped": 0}
 
     try:
         import requests
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=creds['headers'])
         response.raise_for_status()
 
         data = response.json()

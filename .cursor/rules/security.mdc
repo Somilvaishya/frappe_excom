@@ -1,0 +1,18 @@
+---
+description: Security rules for OAuth, webhooks, and secrets
+globs:
+alwaysApply: true
+---
+
+# Security
+
+- NEVER hardcode API keys, OAuth secrets, or tokens in source code
+- Secrets go in `site_config.json` accessed via `frappe.conf`
+- OAuth tokens stored using Frappe's Password field type (encrypted at rest)
+- Webhook payloads: always verify signatures before processing
+- WhatsApp verify_token: read from site_config, never hardcoded
+- Gmail API: handle token refresh gracefully, never expose refresh_token
+- Log message IDs only — never log full message content
+- Parameterized queries only (Frappe ORM handles this, watch raw SQL)
+- CORS: whitelist specific origins, never `*` in production
+- Rate limit public-facing webhook endpoints

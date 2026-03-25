@@ -67,13 +67,14 @@ function mapDeliveryStatus(
 
 function mapMessageType(
   type: string
-): "text" | "image" | "document" | "audio" | "email" | undefined {
-  const map: Record<string, "text" | "image" | "document" | "audio" | "email"> = {
+): "text" | "image" | "document" | "audio" | "email" | "template" | undefined {
+  const map: Record<string, "text" | "image" | "document" | "audio" | "email" | "template"> = {
     Text: "text",
     Image: "image",
     Document: "document",
     Audio: "audio",
     Email: "email",
+    Template: "template",
   };
   return map[type] || "text";
 }

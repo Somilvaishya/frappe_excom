@@ -6,10 +6,10 @@ import type { ExcomThread, UnifiedContact, Account, Message } from "../types";
  * Fetches threads from the Frappe backend and transforms them into UnifiedContact
  * objects by grouping threads that share the same omni_identity.
  */
-export function useThreads(search: string = "") {
+export function useThreads(search: string = "", team: string = "") {
   const { data, error, isLoading, mutate } = useFrappeGetCall<{
     message: ExcomThread[];
-  }>("excom.excom.api.chat.get_threads", { search, limit: 100 });
+  }>("excom.excom.api.chat.get_threads", { search, limit: 100, team });
 
   const threads = data?.message ?? [];
 

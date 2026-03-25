@@ -1,4 +1,5 @@
-import { Search, MessageCircle, ChevronDown, Tag, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, MessageCircle, ChevronDown, Tag, X, Users, Shield, GitMerge, Cog, Plus, Radio } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import {
@@ -8,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { useTags } from "../hooks/useTags";
+import { useFrappePostCall } from "frappe-react-sdk";
 
 interface LeftSidebarProps {
   selectedChannel: string;
@@ -18,6 +20,14 @@ interface LeftSidebarProps {
   totalUnread: number;
   selectedTags?: string[];
   onTagFilterChange?: (tags: string[]) => void;
+  onNavigateToSubscribers?: () => void;
+  onNavigateToTeams?: () => void;
+  onNavigateToMergeSuggestions?: () => void;
+  onNavigateToSubscriberRules?: () => void;
+  onNavigateToBroadcasts?: () => void;
+  selectedTeamFilter?: string;
+  onTeamFilterChange?: (team: string) => void;
+  onNewConversation?: () => void;
 }
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -37,8 +47,29 @@ export function LeftSidebar({
   totalUnread,
   selectedTags = [],
   onTagFilterChange,
+  onNavigateToSubscribers,
+  onNavigateToTeams,
+  onNavigateToMergeSuggestions,
+  onNavigateToSubscriberRules,
+  onNavigateToBroadcasts,
+  selectedTeamFilter = "",
+  onTeamFilterChange,
+  onNewConversation,
 }: LeftSidebarProps) {
   const { tags: allTags } = useTags();
+  const [myTeams, setMyTeams] = useState<{ name: string; team_name: string }[]>([]);
+  const [mergeBadge, setMergeBadge] = useState(0);
+  const { call: fetchMyTeams } = useFrappePostCall("excom.excom.api.teams.get_my_teams");
+  const { call: fetchMergeCount } = useFrappePostCall("excom.excom.api.merge_suggestions.get_suggestion_count");
+
+  useEffect(() => {
+    fetchMyTeams({}).then((res) => {
+      setMyTeams((res as any)?.message || []);
+    }).catch(() => {});
+    fetchMergeCount({}).then((res) => {
+      setMergeBadge((res as any)?.message?.count || 0);
+    }).catch(() => {});
+  }, []);
   return (
     <div className="w-64 bg-gradient-to-b from-zinc-900 to-zinc-950 border-r border-zinc-800 flex flex-col h-full shrink-0 overflow-hidden">
       <div className="shrink-0 p-4 border-b border-zinc-800">
@@ -62,28 +93,41 @@ export function LeftSidebar({
           />
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className="w-full justify-between bg-zinc-800/50 border-zinc-700 text-white hover:bg-zinc-800 hover:text-white"
-            >
-              <span>{CHANNEL_LABELS[selectedChannel] || "All Channels"}</span>
-              <ChevronDown className="w-4 h-4 ml-2 text-zinc-400" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56">
-            {Object.entries(CHANNEL_LABELS).map(([key, label]) => (
-              <DropdownMenuItem
-                key={key}
-                onClick={() => onChannelSelect(key)}
-                className="cursor-pointer"
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="flex-1 justify-between bg-zinc-800/50 border-zinc-700 text-white hover:bg-zinc-800 hover:text-white"
               >
-                {label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <span>{CHANNEL_LABELS[selectedChannel] || "All Channels"}</span>
+                <ChevronDown className="w-4 h-4 ml-2 text-zinc-400" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56">
+              {Object.entries(CHANNEL_LABELS).map(([key, label]) => (
+                <DropdownMenuItem
+                  key={key}
+                  onClick={() => onChannelSelect(key)}
+                  className="cursor-pointer"
+                >
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {onNewConversation && (
+            <Button
+              size="icon"
+              onClick={onNewConversation}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shrink-0"
+              title="New Conversation"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="shrink-0 p-4 border-b border-zinc-800">
@@ -143,6 +187,101 @@ export function LeftSidebar({
             </div>
           </div>
         )}
+
+        {myTeams.length > 0 && onTeamFilterChange && (
+          <div>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Shield className="w-3.5 h-3.5 text-zinc-400" />
+              <span className="text-xs font-medium text-zinc-400">Team Filter</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => onTeamFilterChange("")}
+                className={`px-2 py-1 rounded text-[11px] font-medium transition-all border ${
+                  selectedTeamFilter === ""
+                    ? "bg-blue-500/20 text-blue-400 border-blue-500"
+                    : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                }`}
+              >
+                All
+              </button>
+              {myTeams.map((t) => (
+                <button
+                  key={t.name}
+                  onClick={() => onTeamFilterChange(t.name === "General" ? "__general__" : t.name)}
+                  className={`px-2 py-1 rounded text-[11px] font-medium transition-all border ${
+                    (t.name === "General" ? "__general__" : t.name) === selectedTeamFilter
+                      ? t.name === "General"
+                        ? "bg-amber-500/20 text-amber-400 border-amber-500"
+                        : "bg-blue-500/20 text-blue-400 border-blue-500"
+                      : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                  }`}
+                >
+                  {t.team_name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-0.5">
+          {onNavigateToSubscribers && (
+            <button
+              onClick={onNavigateToSubscribers}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+            >
+              <Users className="w-4 h-4 text-blue-400" />
+              Subscriber Lists
+            </button>
+          )}
+
+          {onNavigateToTeams && (
+            <button
+              onClick={onNavigateToTeams}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+            >
+              <Shield className="w-4 h-4 text-purple-400" />
+              Teams
+            </button>
+          )}
+
+          {onNavigateToMergeSuggestions && (
+            <button
+              onClick={onNavigateToMergeSuggestions}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+            >
+              <span className="flex items-center gap-2.5">
+                <GitMerge className="w-4 h-4 text-green-400" />
+                Merge Suggestions
+              </span>
+              {mergeBadge > 0 && (
+                <span className="bg-green-500/20 text-green-400 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                  {mergeBadge}
+                </span>
+              )}
+            </button>
+          )}
+
+          {onNavigateToSubscriberRules && (
+            <button
+              onClick={onNavigateToSubscriberRules}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+            >
+              <Cog className="w-4 h-4 text-amber-400" />
+              Subscriber Rules
+            </button>
+          )}
+
+          {onNavigateToBroadcasts && (
+            <button
+              onClick={onNavigateToBroadcasts}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+            >
+              <Radio className="w-4 h-4 text-emerald-400" />
+              Broadcasts
+            </button>
+          )}
+        </div>
 
         <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-lg p-4 border border-blue-500/20">
           <h3 className="text-sm font-medium text-white mb-2">

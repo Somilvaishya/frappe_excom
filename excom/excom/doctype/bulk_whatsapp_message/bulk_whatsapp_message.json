@@ -171,7 +171,7 @@
    "fieldname": "whatsapp_account",
    "fieldtype": "Link",
    "label": "Whatsapp Account",
-   "options": "WhatsApp Account"
+   "options": "Excom Channel Account"
   },
   {
    "fieldname": "column_break_xvnh",

@@ -33,14 +33,67 @@ CHANNELS = [
 ]
 
 
+ROLES = [
+	{
+		"role_name": "Excom Manager",
+		"desk_access": 1,
+		"search_bar": 1,
+		"notifications": 1,
+	},
+	{
+		"role_name": "Excom User",
+		"desk_access": 1,
+		"search_bar": 1,
+		"notifications": 1,
+	},
+]
+
+
+GENERAL_TEAM_NAME = "General"
+
+
 def after_install():
 	"""Called once after bench install-app excom."""
+	seed_roles()
 	seed_channels()
+	seed_general_team()
 
 
 def after_migrate():
 	"""Called after every bench migrate. Ensures seed data is intact."""
+	seed_roles()
 	seed_channels()
+	seed_general_team()
+
+
+def seed_roles():
+	"""Create Excom Manager and Excom User roles if they don't exist."""
+	for role_def in ROLES:
+		if frappe.db.exists("Role", role_def["role_name"]):
+			continue
+		doc = frappe.get_doc({
+			"doctype": "Role",
+			"role_name": role_def["role_name"],
+			"desk_access": role_def.get("desk_access", 1),
+			"search_bar": role_def.get("search_bar", 1),
+			"notifications": role_def.get("notifications", 1),
+		})
+		doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+
+
+def seed_general_team():
+	"""Create the permanent General team if it doesn't exist."""
+	if frappe.db.exists("Excom Team", GENERAL_TEAM_NAME):
+		return
+
+	doc = frappe.get_doc({
+		"doctype": "Excom Team",
+		"team_name": GENERAL_TEAM_NAME,
+		"description": "Default team for unassigned conversations. Members can view and claim threads from the General inbox.",
+	})
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
 
 
 def seed_channels():

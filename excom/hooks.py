@@ -142,12 +142,34 @@ after_migrate = ["excom.setup.after_migrate"]
 doc_events = {
 	"*": {
 		"validate": "excom.excom.utils.run_server_script_for_doc_event",
-		"on_update": "excom.excom.utils.run_server_script_for_doc_event",
-		"after_insert": "excom.excom.utils.run_server_script_for_doc_event",
-		"on_submit": "excom.excom.utils.run_server_script_for_doc_event",
+		"on_update": [
+			"excom.excom.utils.run_server_script_for_doc_event",
+			"excom.excom.services.identity_hooks.on_doc_event_for_rules",
+		],
+		"after_insert": [
+			"excom.excom.utils.run_server_script_for_doc_event",
+			"excom.excom.services.identity_hooks.on_doc_event_for_rules",
+		],
+		"on_submit": [
+			"excom.excom.utils.run_server_script_for_doc_event",
+			"excom.excom.services.identity_hooks.on_doc_event_for_rules",
+		],
 		"on_cancel": "excom.excom.utils.run_server_script_for_doc_event",
 		"on_trash": "excom.excom.utils.run_server_script_for_doc_event",
-	}
+	},
+	"Customer": {
+		"after_insert": "excom.excom.services.identity_hooks.on_entity_created",
+		"on_update": "excom.excom.services.identity_hooks.on_customer_updated",
+	},
+	"Supplier": {
+		"after_insert": "excom.excom.services.identity_hooks.on_entity_created",
+	},
+	"Lead": {
+		"after_insert": "excom.excom.services.identity_hooks.on_entity_created",
+	},
+	"Party Link": {
+		"after_insert": "excom.excom.services.identity_hooks.on_party_link_created",
+	},
 }
 
 # Scheduled Tasks
@@ -168,6 +190,7 @@ scheduler_events = {
 		"excom.excom.utils.trigger_whatsapp_notifications_daily",
 		"excom.excom.utils.trigger_whatsapp_notifications_daily_long",
 		"excom.excom.tasks.cleanup.cleanup_stale_identities",
+		"excom.excom.services.identity_hooks.scan_merge_suggestions",
 	],
 	"weekly": [
 		"excom.excom.utils.trigger_whatsapp_notifications_weekly",

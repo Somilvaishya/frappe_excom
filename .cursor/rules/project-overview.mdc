@@ -1,0 +1,42 @@
+---
+description: Excom project overview, tech stack, and key commands
+globs:
+alwaysApply: true
+---
+
+# Excom — Omnichannel Communication Platform
+
+Frappe app consolidating WhatsApp, Email, Instagram into a unified real-time inbox, integrated with ERPNext.
+
+## Stack
+- Backend: Python 3.10+, Frappe Framework, ERPNext
+- Frontend: React + Tailwind CSS (custom pages), Frappe UI (standard)
+- Database: MariaDB via Frappe ORM
+- Realtime: Frappe Socket.IO
+- APIs: Gmail API (OAuth2), WhatsApp Business API, Instagram Graph API
+
+## Commands
+- `bench start` — dev server
+- `bench build --app excom` — build frontend
+- `bench run-tests --app excom` — all tests
+- `bench run-tests --app excom --module excom.tests.test_<name>` — single module
+- `bench migrate` — apply schema changes
+- `bench console` — Python REPL with Frappe context
+
+## Key Architecture
+- **Omni Identity**: links contacts across channels to ERPNext Customer/Lead
+- **Assignment Engine**: routes conversations via territory rules or round-robin
+- **Pointer-based Email**: stores Gmail message IDs, not full bodies
+- **Channel Adapter Pattern**: common interface per channel
+
+## Directory
+```
+excom/excom/
+├── communication/    # Core doctypes (Conversation, Message)
+├── channel/          # WhatsApp, Email, Instagram integrations
+├── crm/              # CRM connectivity, Omni Identity
+├── assignment/       # Assignment Engine
+├── api/              # REST endpoints
+├── public/js/        # React frontend app
+└── tests/            # Test modules
+```

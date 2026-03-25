@@ -7,9 +7,17 @@ import { ChannelTabsView } from "./components/ChannelTabsView";
 import { OmniIdentityPanel } from "./components/OmniIdentityPanel";
 import { AIAssistantDrawer } from "./components/AIAssistantDrawer";
 import { MobileApp } from "./components/mobile/MobileApp";
+import { SubscriberListPage } from "./components/SubscriberListPage";
+import { TeamManagementPage } from "./components/TeamManagementPage";
+import { MergeSuggestionsPage } from "./components/MergeSuggestionsPage";
+import { SubscriberRulesPage } from "./components/SubscriberRulesPage";
+import { BroadcastPage } from "./components/BroadcastPage";
+import { NewConversationDialog } from "./components/NewConversationDialog";
 import { useThreads } from "./hooks/useContacts";
 import { useRealtimeThreads } from "./hooks/useRealtimeThreads";
 import type { UnifiedContact, Conversation } from "./types";
+
+type AppPage = "inbox" | "subscribers" | "teams" | "merge_suggestions" | "subscriber_rules" | "broadcasts";
 
 const getSiteName = (): string => {
   // Priority: frappe boot → env var → current hostname
@@ -33,6 +41,7 @@ const getSocketPort = (): string | undefined => {
 };
 
 function ExcomDashboard() {
+  const [currentPage, setCurrentPage] = useState<AppPage>("inbox");
   const [selectedChannel, setSelectedChannel] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(
@@ -44,8 +53,10 @@ function ExcomDashboard() {
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedTeamFilter, setSelectedTeamFilter] = useState("");
+  const [showNewConversation, setShowNewConversation] = useState(false);
 
-  const { unifiedContacts, refresh: refreshThreads } = useThreads(searchQuery);
+  const { unifiedContacts, refresh: refreshThreads } = useThreads(searchQuery, selectedTeamFilter);
 
   const handleThreadUpdate = useCallback(() => {
     refreshThreads();
@@ -125,8 +136,53 @@ function ExcomDashboard() {
     }
   };
 
+  const handleNewConversationCreated = useCallback(
+    (threadId: string, identityName: string) => {
+      setShowNewConversation(false);
+      setSelectedTeamFilter("");
+      setSelectedChannel("all");
+      setSelectedContactId(identityName);
+      setSelectedAccountId(threadId);
+      refreshThreads();
+    },
+    [refreshThreads]
+  );
+
   if (isMobile) {
     return <MobileApp unifiedContacts={unifiedContacts} />;
+  }
+
+  if (currentPage === "subscribers") {
+    return (
+      <SubscriberListPage
+        onNavigateBack={() => setCurrentPage("inbox")}
+        onNavigateToBroadcasts={() => setCurrentPage("broadcasts")}
+      />
+    );
+  }
+
+  if (currentPage === "teams") {
+    return (
+      <TeamManagementPage onNavigateBack={() => setCurrentPage("inbox")} />
+    );
+  }
+
+  if (currentPage === "merge_suggestions") {
+    return (
+      <MergeSuggestionsPage onNavigateBack={() => setCurrentPage("inbox")} />
+    );
+  }
+
+  if (currentPage === "subscriber_rules") {
+    return (
+      <SubscriberRulesPage onNavigateBack={() => setCurrentPage("inbox")} />
+    );
+  }
+
+  if (currentPage === "broadcasts") {
+    return (
+      <BroadcastPage onNavigateBack={() => setCurrentPage("inbox")} />
+    );
   }
 
   return (
@@ -140,6 +196,14 @@ function ExcomDashboard() {
         totalUnread={channelCounts.totalUnread}
         selectedTags={selectedTags}
         onTagFilterChange={setSelectedTags}
+        onNavigateToSubscribers={() => setCurrentPage("subscribers")}
+        onNavigateToTeams={() => setCurrentPage("teams")}
+        onNavigateToMergeSuggestions={() => setCurrentPage("merge_suggestions")}
+        onNavigateToSubscriberRules={() => setCurrentPage("subscriber_rules")}
+        onNavigateToBroadcasts={() => setCurrentPage("broadcasts")}
+        selectedTeamFilter={selectedTeamFilter}
+        onTeamFilterChange={setSelectedTeamFilter}
+        onNewConversation={() => setShowNewConversation(true)}
       />
 
       <ChatThreadList
@@ -196,12 +260,38 @@ function ExcomDashboard() {
             <h2 className="text-xl font-semibold text-white mb-2">
               Excom Chat
             </h2>
-            <p className="text-zinc-400 text-sm max-w-sm">
+            <p className="text-zinc-400 text-sm max-w-sm mb-4">
               Select a conversation from the list to start messaging. All your
               channels are unified in one place.
             </p>
+            <button
+              onClick={() => setShowNewConversation(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              New Conversation
+            </button>
           </div>
         </div>
+      )}
+
+      {showNewConversation && (
+        <NewConversationDialog
+          onClose={() => setShowNewConversation(false)}
+          onConversationCreated={handleNewConversationCreated}
+        />
       )}
     </div>
   );

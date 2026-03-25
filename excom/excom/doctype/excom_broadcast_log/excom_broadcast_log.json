@@ -1,0 +1,110 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-03-09 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "broadcast",
+  "omni_identity",
+  "column_break_main",
+  "status",
+  "error_message",
+  "detail_section",
+  "recipient_address",
+  "column_break_detail",
+  "sent_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "broadcast",
+   "fieldtype": "Link",
+   "label": "Broadcast",
+   "options": "Excom Broadcast",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "omni_identity",
+   "fieldtype": "Link",
+   "label": "Omni Identity",
+   "options": "Omni Identity",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Queued\nSent\nFailed\nSkipped",
+   "default": "Queued",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "detail_section",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "recipient_address",
+   "fieldtype": "Data",
+   "label": "Recipient Address",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "Email or phone used for delivery"
+  },
+  {
+   "fieldname": "column_break_detail",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sent_at",
+   "fieldtype": "Datetime",
+   "label": "Sent At",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-03-09 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Excom",
+ "name": "Excom Broadcast Log",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "export": 1
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Excom Manager"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Excom User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
