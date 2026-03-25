@@ -243,12 +243,21 @@ def _send_whatsapp_to_subscriber(broadcast, omni_identity_name: str) -> bool:
 
     template = frappe.get_doc("WhatsApp Templates", broadcast.wa_template)
 
-    variables = json.loads(broadcast.get("wa_template_variables") or "[]")
+    variable_mode = broadcast.get("wa_variable_mode") or "same_for_all"
     header_media = broadcast.get("wa_header_media") or ""
+    button_urls = json.loads(broadcast.get("wa_button_urls") or "[]")
+    language_code = broadcast.get("wa_language_code") or template.language_code or "en_US"
+
+    if variable_mode == "per_subscriber":
+        mapping = json.loads(broadcast.get("wa_variable_mapping") or "[]")
+        context = _build_subscriber_context(omni_identity_name)
+        variables = _resolve_variable_mapping(mapping, context)
+    else:
+        variables = json.loads(broadcast.get("wa_template_variables") or "[]")
 
     from excom.excom.api.chat import _build_template_components
 
-    components = _build_template_components(template, variables, header_media)
+    components = _build_template_components(template, variables, header_media, button_urls)
 
     from excom.excom.services.whatsapp_service import send_template_message
 
@@ -256,7 +265,7 @@ def _send_whatsapp_to_subscriber(broadcast, omni_identity_name: str) -> bool:
         account=account,
         to=phone,
         template_name=template.actual_name or template.name,
-        language_code=template.language or "en_US",
+        language_code=language_code,
         components=components,
     )
 
@@ -267,6 +276,32 @@ def _send_whatsapp_to_subscriber(broadcast, omni_identity_name: str) -> bool:
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
+
+def _resolve_variable_mapping(mapping: list, context: dict) -> list:
+    """Resolve per-subscriber variable mapping to actual values.
+
+    Args:
+        mapping: List of dotted field paths like ["subscriber.display_name", "customer.customer_name"]
+        context: Subscriber context dict from _build_subscriber_context
+
+    Returns:
+        List of resolved string values
+    """
+    values = []
+    for field_path in mapping:
+        if not field_path or "." not in field_path:
+            values.append("")
+            continue
+        obj_key, attr = field_path.split(".", 1)
+        obj = context.get(obj_key)
+        if obj and hasattr(obj, attr):
+            values.append(str(getattr(obj, attr) or ""))
+        elif obj and isinstance(obj, dict):
+            values.append(str(obj.get(attr, "")))
+        else:
+            values.append("")
+    return values
 
 
 def _build_subscriber_context(omni_identity_name: str) -> dict:

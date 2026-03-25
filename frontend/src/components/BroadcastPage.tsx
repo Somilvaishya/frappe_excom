@@ -60,6 +60,15 @@ interface SubscriberListOption {
   active_subscribers: number;
 }
 
+interface TemplateButton {
+  button_type: string;
+  button_label: string;
+  website_url?: string;
+  url_type?: string;
+  example_url?: string;
+  phone_number?: string;
+}
+
 interface TemplateItem {
   name: string;
   template_name: string;
@@ -74,6 +83,14 @@ interface TemplateItem {
   field_names: string;
   variable_count: number;
   sample_variables: string[];
+  buttons: TemplateButton[];
+  has_dynamic_url: boolean;
+  available_languages: string[];
+}
+
+interface SubscriberField {
+  value: string;
+  label: string;
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; icon: typeof Clock }> = {
@@ -301,7 +318,12 @@ function ComposeDialog({
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
   const [templateSearch, setTemplateSearch] = useState("");
+  const [selectedLanguage, setSelectedLanguage] = useState("");
+  const [variableMode, setVariableMode] = useState<"same_for_all" | "per_subscriber">("same_for_all");
   const [variables, setVariables] = useState<string[]>([]);
+  const [variableMapping, setVariableMapping] = useState<string[]>([]);
+  const [buttonUrls, setButtonUrls] = useState<string[]>([]);
+  const [subscriberFields, setSubscriberFields] = useState<SubscriberField[]>([]);
   const [headerMediaUrl, setHeaderMediaUrl] = useState("");
   const [headerFileName, setHeaderFileName] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -316,6 +338,7 @@ function ComposeDialog({
   const { call: fetchLists } = useFrappePostCall("excom.excom.api.broadcast.get_subscriber_lists_for_broadcast");
   const { call: fetchWaAccounts } = useFrappePostCall("excom.excom.api.chat.get_channel_accounts");
   const { call: fetchTemplates } = useFrappePostCall("excom.excom.api.chat.get_whatsapp_templates");
+  const { call: fetchSubFields } = useFrappePostCall("excom.excom.api.chat.get_subscriber_variable_fields");
   const { call: createBroadcast } = useFrappePostCall("excom.excom.api.broadcast.create_broadcast");
   const { call: submitBroadcast } = useFrappePostCall("excom.excom.api.broadcast.submit_broadcast");
   const { upload } = useFrappeFileUpload();
@@ -346,6 +369,11 @@ function ComposeDialog({
           if (accs.length === 1) setWaChannelAccount(accs[0].name);
         }).catch(() => {});
       }
+      if (subscriberFields.length === 0) {
+        fetchSubFields({}).then((res) => {
+          setSubscriberFields((res as any)?.message || []);
+        }).catch(() => {});
+      }
     }
   }, [step, channel, templateSearch, loadTemplates]);
 
@@ -372,15 +400,26 @@ function ComposeDialog({
 
   const canProceedStep1 = name.trim() && subscriberList;
   const canProceedStep2 = channel === "WhatsApp"
-    ? selectedTemplate && (!needsMedia || headerMediaUrl) && waChannelAccount
+    ? selectedTemplate && (!needsMedia || headerMediaUrl) && waChannelAccount && (
+        variableMode === "per_subscriber"
+          ? variableMapping.every((m) => !!m)
+          : true
+      )
     : emailSubject.trim() && emailBody.trim();
 
   const getPreview = (): string => {
     if (!selectedTemplate) return "";
     let text = selectedTemplate.template || "";
-    variables.forEach((val, i) => {
-      text = text.replace(`{{${i + 1}}}`, val || `{{${i + 1}}}`);
-    });
+    if (variableMode === "per_subscriber") {
+      variableMapping.forEach((mapped, i) => {
+        const field = subscriberFields.find((f) => f.value === mapped);
+        text = text.replace(`{{${i + 1}}}`, field ? `{${field.label}}` : `{{${i + 1}}}`);
+      });
+    } else {
+      variables.forEach((val, i) => {
+        text = text.replace(`{{${i + 1}}}`, val || `{{${i + 1}}}`);
+      });
+    }
     return text;
   };
 
@@ -393,8 +432,12 @@ function ComposeDialog({
         channel,
         wa_channel_account: channel === "WhatsApp" ? waChannelAccount : "",
         wa_template: channel === "WhatsApp" ? selectedTemplate?.name : "",
-        wa_template_variables: channel === "WhatsApp" ? JSON.stringify(variables) : "[]",
+        wa_language_code: channel === "WhatsApp" ? selectedLanguage : "",
+        wa_variable_mode: channel === "WhatsApp" ? variableMode : "same_for_all",
+        wa_template_variables: channel === "WhatsApp" && variableMode === "same_for_all" ? JSON.stringify(variables) : "[]",
+        wa_variable_mapping: channel === "WhatsApp" && variableMode === "per_subscriber" ? JSON.stringify(variableMapping) : "[]",
         wa_header_media: channel === "WhatsApp" ? headerMediaUrl : "",
+        wa_button_urls: channel === "WhatsApp" ? JSON.stringify(buttonUrls.filter(Boolean)) : "[]",
         email_subject: channel === "Email" ? emailSubject : "",
         email_body: channel === "Email" ? emailBody : "",
       });
@@ -573,36 +616,57 @@ function ComposeDialog({
                     />
                   </div>
                   <div className="space-y-2 max-h-72 overflow-y-auto">
-                    {templates.map((t) => (
-                      <button
-                        key={t.name}
-                        onClick={() => {
-                          setSelectedTemplate(t);
-                          setVariables(new Array(t.variable_count).fill(""));
-                          setHeaderMediaUrl("");
-                          setHeaderFileName("");
-                        }}
-                        className="w-full text-left rounded-lg border border-zinc-800 p-3.5 hover:border-green-500/40 hover:bg-green-500/5 transition-all group"
-                      >
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-sm font-medium text-white group-hover:text-green-400">{t.template_name}</span>
-                          <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-green-400" />
-                        </div>
-                        <p className="text-xs text-zinc-400 line-clamp-2 mb-2">{t.template || "No preview"}</p>
-                        <div className="flex items-center gap-3 text-[10px] text-zinc-500">
-                          <span className="bg-zinc-800 px-1.5 py-0.5 rounded">{t.category}</span>
-                          {t.variable_count > 0 && (
-                            <span className="text-blue-400">{t.variable_count} variable{t.variable_count > 1 ? "s" : ""}</span>
-                          )}
-                          {t.header_type === "IMAGE" && (
-                            <span className="text-purple-400 flex items-center gap-0.5"><ImageIcon className="w-3 h-3" /> Photo</span>
-                          )}
-                          {t.header_type === "DOCUMENT" && (
-                            <span className="text-orange-400 flex items-center gap-0.5"><Paperclip className="w-3 h-3" /> Document</span>
-                          )}
-                        </div>
-                      </button>
-                    ))}
+                    {(() => {
+                      const seen = new Set<string>();
+                      return templates.filter((t) => {
+                        const key = t.actual_name || t.template_name;
+                        if (seen.has(key)) return false;
+                        seen.add(key);
+                        return true;
+                      }).map((t) => (
+                        <button
+                          key={t.name}
+                          onClick={() => {
+                            setSelectedTemplate(t);
+                            setSelectedLanguage(t.language_code);
+                            setVariables(new Array(t.variable_count).fill(""));
+                            setVariableMapping(new Array(t.variable_count).fill(""));
+                            setVariableMode("same_for_all");
+                            setHeaderMediaUrl("");
+                            setHeaderFileName("");
+                            const dynBtns = (t.buttons || []).filter(
+                              (b) => b.button_type === "Visit Website" && b.url_type === "Dynamic"
+                            );
+                            setButtonUrls(new Array(dynBtns.length).fill(""));
+                          }}
+                          className="w-full text-left rounded-lg border border-zinc-800 p-3.5 hover:border-green-500/40 hover:bg-green-500/5 transition-all group"
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-sm font-medium text-white group-hover:text-green-400">{t.template_name}</span>
+                            <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-green-400" />
+                          </div>
+                          <p className="text-xs text-zinc-400 line-clamp-2 mb-2">{t.template || "No preview"}</p>
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
+                            <span className="bg-zinc-800 px-1.5 py-0.5 rounded">{t.category}</span>
+                            {t.available_languages.length > 1 && (
+                              <span className="text-cyan-400">{t.available_languages.length} languages</span>
+                            )}
+                            {t.variable_count > 0 && (
+                              <span className="text-blue-400">{t.variable_count} variable{t.variable_count > 1 ? "s" : ""}</span>
+                            )}
+                            {t.header_type === "IMAGE" && (
+                              <span className="text-purple-400 flex items-center gap-0.5"><ImageIcon className="w-3 h-3" /> Photo</span>
+                            )}
+                            {t.header_type === "DOCUMENT" && (
+                              <span className="text-orange-400 flex items-center gap-0.5"><Paperclip className="w-3 h-3" /> Document</span>
+                            )}
+                            {t.has_dynamic_url && (
+                              <span className="text-yellow-400">Dynamic URL</span>
+                            )}
+                          </div>
+                        </button>
+                      ));
+                    })()}
                     {templates.length === 0 && (
                       <div className="text-center py-8 text-sm text-zinc-500">No approved templates found</div>
                     )}
@@ -625,6 +689,39 @@ function ComposeDialog({
                     )}
                   </div>
 
+                  {/* Language selector */}
+                  {selectedTemplate.available_languages.length > 1 && (
+                    <div>
+                      <label className="text-xs text-zinc-400 font-medium mb-1.5 block">Language</label>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedTemplate.available_languages.map((lang) => (
+                          <button
+                            key={lang}
+                            onClick={() => {
+                              setSelectedLanguage(lang);
+                              const match = templates.find(
+                                (t) => (t.actual_name || t.template_name) === (selectedTemplate.actual_name || selectedTemplate.template_name) && t.language_code === lang
+                              );
+                              if (match && match.name !== selectedTemplate.name) {
+                                setSelectedTemplate(match);
+                                setVariables(new Array(match.variable_count).fill(""));
+                                setVariableMapping(new Array(match.variable_count).fill(""));
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                              selectedLanguage === lang
+                                ? "border-green-500/50 bg-green-500/10 text-green-400"
+                                : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                            }`}
+                          >
+                            {lang}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Header media */}
                   {needsMedia && (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
@@ -678,28 +775,103 @@ function ComposeDialog({
                     </div>
                   )}
 
+                  {/* Variables — mode toggle + inputs */}
                   {selectedTemplate.variable_count > 0 && (
                     <div className="space-y-3">
-                      <p className="text-xs text-zinc-400 font-medium">Fill template variables:</p>
-                      {variables.map((val, idx) => (
-                        <div key={idx}>
-                          <label className="text-xs text-zinc-500 mb-1 block">
-                            {labels[idx] || `Variable {{${idx + 1}}}`}
-                          </label>
-                          <Input
-                            placeholder={selectedTemplate.sample_variables?.[idx] || `Value for {{${idx + 1}}}`}
-                            value={val}
-                            onChange={(e) => {
-                              const next = [...variables];
-                              next[idx] = e.target.value;
-                              setVariables(next);
-                            }}
-                            className="bg-zinc-800 border-zinc-700 text-white"
-                          />
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-zinc-400 font-medium">Template Variables</p>
+                        <div className="flex gap-1 bg-zinc-800 rounded-lg p-0.5">
+                          <button
+                            onClick={() => setVariableMode("same_for_all")}
+                            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
+                              variableMode === "same_for_all" ? "bg-zinc-700 text-white" : "text-zinc-500 hover:text-zinc-300"
+                            }`}
+                          >
+                            Same for all
+                          </button>
+                          <button
+                            onClick={() => setVariableMode("per_subscriber")}
+                            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
+                              variableMode === "per_subscriber" ? "bg-zinc-700 text-white" : "text-zinc-500 hover:text-zinc-300"
+                            }`}
+                          >
+                            Per subscriber
+                          </button>
                         </div>
-                      ))}
+                      </div>
+
+                      {variableMode === "same_for_all" ? (
+                        variables.map((val, idx) => (
+                          <div key={idx}>
+                            <label className="text-xs text-zinc-500 mb-1 block">
+                              {labels[idx] || `Variable {{${idx + 1}}}`}
+                            </label>
+                            <Input
+                              placeholder={selectedTemplate.sample_variables?.[idx] || `Value for {{${idx + 1}}}`}
+                              value={val}
+                              onChange={(e) => {
+                                const next = [...variables];
+                                next[idx] = e.target.value;
+                                setVariables(next);
+                              }}
+                              className="bg-zinc-800 border-zinc-700 text-white"
+                            />
+                          </div>
+                        ))
+                      ) : (
+                        variableMapping.map((mapped, idx) => (
+                          <div key={idx}>
+                            <label className="text-xs text-zinc-500 mb-1 block">
+                              {labels[idx] || `Variable {{${idx + 1}}}`}
+                            </label>
+                            <select
+                              value={mapped}
+                              onChange={(e) => {
+                                const next = [...variableMapping];
+                                next[idx] = e.target.value;
+                                setVariableMapping(next);
+                              }}
+                              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
+                            >
+                              <option value="">Select subscriber field...</option>
+                              {subscriberFields.map((f) => (
+                                <option key={f.value} value={f.value}>{f.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ))
+                      )}
                     </div>
                   )}
+
+                  {/* Dynamic button URLs */}
+                  {selectedTemplate.has_dynamic_url && (() => {
+                    const dynBtns = (selectedTemplate.buttons || []).filter(
+                      (b) => b.button_type === "Visit Website" && b.url_type === "Dynamic"
+                    );
+                    return dynBtns.length > 0 ? (
+                      <div className="space-y-3">
+                        <p className="text-xs text-zinc-400 font-medium">Button Link Parameters</p>
+                        {dynBtns.map((btn, idx) => (
+                          <div key={idx}>
+                            <label className="text-xs text-zinc-500 mb-1 block">
+                              {btn.button_label} — <span className="text-zinc-600">{btn.website_url}</span>
+                            </label>
+                            <Input
+                              placeholder={btn.example_url || "URL suffix value"}
+                              value={buttonUrls[idx] || ""}
+                              onChange={(e) => {
+                                const next = [...buttonUrls];
+                                next[idx] = e.target.value;
+                                setButtonUrls(next);
+                              }}
+                              className="bg-zinc-800 border-zinc-700 text-white"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
                 </>
               )}
             </div>
@@ -768,10 +940,20 @@ function ComposeDialog({
                   </div>
                 )}
                 {channel === "WhatsApp" && selectedTemplate && (
-                  <div className="flex justify-between px-4 py-3">
-                    <span className="text-sm text-zinc-400">Template</span>
-                    <span className="text-sm text-white">{selectedTemplate.template_name}</span>
-                  </div>
+                  <>
+                    <div className="flex justify-between px-4 py-3">
+                      <span className="text-sm text-zinc-400">Template</span>
+                      <span className="text-sm text-white">{selectedTemplate.template_name}</span>
+                    </div>
+                    <div className="flex justify-between px-4 py-3">
+                      <span className="text-sm text-zinc-400">Language</span>
+                      <span className="text-sm text-white">{selectedLanguage}</span>
+                    </div>
+                    <div className="flex justify-between px-4 py-3">
+                      <span className="text-sm text-zinc-400">Variables</span>
+                      <span className="text-sm text-white capitalize">{variableMode.replace("_", " ")}</span>
+                    </div>
+                  </>
                 )}
                 {channel === "Email" && (
                   <div className="flex justify-between px-4 py-3">

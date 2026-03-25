@@ -1121,7 +1121,7 @@ def initiate_outbound(
 
 @frappe.whitelist()
 def get_whatsapp_templates(search: str = "") -> list:
-    """Return approved WhatsApp templates for the template picker."""
+    """Return approved WhatsApp templates with language variants and buttons."""
     filters = {"status": "APPROVED"}
     if search:
         filters["template_name"] = ["like", f"%{search}%"]
@@ -1135,17 +1135,62 @@ def get_whatsapp_templates(search: str = "") -> list:
             "sample_values", "field_names", "header", "footer",
         ],
         order_by="template_name asc",
-        limit=50,
+        limit=100,
     )
 
+    all_names = [t.name for t in templates]
+    buttons_by_parent: dict = {}
+    if all_names:
+        buttons = frappe.get_all(
+            "WhatsApp Button",
+            filters={"parent": ["in", all_names], "parenttype": "WhatsApp Templates"},
+            fields=["parent", "button_type", "button_label", "website_url", "url_type", "example_url", "phone_number"],
+            order_by="idx asc",
+        )
+        for btn in buttons:
+            buttons_by_parent.setdefault(btn.parent, []).append(btn)
+
+    lang_groups: dict = {}
     for t in templates:
         variables = []
         if t.sample_values:
             variables = [v.strip() for v in t.sample_values.split(",") if v.strip()]
         t["variable_count"] = len(variables)
         t["sample_variables"] = variables
+        t["buttons"] = buttons_by_parent.get(t.name, [])
+        t["has_dynamic_url"] = any(
+            b.get("url_type") == "Dynamic" for b in t["buttons"]
+            if b.get("button_type") == "Visit Website"
+        )
+
+        key = t.actual_name or t.template_name
+        if key not in lang_groups:
+            lang_groups[key] = []
+        lang_groups[key].append(t.language_code)
+
+    for t in templates:
+        key = t.actual_name or t.template_name
+        t["available_languages"] = lang_groups.get(key, [t.language_code])
 
     return templates
+
+
+@frappe.whitelist()
+def get_subscriber_variable_fields() -> list:
+    """Return Omni Identity fields available for per-subscriber variable mapping."""
+    return [
+        {"value": "subscriber.display_name", "label": "Display Name"},
+        {"value": "subscriber.primary_phone", "label": "Phone"},
+        {"value": "subscriber.primary_email", "label": "Email"},
+        {"value": "subscriber.primary_whatsapp", "label": "WhatsApp Number"},
+        {"value": "customer.customer_name", "label": "Customer Name"},
+        {"value": "customer.customer_group", "label": "Customer Group"},
+        {"value": "lead.lead_name", "label": "Lead Name"},
+        {"value": "lead.company_name", "label": "Lead Company"},
+        {"value": "supplier.supplier_name", "label": "Supplier Name"},
+        {"value": "contact.first_name", "label": "Contact First Name"},
+        {"value": "contact.last_name", "label": "Contact Last Name"},
+    ]
 
 
 @frappe.whitelist()
@@ -1276,9 +1321,17 @@ def check_24h_window(thread_id: str) -> dict:
 
 
 def _build_template_components(
-    template_doc, body_variables: list, header_media_url: str = ""
+    template_doc, body_variables: list, header_media_url: str = "",
+    button_urls: list = None,
 ) -> list:
-    """Build Meta WhatsApp template components from variables and media."""
+    """Build Meta WhatsApp template components from variables, media, and button URLs.
+
+    Args:
+        template_doc: WhatsApp Templates document
+        body_variables: List of body variable values
+        header_media_url: Frappe file URL for IMAGE/DOCUMENT header
+        button_urls: List of dynamic URL suffix values for URL buttons
+    """
     components = []
 
     if body_variables:
@@ -1312,6 +1365,19 @@ def _build_template_components(
                 },
             }],
         })
+
+    if button_urls and template_doc.get("buttons"):
+        url_idx = 0
+        for i, btn in enumerate(template_doc.buttons):
+            if btn.button_type == "Visit Website" and btn.url_type == "Dynamic":
+                if url_idx < len(button_urls) and button_urls[url_idx]:
+                    components.append({
+                        "type": "button",
+                        "sub_type": "url",
+                        "index": str(i),
+                        "parameters": [{"type": "text", "text": str(button_urls[url_idx])}],
+                    })
+                url_idx += 1
 
     return components
 

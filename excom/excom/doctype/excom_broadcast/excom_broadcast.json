@@ -16,8 +16,12 @@
   "whatsapp_section",
   "wa_channel_account",
   "wa_template",
+  "wa_language_code",
+  "wa_variable_mode",
   "wa_template_variables",
+  "wa_variable_mapping",
   "wa_header_media",
+  "wa_button_urls",
   "email_section",
   "email_subject",
   "email_body",
@@ -110,11 +114,34 @@
    "mandatory_depends_on": "eval:doc.channel=='WhatsApp'"
   },
   {
+   "fieldname": "wa_language_code",
+   "fieldtype": "Data",
+   "label": "Language Code",
+   "depends_on": "eval:doc.channel=='WhatsApp' && doc.wa_template",
+   "description": "Template language code e.g. en_US"
+  },
+  {
+   "fieldname": "wa_variable_mode",
+   "fieldtype": "Select",
+   "label": "Variable Mode",
+   "options": "same_for_all\nper_subscriber",
+   "default": "same_for_all",
+   "depends_on": "eval:doc.channel=='WhatsApp' && doc.wa_template",
+   "description": "Same values for all subscribers or map to subscriber fields"
+  },
+  {
    "fieldname": "wa_template_variables",
    "fieldtype": "Small Text",
    "label": "Template Variables",
    "depends_on": "eval:doc.channel=='WhatsApp' && doc.wa_template",
-   "description": "JSON array of variable values, e.g. [\"John\", \"Order #123\"]"
+   "description": "JSON array of variable values or field mappings"
+  },
+  {
+   "fieldname": "wa_variable_mapping",
+   "fieldtype": "Small Text",
+   "label": "Variable Mapping",
+   "depends_on": "eval:doc.channel=='WhatsApp' && doc.wa_variable_mode=='per_subscriber'",
+   "description": "JSON array of subscriber field paths, e.g. [\"subscriber.display_name\"]"
   },
   {
    "fieldname": "wa_header_media",
@@ -122,6 +149,13 @@
    "label": "Header Media",
    "depends_on": "eval:doc.channel=='WhatsApp' && doc.wa_template",
    "description": "Image or document to attach as template header"
+  },
+  {
+   "fieldname": "wa_button_urls",
+   "fieldtype": "Small Text",
+   "label": "Button URLs",
+   "depends_on": "eval:doc.channel=='WhatsApp' && doc.wa_template",
+   "description": "JSON array of dynamic URL button suffixes"
   },
   {
    "fieldname": "email_section",
