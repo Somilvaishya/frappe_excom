@@ -173,6 +173,15 @@ def _send_email_to_subscriber(broadcast, omni_identity_name: str) -> bool:
             now=True,
         )
 
+    _create_broadcast_message(
+        broadcast=broadcast,
+        omni_identity_name=omni_identity_name,
+        channel="email",
+        account_name=account_name or "",
+        content_text=broadcast.email_subject,
+        message_type="Email",
+    )
+
     _log_delivery(broadcast.name, omni_identity_name, "Sent", recipient=email)
     return True
 
@@ -269,6 +278,22 @@ def _send_whatsapp_to_subscriber(broadcast, omni_identity_name: str) -> bool:
         components=components,
     )
 
+    from excom.excom.api.chat import _build_template_preview
+    preview = _build_template_preview(template, variables)
+
+    _create_broadcast_message(
+        broadcast=broadcast,
+        omni_identity_name=omni_identity_name,
+        channel="whatsapp",
+        account_name=account.name,
+        content_text=preview,
+        message_type="Template",
+        provider_message_id=result.get("provider_message_id", ""),
+        delivery_status=result.get("status", "Sent"),
+        media_file=header_media,
+        template_name=broadcast.wa_template,
+    )
+
     _log_delivery(broadcast.name, omni_identity_name, "Sent", recipient=phone)
     return True
 
@@ -338,6 +363,52 @@ def _build_subscriber_context(omni_identity_name: str) -> dict:
                 pass
 
     return context
+
+
+def _create_broadcast_message(
+    broadcast,
+    omni_identity_name: str,
+    channel: str,
+    account_name: str,
+    content_text: str,
+    message_type: str,
+    provider_message_id: str = "",
+    delivery_status: str = "Sent",
+    media_file: str = "",
+    template_name: str = "",
+) -> None:
+    """Create an Excom Thread (if needed) and Excom Message for a broadcast send.
+
+    This ensures broadcast messages appear in the subscriber's inbox thread,
+    so conversation history is complete when they reply.
+    """
+    from excom.excom.services.thread_service import upsert_thread
+
+    try:
+        thread_name = upsert_thread(omni_identity_name, channel, account_name)
+
+        frappe.get_doc({
+            "doctype": "Excom Message",
+            "thread": thread_name,
+            "omni_identity": omni_identity_name,
+            "channel": channel,
+            "account_doctype": "Excom Channel Account",
+            "account": account_name,
+            "direction": "Outbound",
+            "message_type": message_type,
+            "provider_message_id": provider_message_id,
+            "provider_timestamp": now_datetime(),
+            "content_text": content_text[:500] if content_text else "",
+            "media_file": media_file or None,
+            "delivery_status": delivery_status,
+            "template": template_name or None,
+            "reference_doctype": "Excom Broadcast",
+            "reference_name": broadcast.name,
+        }).insert(ignore_permissions=True)
+    except Exception:
+        frappe.log_error(
+            title=f"Broadcast message record failed: {broadcast.name} -> {omni_identity_name}",
+        )
 
 
 def _log_delivery(
