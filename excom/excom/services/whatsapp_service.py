@@ -56,15 +56,17 @@ def send_template_message(account, to: str, template_name: str, language_code: s
         dict with keys: provider_message_id, status
     """
     to = _clean_phone(to)
+    template_block: dict = {
+        "name": template_name,
+        "language": {"code": language_code},
+    }
+    if components:
+        template_block["components"] = components
     payload = {
         "messaging_product": "whatsapp",
         "to": to,
         "type": "template",
-        "template": {
-            "name": template_name,
-            "language": {"code": language_code},
-            "components": components or [],
-        },
+        "template": template_block,
     }
     return _call_api(account, payload)
 

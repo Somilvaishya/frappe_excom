@@ -1340,7 +1340,7 @@ def _build_template_components(
             "parameters": [{"type": "text", "text": str(v)} for v in body_variables],
         })
 
-    if template_doc.header_type == "TEXT" and template_doc.header:
+    if template_doc.header_type == "TEXT" and template_doc.header and "{{" in template_doc.header:
         components.append({
             "type": "header",
             "parameters": [{"type": "text", "text": template_doc.header}],
