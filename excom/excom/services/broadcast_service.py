@@ -227,9 +227,13 @@ def _send_whatsapp_to_subscriber(broadcast, omni_identity_name: str) -> bool:
         )
         return False
 
-    from excom.excom.utils import get_channel_account
+    wa_account_name = broadcast.get("wa_channel_account")
+    if wa_account_name:
+        account = frappe.get_doc("Excom Channel Account", wa_account_name)
+    else:
+        from excom.excom.utils import get_channel_account
+        account = get_channel_account(channel="whatsapp")
 
-    account = get_channel_account(channel="whatsapp", account_type="outgoing")
     if not account:
         _log_delivery(
             broadcast.name, omni_identity_name, "Failed",

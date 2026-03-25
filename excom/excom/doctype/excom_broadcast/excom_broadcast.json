@@ -14,6 +14,7 @@
   "status",
   "scheduled_at",
   "whatsapp_section",
+  "wa_channel_account",
   "wa_template",
   "wa_template_variables",
   "wa_header_media",
@@ -92,6 +93,14 @@
    "fieldtype": "Section Break",
    "label": "WhatsApp Settings",
    "depends_on": "eval:doc.channel=='WhatsApp'"
+  },
+  {
+   "fieldname": "wa_channel_account",
+   "fieldtype": "Link",
+   "label": "WhatsApp Account",
+   "options": "Excom Channel Account",
+   "mandatory_depends_on": "eval:doc.channel=='WhatsApp'",
+   "description": "Channel account to send WhatsApp messages from"
   },
   {
    "fieldname": "wa_template",

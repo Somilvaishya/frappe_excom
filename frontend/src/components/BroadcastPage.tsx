@@ -296,6 +296,8 @@ function ComposeDialog({
   const [loadingLists, setLoadingLists] = useState(true);
 
   // WhatsApp
+  const [waAccounts, setWaAccounts] = useState<{ name: string; account_name: string }[]>([]);
+  const [waChannelAccount, setWaChannelAccount] = useState("");
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
   const [templateSearch, setTemplateSearch] = useState("");
@@ -312,6 +314,7 @@ function ComposeDialog({
   const [submitting, setSubmitting] = useState(false);
 
   const { call: fetchLists } = useFrappePostCall("excom.excom.api.broadcast.get_subscriber_lists_for_broadcast");
+  const { call: fetchWaAccounts } = useFrappePostCall("excom.excom.api.chat.get_channel_accounts");
   const { call: fetchTemplates } = useFrappePostCall("excom.excom.api.chat.get_whatsapp_templates");
   const { call: createBroadcast } = useFrappePostCall("excom.excom.api.broadcast.create_broadcast");
   const { call: submitBroadcast } = useFrappePostCall("excom.excom.api.broadcast.submit_broadcast");
@@ -334,7 +337,16 @@ function ComposeDialog({
   }, [fetchTemplates]);
 
   useEffect(() => {
-    if (step === 2 && channel === "WhatsApp") loadTemplates(templateSearch);
+    if (step === 2 && channel === "WhatsApp") {
+      loadTemplates(templateSearch);
+      if (waAccounts.length === 0) {
+        fetchWaAccounts({ channel: "whatsapp" }).then((res) => {
+          const accs = (res as any)?.message || [];
+          setWaAccounts(accs);
+          if (accs.length === 1) setWaChannelAccount(accs[0].name);
+        }).catch(() => {});
+      }
+    }
   }, [step, channel, templateSearch, loadTemplates]);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -360,7 +372,7 @@ function ComposeDialog({
 
   const canProceedStep1 = name.trim() && subscriberList;
   const canProceedStep2 = channel === "WhatsApp"
-    ? selectedTemplate && (!needsMedia || headerMediaUrl)
+    ? selectedTemplate && (!needsMedia || headerMediaUrl) && waChannelAccount
     : emailSubject.trim() && emailBody.trim();
 
   const getPreview = (): string => {
@@ -379,6 +391,7 @@ function ComposeDialog({
         broadcast_name: name.trim(),
         subscriber_list: subscriberList,
         channel,
+        wa_channel_account: channel === "WhatsApp" ? waChannelAccount : "",
         wa_template: channel === "WhatsApp" ? selectedTemplate?.name : "",
         wa_template_variables: channel === "WhatsApp" ? JSON.stringify(variables) : "[]",
         wa_header_media: channel === "WhatsApp" ? headerMediaUrl : "",
@@ -526,6 +539,27 @@ function ComposeDialog({
 
           {step === 2 && channel === "WhatsApp" && (
             <div className="space-y-4">
+              {waAccounts.length > 1 && (
+                <div>
+                  <label className="text-sm text-zinc-300 font-medium mb-2 block">Send From Account</label>
+                  <div className="space-y-2">
+                    {waAccounts.map((acc) => (
+                      <button
+                        key={acc.name}
+                        onClick={() => setWaChannelAccount(acc.name)}
+                        className={`w-full text-left px-4 py-2.5 rounded-lg border transition-all ${
+                          waChannelAccount === acc.name
+                            ? "border-green-500/50 bg-green-500/10"
+                            : "border-zinc-800 hover:border-zinc-600"
+                        }`}
+                      >
+                        <span className="text-sm text-white">{acc.account_name || acc.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {!selectedTemplate ? (
                 <>
                   <div className="relative">
@@ -725,6 +759,14 @@ function ComposeDialog({
                     <ChannelIcon channel={channel} /> {channel}
                   </span>
                 </div>
+                {channel === "WhatsApp" && waChannelAccount && (
+                  <div className="flex justify-between px-4 py-3">
+                    <span className="text-sm text-zinc-400">Account</span>
+                    <span className="text-sm text-white">
+                      {waAccounts.find((a) => a.name === waChannelAccount)?.account_name || waChannelAccount}
+                    </span>
+                  </div>
+                )}
                 {channel === "WhatsApp" && selectedTemplate && (
                   <div className="flex justify-between px-4 py-3">
                     <span className="text-sm text-zinc-400">Template</span>
