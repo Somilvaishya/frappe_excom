@@ -6,6 +6,7 @@
  "engine": "InnoDB",
  "field_order": [
   "team_name",
+  "parent_team",
   "column_break_basic",
   "description",
   "members_section",
@@ -20,6 +21,15 @@
    "unique": 1,
    "in_list_view": 1,
    "in_standard_filter": 1
+  },
+  {
+   "fieldname": "parent_team",
+   "fieldtype": "Link",
+   "label": "Parent Team",
+   "options": "Excom Team",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Creates a team hierarchy — e.g. Sales Delhi under Sales"
   },
   {
    "fieldname": "column_break_basic",
@@ -44,7 +54,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-03-09 12:00:00.000000",
+ "modified": "2026-03-09 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Excom",
  "name": "Excom Team",

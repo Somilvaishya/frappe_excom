@@ -45,7 +45,10 @@
   "column_break_webchat",
   "webchat_color",
   "webchat_position",
-  "webchat_prechat_fields"
+  "webchat_prechat_fields",
+
+  "visibility_section",
+  "allowed_teams"
  ],
  "fields": [
   {
@@ -310,11 +313,23 @@
    "fieldtype": "Small Text",
    "label": "Pre-chat Fields",
    "description": "JSON array of fields to collect before chat. Options: name, email, phone"
+  },
+  {
+   "fieldname": "visibility_section",
+   "fieldtype": "Section Break",
+   "label": "Team Visibility"
+  },
+  {
+   "fieldname": "allowed_teams",
+   "fieldtype": "Table",
+   "label": "Allowed Teams",
+   "options": "Excom Account Team",
+   "description": "If empty, all teams can see this account. Otherwise only the listed teams (and their sub-teams) can use it for new conversations and broadcasts."
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-02 10:00:00.000000",
+ "modified": "2026-03-09 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Excom",
  "name": "Excom Channel Account",

@@ -1086,13 +1086,20 @@ def get_related_documents(omni_identity: str):
 
 @frappe.whitelist()
 def get_channel_accounts(channel: str = "") -> list:
-    """Return active channel accounts, optionally filtered by channel type."""
+    """Return active channel accounts visible to the current user's teams.
+
+    Visibility rules:
+    - If an account has no entries in allowed_teams → visible to everyone
+    - If it has entries → visible only to users whose teams (or ancestor teams)
+      overlap with the allowed list
+    - System Manager / Excom Manager see all accounts
+    """
     _check_excom_access()
     filters = {"status": "Active"}
     if channel:
         filters["channel"] = channel
 
-    return frappe.get_all(
+    accounts = frappe.get_all(
         "Excom Channel Account",
         filters=filters,
         fields=[
@@ -1102,6 +1109,25 @@ def get_channel_accounts(channel: str = "") -> list:
         ],
         order_by="is_default_outgoing desc, account_name asc",
     )
+
+    user_roles = set(frappe.get_roles(frappe.session.user))
+    if user_roles & {"System Manager", "Excom Manager"}:
+        return accounts
+
+    from excom.excom.doctype.excom_team.excom_team import get_user_teams_with_ancestors
+    user_teams = set(get_user_teams_with_ancestors())
+
+    visible = []
+    for acc in accounts:
+        allowed = frappe.get_all(
+            "Excom Account Team",
+            filters={"parenttype": "Excom Channel Account", "parent": acc.name},
+            pluck="team",
+        )
+        if not allowed or user_teams & set(allowed):
+            visible.append(acc)
+
+    return visible
 
 
 @frappe.whitelist()
