@@ -51,7 +51,7 @@ frappe.notification = {
 		// body...
 		frm.add_custom_button(__('Get Alerts for Today'), function () {
             frappe.call({
-                method: 'excom.excom.doctype.whatsapp_notification.whatsapp_notification.call_trigger_notifications',
+                method: 'excom.excom.doctype.excom_notification.excom_notification.call_trigger_notifications',
                 args: {
                     method: 'daily' 
                 },
@@ -70,7 +70,7 @@ frappe.notification = {
 };
 
 
-frappe.ui.form.on('WhatsApp Notification', {
+frappe.ui.form.on('Excom Notification', {
 	refresh: function(frm) {
 		frm.trigger("load_template")
 		frappe.notification.setup_fieldname_select(frm);

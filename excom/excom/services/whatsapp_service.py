@@ -107,39 +107,6 @@ def send_media_message(account, to: str, media_type: str, file_url: str,
     return _call_api(account, payload)
 
 
-def wa_update_delivery_status(provider_message_id: str, status: str, timestamp: str = ""):
-    """
-    Update delivery status on the legacy WhatsApp Message DocType.
-    Also populates lifecycle timestamp fields (sent_at, delivered_at, etc.).
-
-    Args:
-        provider_message_id: The wamid from Meta
-        status: One of "sent", "delivered", "read", "failed"
-        timestamp: ISO timestamp from the webhook (optional)
-    """
-    name = frappe.db.get_value(
-        "WhatsApp Message", {"message_id": provider_message_id}, "name"
-    )
-    if not name:
-        return
-
-    now = timestamp or now_datetime()
-    status_lower = status.lower() if status else ""
-
-    updates = {"status": status_lower}
-    ts_field_map = {
-        "sent": "sent_at",
-        "delivered": "delivered_at",
-        "read": "read_at",
-        "failed": "failed_at",
-    }
-    ts_field = ts_field_map.get(status_lower)
-    if ts_field:
-        updates[ts_field] = now
-
-    frappe.db.set_value("WhatsApp Message", name, updates, update_modified=False)
-
-
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------

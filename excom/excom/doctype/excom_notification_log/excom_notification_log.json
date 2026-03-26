@@ -27,7 +27,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Notification",
-   "options": "WhatsApp Notification"
+   "options": "Excom Notification"
   },
   {
    "default": "Pending",
@@ -105,7 +105,7 @@
  "modified": "2026-02-20 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Excom",
- "name": "WhatsApp Notification Log",
+ "name": "Excom Notification Log",
  "owner": "Administrator",
  "permissions": [
   {

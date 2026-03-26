@@ -137,7 +137,7 @@ after_migrate = ["excom.setup.after_migrate"]
 
 # Document Events
 # ---------------
-# Triggers WhatsApp Notification automation for every DocType event.
+# Triggers Excom Notification automation for every DocType event.
 
 doc_events = {
 	"*": {

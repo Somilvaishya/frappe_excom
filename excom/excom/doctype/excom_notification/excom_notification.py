@@ -1,19 +1,18 @@
-"""Notification."""
+"""Excom Notification — triggers WhatsApp template sends on doc events and schedules."""
 
 import json
 import frappe
 
-from frappe import _dict, _
+from frappe import _
 from frappe.model.document import Document
 from frappe.utils.safe_exec import get_safe_globals, safe_exec
-from frappe.integrations.utils import make_post_request
 from frappe.desk.form.utils import get_pdf_link
 from frappe.utils import add_to_date, nowdate, now_datetime, datetime
 
-from excom.excom.utils import get_channel_account, get_wa_credentials
+from excom.excom.utils import get_channel_account
 
 
-class WhatsAppNotification(Document):
+class ExcomNotification(Document):
     """Notification."""
 
     def validate(self):
@@ -45,7 +44,7 @@ class WhatsAppNotification(Document):
         self.validate_delay_fields()
 
     def _queue_delayed_notification(self, doc, doc_data, phone_number):
-        """Create a Pending WhatsApp Notification Log for delayed dispatch."""
+        """Create a Pending Excom Notification Log for delayed dispatch."""
         unit = (self.delay_unit or "Minutes").lower()
         value = int(self.delay_value or 1)
         kwargs = {"minutes": 0, "hours": 0, "days": 0}
@@ -60,7 +59,7 @@ class WhatsAppNotification(Document):
         to_number = self.format_number(phone_number) if phone_number else ""
 
         frappe.get_doc({
-            "doctype": "WhatsApp Notification Log",
+            "doctype": "Excom Notification Log",
             "notification": self.name,
             "status": "Pending",
             "scheduled_for": scheduled_for,
@@ -110,7 +109,7 @@ class WhatsAppNotification(Document):
 
 
     def send_simple_template(self, template):
-        """ send simple template without a doc to get field data """
+        """Send simple template without a doc to get field data."""
         for contact in self._contact_list:
             data = {
                 "messaging_product": "whatsapp",
@@ -118,13 +117,10 @@ class WhatsAppNotification(Document):
                 "type": "template",
                 "template": {
                     "name": template.actual_name,
-                    "language": {
-                        "code": template.language_code
-                    },
-                    "components": []
-                }
+                    "language": {"code": template.language_code},
+                    "components": [],
+                },
             }
-            self.content_type = template.get("header_type", "text").lower()
             self.notify(data, template_account=template.get("whatsapp_account"))
 
 
@@ -286,7 +282,7 @@ class WhatsAppNotification(Document):
             self.notify(data, doc_data, template_account=template.whatsapp_account, force_send=force_send)
 
     def notify(self, data, doc_data=None, template_account=None, force_send=False):
-        """Notify."""
+        """Send WhatsApp template via whatsapp_service and record as Excom Message."""
         if template_account:
             account_doc = frappe.get_doc("Excom Channel Account", template_account)
         else:
@@ -295,44 +291,34 @@ class WhatsAppNotification(Document):
         if not account_doc:
             frappe.throw(_("Please set a default outgoing WhatsApp Channel Account"))
 
-        creds = get_wa_credentials(account_doc)
+        from excom.excom.services.whatsapp_service import send_template_message
 
+        template_doc = frappe.get_doc("WhatsApp Templates", self.template)
+        template_name = data["template"]["name"]
+        language_code = data["template"]["language"]["code"]
+        components = data["template"].get("components") or []
+        to_number = data["to"]
+
+        error_message = ""
+        success = False
+        result = {}
         try:
-            success = False
-            response = make_post_request(
-                f"{creds['url']}/{creds['version']}/{creds['phone_id']}/messages",
-                headers=creds['headers'], data=json.dumps(data)
+            result = send_template_message(
+                account=account_doc,
+                to=to_number,
+                template_name=template_name,
+                language_code=language_code,
+                components=components if components else None,
             )
 
-            if not self.get("content_type"):
-                self.content_type = 'text'
-
-            parameters = None
-            if data["template"]["components"]:
-                parameters = [param["text"] for param in data["template"]["components"][0]["parameters"]]
-                parameters = frappe.json.dumps(parameters, default=str)
-
-            new_doc = {
-                "doctype": "WhatsApp Message",
-                "type": "Outgoing",
-                "message": str(data['template']),
-                "to": data['to'],
-                "message_type": "Template",
-                "message_id": response['messages'][0]['id'],
-                "content_type": self.content_type,
-                "use_template": 1,
-                "template": self.template,
-                "template_parameters": parameters,
-                "whatsapp_account": account_doc.name,
-            }
-
-            if doc_data:
-                new_doc.update({
-                    "reference_doctype": doc_data.doctype,
-                    "reference_name": doc_data.name,
-                })
-
-            frappe.get_doc(new_doc).save(ignore_permissions=True)
+            self._create_excom_message(
+                account_doc=account_doc,
+                to_number=to_number,
+                template_doc=template_doc,
+                provider_message_id=result.get("provider_message_id", ""),
+                delivery_status=result.get("status", "Sent"),
+                doc_data=doc_data,
+            )
 
             if doc_data and self.set_property_after_alert and self.property_value:
                 if doc_data.doctype and doc_data.name:
@@ -343,36 +329,72 @@ class WhatsAppNotification(Document):
                     if df:
                         if df.fieldtype in frappe.model.numeric_fieldtypes:
                             value = frappe.utils.cint(value)
-
                         frappe.db.set_value(doc_data.get("doctype"), doc_data.get("name"), fieldname, value)
 
-            frappe.msgprint("WhatsApp Message Triggered", indicator="green", alert=True)
+            frappe.msgprint("Notification sent", indicator="green", alert=True)
             success = True
 
         except Exception as e:
             error_message = str(e)
-            if frappe.flags.integration_request:
-                response = frappe.flags.integration_request.json().get('error', {})
-                if response:
-                    error_message = response.get('Error', response.get("message"))
-
             frappe.msgprint(
-                f"Failed to trigger whatsapp message: {error_message}",
+                f"Failed to send notification: {error_message}",
                 indicator="red",
-                alert=True
+                alert=True,
             )
             if force_send:
                 raise
         finally:
-            if not success:
-                meta = {"error": error_message}
-            else:
-                meta = frappe.flags.integration_request.json()
             frappe.get_doc({
-                "doctype": "WhatsApp Notification Log",
+                "doctype": "Excom Notification Log",
                 "template": self.template,
-                "meta_data": meta
+                "meta_data": {"error": error_message} if not success else result,
             }).insert(ignore_permissions=True)
+
+    def _create_excom_message(
+        self, account_doc, to_number, template_doc,
+        provider_message_id="", delivery_status="Sent", doc_data=None,
+    ):
+        """Create an Excom Thread + Message for the notification send."""
+        from excom.excom.doctype.omni_identity.omni_identity import resolve_identity
+        from excom.excom.services.thread_service import upsert_thread
+        from excom.excom.api.chat import _build_template_preview
+
+        try:
+            identity_name = resolve_identity(
+                phone=to_number,
+                channel="whatsapp",
+                channel_user_id=to_number,
+                display_name=to_number,
+            )
+            thread_name = upsert_thread(identity_name, "whatsapp", account_doc.name)
+
+            body_vars = []
+            if self.fields:
+                body_vars = [f.field_name for f in self.fields]
+            preview = _build_template_preview(template_doc, body_vars)
+
+            msg_data = {
+                "doctype": "Excom Message",
+                "thread": thread_name,
+                "omni_identity": identity_name,
+                "channel": "whatsapp",
+                "account_doctype": "Excom Channel Account",
+                "account": account_doc.name,
+                "direction": "Outbound",
+                "message_type": "Template",
+                "provider_message_id": provider_message_id,
+                "provider_timestamp": now_datetime(),
+                "content_text": preview[:500],
+                "delivery_status": delivery_status,
+                "template": self.template,
+            }
+            if doc_data:
+                msg_data["reference_doctype"] = doc_data.get("doctype")
+                msg_data["reference_name"] = doc_data.get("name")
+
+            frappe.get_doc(msg_data).insert(ignore_permissions=True)
+        except Exception:
+            frappe.log_error(title=f"Excom Message creation failed for notification {self.name}")
 
 
     def _send_to_subscriber_list(self, doc, doc_data, default_template=None, force_send=False):
@@ -407,7 +429,7 @@ class WhatsAppNotification(Document):
 
     def on_trash(self):
         """On delete remove from schedule."""
-        frappe.cache().delete_value("whatsapp_notification_map")
+        frappe.cache().delete_value("excom_notification_map")
 
 
     def format_number(self, number):
@@ -461,11 +483,15 @@ def trigger_notifications(method="daily"):
         # don't send notifications while syncing or patching
         return
 
+    doctype_name = "Excom Notification"
+    if not frappe.db.table_exists(f"tab{doctype_name}"):
+        doctype_name = "WhatsApp Notification"
+
     if method == "daily":
         doc_list = frappe.get_all(
-            "WhatsApp Notification", filters={"doctype_event": ("in", ("Days Before", "Days After")), "disabled": 0}
+            doctype_name, filters={"doctype_event": ("in", ("Days Before", "Days After")), "disabled": 0}
         )
         for d in doc_list:
-            alert = frappe.get_doc("WhatsApp Notification", d.name)
+            alert = frappe.get_doc(doctype_name, d.name)
             alert.get_documents_for_today()
            

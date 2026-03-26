@@ -141,7 +141,7 @@
    "fieldname": "fields",
    "fieldtype": "Table",
    "label": "Fields",
-   "options": "WhatsApp Message Fields"
+   "options": "Excom Notification Fields"
   },
   {
    "fieldname": "section_break_11",
@@ -264,7 +264,7 @@
  "modified": "2025-09-18 02:11:52.149544",
  "modified_by": "Administrator",
  "module": "Excom",
- "name": "WhatsApp Notification",
+ "name": "Excom Notification",
  "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [

@@ -489,18 +489,34 @@ class WhatsAppFlow(Document):
         if not self.flow_id:
             frappe.throw(_("Flow must be created on WhatsApp first"))
 
-        # Create a WhatsApp Message to send the flow
-        msg = frappe.get_doc({
-            "doctype": "WhatsApp Message",
-            "type": "Outgoing",
-            "to": phone_number,
-            "content_type": "flow",
-            "flow": self.name,
-            "flow_cta": self.flow_cta or "Open Form",
-            "message": message or f"Test: {self.flow_name}",
-            "whatsapp_account": self.whatsapp_account
-        })
-        msg.insert(ignore_permissions=True)
+        from excom.excom.doctype.omni_identity.omni_identity import resolve_identity
+        from excom.excom.services.thread_service import upsert_thread
+        from excom.excom.services.whatsapp_service import send_text_message
+
+        account_doc = frappe.get_doc("Excom Channel Account", self.whatsapp_account)
+        body = message or f"Test: {self.flow_name}"
+
+        result = send_text_message(account=account_doc, to=phone_number, content=body)
+
+        identity_name = resolve_identity(
+            phone=phone_number, channel="whatsapp",
+            channel_user_id=phone_number, display_name=phone_number,
+        )
+        thread_name = upsert_thread(identity_name, "whatsapp", self.whatsapp_account)
+        frappe.get_doc({
+            "doctype": "Excom Message",
+            "thread": thread_name,
+            "omni_identity": identity_name,
+            "channel": "whatsapp",
+            "account_doctype": "Excom Channel Account",
+            "account": self.whatsapp_account,
+            "direction": "Outbound",
+            "message_type": "Interactive",
+            "provider_message_id": result.get("provider_message_id", ""),
+            "provider_timestamp": frappe.utils.now_datetime(),
+            "content_text": body[:500],
+            "delivery_status": result.get("status", "Sent"),
+        }).insert(ignore_permissions=True)
         frappe.db.commit()
 
         frappe.msgprint(

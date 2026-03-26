@@ -51,8 +51,9 @@ def post():
 
 	# Persist raw payload synchronously so we never lose it even if the job fails.
 	try:
+		from excom.excom.utils import _notification_log_doctype
 		frappe.get_doc({
-			"doctype": "WhatsApp Notification Log",
+			"doctype": _notification_log_doctype(),
 			"template": "Webhook",
 			"meta_data": json.dumps(data),
 		}).insert(ignore_permissions=True)
@@ -287,18 +288,10 @@ def _update_template_status(data):
 
 
 def _update_message_status(data):
-	"""Update delivery status on Excom Message and WhatsApp Message lifecycle timestamps."""
+	"""Update delivery status on Excom Message."""
 	status_entry = data.get("statuses", [{}])[0]
 	provider_id = status_entry.get("id")
 	status = status_entry.get("status")
 
 	if provider_id and status:
 		update_delivery_status(provider_id, status)
-
-		from excom.excom.services.whatsapp_service import wa_update_delivery_status
-		timestamp = ""
-		if status_entry.get("timestamp"):
-			timestamp = datetime.datetime.fromtimestamp(
-				int(status_entry["timestamp"])
-			).strftime("%Y-%m-%d %H:%M:%S")
-		wa_update_delivery_status(provider_id, status, timestamp=timestamp)

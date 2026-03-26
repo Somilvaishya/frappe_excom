@@ -26,23 +26,38 @@ def run_server_script_for_doc_event(doc, event):
     if notification:
         for notification_name in notification:
             frappe.get_doc(
-                "WhatsApp Notification",
-                notification_name
+                _notification_doctype(),
+                notification_name,
             ).send_template_message(doc)
+
+
+def _notification_doctype() -> str:
+    """Return the active notification doctype name (handles pre/post rename)."""
+    if frappe.db.table_exists("tabExcom Notification"):
+        return "Excom Notification"
+    return "WhatsApp Notification"
+
+
+def _notification_log_doctype() -> str:
+    """Return the active notification log doctype name."""
+    if frappe.db.table_exists("tabExcom Notification Log"):
+        return "Excom Notification Log"
+    return "WhatsApp Notification Log"
 
 
 def get_notifications_map():
     """Get mapping."""
-    if frappe.flags.in_patch and not frappe.db.table_exists("WhatsApp Notification"):
+    dt = _notification_doctype()
+    if frappe.flags.in_patch and not frappe.db.table_exists(f"tab{dt}"):
         return {}
 
     notification_map = {}
-    enabled_whatsapp_notifications = frappe.get_all(
-        "WhatsApp Notification",
+    enabled_notifications = frappe.get_all(
+        dt,
         fields=("name", "reference_doctype", "doctype_event", "notification_type"),
         filters={"disabled": 0},
     )
-    for notification in enabled_whatsapp_notifications:
+    for notification in enabled_notifications:
         if notification.notification_type == "DocType Event":
             notification_map.setdefault(
                 notification.reference_doctype, {}
@@ -50,7 +65,7 @@ def get_notifications_map():
                 notification.doctype_event, []
             ).append(notification.name)
 
-    frappe.cache().set_value("whatsapp_notification_map", notification_map)
+    frappe.cache().set_value("excom_notification_map", notification_map)
 
     return notification_map
 
@@ -107,29 +122,28 @@ def trigger_whatsapp_notifications_monthly_long():
 
 def trigger_whatsapp_notifications(event):
     """Run cron."""
-    wa_notify_list = frappe.get_list(
-        "WhatsApp Notification",
+    dt = _notification_doctype()
+    notify_list = frappe.get_list(
+        dt,
         filters={
             "event_frequency": event,
             "disabled": 0,
-        }
+        },
     )
 
-    for wa in wa_notify_list:
-        frappe.get_doc(
-            "WhatsApp Notification",
-            wa.name,
-        ).send_scheduled_message()
+    for n in notify_list:
+        frappe.get_doc(dt, n.name).send_scheduled_message()
 
 
-def process_pending_whatsapp_notification_logs(batch_size=100):
-    """Process delayed WhatsApp notifications queued in log table."""
+def process_pending_whatsapp_notification_logs(batch_size: int = 100):
+    """Process delayed notifications queued in log table."""
     if frappe.flags.in_import or frappe.flags.in_patch:
         return
 
+    log_dt = _notification_log_doctype()
     now_dt = now_datetime()
     pending_logs = frappe.get_all(
-        "WhatsApp Notification Log",
+        log_dt,
         filters={"status": "Pending"},
         fields=["name", "pending_since", "scheduled_for"],
         limit_page_length=batch_size,
@@ -141,73 +155,56 @@ def process_pending_whatsapp_notification_logs(batch_size=100):
         if log.pending_since:
             updates["pending_for_seconds"] = max(0, int(time_diff_in_seconds(now_dt, log.pending_since)))
         if updates:
-            frappe.db.set_value("WhatsApp Notification Log", log.name, updates, update_modified=False)
+            frappe.db.set_value(log_dt, log.name, updates, update_modified=False)
 
     due_logs = [log for log in pending_logs if not log.scheduled_for or log.scheduled_for <= now_dt]
     for due in due_logs:
-        _process_pending_whatsapp_notification_log(due.name)
+        _process_pending_notification_log(due.name)
 
 
-def _process_pending_whatsapp_notification_log(log_name):
+def _process_pending_notification_log(log_name: str):
     """Process one pending notification log entry safely."""
-    log = frappe.get_doc("WhatsApp Notification Log", log_name)
+    log_dt = _notification_log_doctype()
+    notif_dt = _notification_doctype()
+
+    log = frappe.get_doc(log_dt, log_name)
     if log.status != "Pending":
         return
 
-    if not log.notification or not frappe.db.exists("WhatsApp Notification", log.notification):
-        frappe.db.set_value(
-            "WhatsApp Notification Log",
-            log_name,
-            {
-                "status": "Cancelled",
-                "reason": "Notification config missing",
-                "processed_on": now_datetime(),
-            },
-            update_modified=True,
-        )
+    if not log.notification or not frappe.db.exists(notif_dt, log.notification):
+        frappe.db.set_value(log_dt, log_name, {
+            "status": "Cancelled",
+            "reason": "Notification config missing",
+            "processed_on": now_datetime(),
+        }, update_modified=True)
         return
 
     if not log.reference_doctype or not log.reference_name:
-        frappe.db.set_value(
-            "WhatsApp Notification Log",
-            log_name,
-            {
-                "status": "Skipped",
-                "reason": "Reference document not available",
-                "processed_on": now_datetime(),
-            },
-            update_modified=True,
-        )
+        frappe.db.set_value(log_dt, log_name, {
+            "status": "Skipped",
+            "reason": "Reference document not available",
+            "processed_on": now_datetime(),
+        }, update_modified=True)
         return
 
     if not frappe.db.exists(log.reference_doctype, log.reference_name):
-        frappe.db.set_value(
-            "WhatsApp Notification Log",
-            log_name,
-            {
-                "status": "Cancelled",
-                "reason": "Reference document deleted",
-                "processed_on": now_datetime(),
-            },
-            update_modified=True,
-        )
+        frappe.db.set_value(log_dt, log_name, {
+            "status": "Cancelled",
+            "reason": "Reference document deleted",
+            "processed_on": now_datetime(),
+        }, update_modified=True)
         return
 
     reference_doc = frappe.get_doc(log.reference_doctype, log.reference_name)
     if hasattr(reference_doc, "docstatus") and reference_doc.docstatus == 2:
-        frappe.db.set_value(
-            "WhatsApp Notification Log",
-            log_name,
-            {
-                "status": "Cancelled",
-                "reason": "Reference document cancelled",
-                "processed_on": now_datetime(),
-            },
-            update_modified=True,
-        )
+        frappe.db.set_value(log_dt, log_name, {
+            "status": "Cancelled",
+            "reason": "Reference document cancelled",
+            "processed_on": now_datetime(),
+        }, update_modified=True)
         return
 
-    notification = frappe.get_doc("WhatsApp Notification", log.notification)
+    notification = frappe.get_doc(notif_dt, log.notification)
     try:
         notification.send_template_message(
             reference_doc,
@@ -216,27 +213,17 @@ def _process_pending_whatsapp_notification_log(log_name):
             notification_log_name=log.name,
             force_send=True,
         )
-        frappe.db.set_value(
-            "WhatsApp Notification Log",
-            log_name,
-            {
-                "status": "Sent",
-                "processed_on": now_datetime(),
-            },
-            update_modified=True,
-        )
+        frappe.db.set_value(log_dt, log_name, {
+            "status": "Sent",
+            "processed_on": now_datetime(),
+        }, update_modified=True)
     except Exception as e:
-        frappe.db.set_value(
-            "WhatsApp Notification Log",
-            log_name,
-            {
-                "status": "Failed",
-                "reason": str(e),
-                "processed_on": now_datetime(),
-            },
-            update_modified=True,
-        )
-        frappe.log_error(frappe.get_traceback(), "WhatsApp delayed notification failed")
+        frappe.db.set_value(log_dt, log_name, {
+            "status": "Failed",
+            "reason": str(e),
+            "processed_on": now_datetime(),
+        }, update_modified=True)
+        frappe.log_error(frappe.get_traceback(), "Excom delayed notification failed")
 
 
 def get_channel_account(phone_id=None, channel='whatsapp', account_type='incoming'):
