@@ -484,7 +484,7 @@ def trigger_notifications(method="daily"):
         return
 
     doctype_name = "Excom Notification"
-    if not frappe.db.table_exists(f"tab{doctype_name}"):
+    if not frappe.db.table_exists(doctype_name):
         doctype_name = "WhatsApp Notification"
 
     if method == "daily":

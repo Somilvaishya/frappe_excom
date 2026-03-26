@@ -33,14 +33,14 @@ def run_server_script_for_doc_event(doc, event):
 
 def _notification_doctype() -> str:
     """Return the active notification doctype name (handles pre/post rename)."""
-    if frappe.db.table_exists("tabExcom Notification"):
+    if frappe.db.table_exists("Excom Notification"):
         return "Excom Notification"
     return "WhatsApp Notification"
 
 
 def _notification_log_doctype() -> str:
     """Return the active notification log doctype name."""
-    if frappe.db.table_exists("tabExcom Notification Log"):
+    if frappe.db.table_exists("Excom Notification Log"):
         return "Excom Notification Log"
     return "WhatsApp Notification Log"
 
@@ -48,7 +48,7 @@ def _notification_log_doctype() -> str:
 def get_notifications_map():
     """Get mapping."""
     dt = _notification_doctype()
-    if frappe.flags.in_patch and not frappe.db.table_exists(f"tab{dt}"):
+    if frappe.flags.in_patch and not frappe.db.table_exists(dt):
         return {}
 
     notification_map = {}
