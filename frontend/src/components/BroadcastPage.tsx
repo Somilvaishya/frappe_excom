@@ -582,7 +582,7 @@ function ComposeDialog({
 
           {step === 2 && channel === "WhatsApp" && (
             <div className="space-y-4">
-              {waAccounts.length > 1 && (
+              {waAccounts.length > 0 && (
                 <div>
                   <label className="text-sm text-zinc-300 font-medium mb-2 block">Send From Account</label>
                   <div className="space-y-2">
