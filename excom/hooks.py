@@ -167,6 +167,9 @@ doc_events = {
 	"Lead": {
 		"after_insert": "excom.excom.services.identity_hooks.on_entity_created",
 	},
+	"Contact": {
+		"after_insert": "excom.excom.services.identity_hooks.on_entity_created",
+	},
 	"Party Link": {
 		"after_insert": "excom.excom.services.identity_hooks.on_party_link_created",
 	},

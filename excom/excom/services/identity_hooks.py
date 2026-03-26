@@ -15,10 +15,10 @@ from frappe.utils import now_datetime
 
 def on_entity_created(doc, method: str) -> None:
     """
-    Called after_insert on Customer, Supplier, Lead.
-    Creates an Omni Identity if one doesn't already exist.
+    Called after_insert on Customer, Supplier, Lead, Contact.
+    Creates an Omni Identity if one doesn't already exist and contact info is present.
     """
-    if not frappe.db.table_exists("tabOmni Identity"):
+    if not frappe.db.table_exists("Omni Identity"):
         return
 
     try:
@@ -32,6 +32,9 @@ def on_entity_created(doc, method: str) -> None:
         elif doctype == "Lead":
             from excom.excom.services.identity_sync import sync_single_lead
             sync_single_lead(doc.name)
+        elif doctype == "Contact":
+            from excom.excom.services.identity_sync import sync_single_contact
+            sync_single_contact(doc.name)
     except Exception:
         frappe.log_error(
             title=f"Excom: auto-create identity failed for {doc.doctype} {doc.name}",
@@ -44,7 +47,7 @@ def on_customer_updated(doc, method: str) -> None:
     If customer was converted from a Lead (has lead_name), merge Lead's identity
     into Customer's identity.
     """
-    if not frappe.db.table_exists("tabOmni Identity"):
+    if not frappe.db.table_exists("Omni Identity"):
         return
 
     try:
@@ -87,7 +90,7 @@ def on_party_link_created(doc, method: str) -> None:
     Called after_insert on Party Link.
     Merges the newer identity into the older one when two entities become linked.
     """
-    if not frappe.db.table_exists("tabOmni Identity"):
+    if not frappe.db.table_exists("Omni Identity"):
         return
 
     try:

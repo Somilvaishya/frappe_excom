@@ -277,6 +277,95 @@ def sync_single_lead(
     return identity.name
 
 
+def sync_single_contact(
+    contact_name: str, processed: Optional[set] = None
+) -> Optional[str]:
+    """
+    Handle a newly created Contact.
+
+    If the Contact is linked to a party (Customer/Supplier/Lead) that already
+    has an Omni Identity, add the Contact as a linked entity on that identity
+    and update phone/email if missing. If no parent party identity exists,
+    create a new one only if the Contact has contact info.
+
+    Returns the Omni Identity name, or None if skipped.
+    """
+    if processed is None:
+        processed = set()
+
+    if _is_already_linked("Contact", contact_name):
+        processed.add(_entity_key("Contact", contact_name))
+        return None
+
+    contact = frappe.get_cached_doc("Contact", contact_name)
+    phone = _get_contact_phone(contact)
+    email = _get_contact_email(contact)
+
+    if not phone and not email:
+        return None
+
+    parent_links = frappe.get_all(
+        "Dynamic Link",
+        filters={"parent": contact_name, "parenttype": "Contact"},
+        fields=["link_doctype", "link_name"],
+    )
+
+    for dl in parent_links:
+        if dl.link_doctype in ("Customer", "Supplier", "Lead"):
+            existing_oi = frappe.db.get_value(
+                "Omni Identity Link",
+                {"linked_doctype": dl.link_doctype, "linked_name": dl.link_name},
+                "parent",
+            )
+            if existing_oi:
+                oi_doc = frappe.get_doc("Omni Identity", existing_oi)
+                oi_doc.append("linked_entities", {
+                    "linked_doctype": "Contact",
+                    "linked_name": contact_name,
+                    "role": "Primary Contact",
+                })
+                if not oi_doc.primary_phone and phone:
+                    oi_doc.primary_phone = phone
+                    oi_doc.primary_whatsapp = _digits_only(phone)
+                if not oi_doc.primary_email and email:
+                    oi_doc.primary_email = email
+                oi_doc.flags.ignore_validate = True
+                oi_doc.save(ignore_permissions=True)
+                processed.add(_entity_key("Contact", contact_name))
+                return oi_doc.name
+
+    display = contact.first_name or email or phone or "Unknown"
+    identity = frappe.get_doc({
+        "doctype": "Omni Identity",
+        "display_name": display,
+        "primary_phone": phone,
+        "primary_email": email,
+        "primary_whatsapp": _digits_only(phone),
+        "status": "Active",
+        "is_master": 1,
+    })
+    identity.append("linked_entities", {
+        "linked_doctype": "Contact",
+        "linked_name": contact_name,
+        "role": "Primary Contact",
+    })
+
+    for dl in parent_links:
+        if dl.link_doctype in ("Customer", "Supplier", "Lead"):
+            if not _is_already_linked(dl.link_doctype, dl.link_name):
+                identity.append("linked_entities", {
+                    "linked_doctype": dl.link_doctype,
+                    "linked_name": dl.link_name,
+                    "role": "Primary Contact",
+                })
+                processed.add(_entity_key(dl.link_doctype, dl.link_name))
+
+    identity.flags.ignore_validate = True
+    identity.insert(ignore_permissions=True)
+    processed.add(_entity_key("Contact", contact_name))
+    return identity.name
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
