@@ -9,7 +9,14 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { useTags } from "../hooks/useTags";
-import { useFrappePostCall } from "frappe-react-sdk";
+import { useFrappePostCall, useFrappeGetCall } from "frappe-react-sdk";
+
+interface BrandingData {
+  logo_gradient_from: string;
+  logo_gradient_to: string;
+  show_app_name: boolean;
+  app_name: string;
+}
 
 interface LeftSidebarProps {
   selectedChannel: string;
@@ -61,6 +68,10 @@ export function LeftSidebar({
   const [mergeBadge, setMergeBadge] = useState(0);
   const { call: fetchMyTeams } = useFrappePostCall("excom.excom.api.teams.get_my_teams");
   const { call: fetchMergeCount } = useFrappePostCall("excom.excom.api.merge_suggestions.get_suggestion_count");
+  const { data: brandingRaw } = useFrappeGetCall<{ message: BrandingData }>(
+    "excom.excom.doctype.excom_settings.excom_settings.get_branding"
+  );
+  const branding = brandingRaw?.message;
 
   useEffect(() => {
     fetchMyTeams({}).then((res) => {
@@ -73,8 +84,18 @@ export function LeftSidebar({
   return (
     <div className="w-64 bg-gradient-to-b from-zinc-900 to-zinc-950 border-r border-zinc-800 flex flex-col h-full shrink-0 overflow-hidden">
       <div className="shrink-0 p-4 border-b border-zinc-800">
+        {branding?.show_app_name && branding.app_name && (
+          <div className="mb-3 text-[11px] font-semibold tracking-wider uppercase text-zinc-400">
+            {branding.app_name}
+          </div>
+        )}
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+          <div
+            className="w-10 h-10 rounded-lg flex items-center justify-center"
+            style={{
+              background: `linear-gradient(to bottom right, ${branding?.logo_gradient_from || "#3b82f6"}, ${branding?.logo_gradient_to || "#9333ea"})`,
+            }}
+          >
             <MessageCircle className="w-6 h-6 text-white" />
           </div>
           <div>

@@ -4,6 +4,11 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "branding_section",
+  "logo_gradient_from",
+  "logo_gradient_to",
+  "column_break_branding",
+  "show_app_name",
   "identity_sync_section",
   "identity_sync_html",
   "cleanup_section",
@@ -13,6 +18,36 @@
   "cleanup_channels"
  ],
  "fields": [
+  {
+   "fieldname": "branding_section",
+   "fieldtype": "Section Break",
+   "label": "Branding"
+  },
+  {
+   "default": "#3b82f6",
+   "description": "Start colour of the logo gradient (e.g. #3b82f6)",
+   "fieldname": "logo_gradient_from",
+   "fieldtype": "Color",
+   "label": "Logo Gradient From"
+  },
+  {
+   "default": "#9333ea",
+   "description": "End colour of the logo gradient (e.g. #9333ea)",
+   "fieldname": "logo_gradient_to",
+   "fieldtype": "Color",
+   "label": "Logo Gradient To"
+  },
+  {
+   "fieldname": "column_break_branding",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Show the app name from Website Settings above the Excom header in the React inbox.",
+   "fieldname": "show_app_name",
+   "fieldtype": "Check",
+   "label": "Show App Name in Header"
+  },
   {
    "fieldname": "identity_sync_section",
    "fieldtype": "Section Break",
@@ -61,7 +96,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-02-24 00:00:00.000000",
+ "modified": "2026-03-09 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Excom",
  "name": "Excom Settings",
