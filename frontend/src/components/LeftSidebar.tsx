@@ -18,6 +18,17 @@ interface BrandingData {
   app_name: string;
 }
 
+interface BroadcastFilterItem {
+  name: string;
+  broadcast_name: string;
+  channel: string;
+  status: string;
+  total_recipients: number;
+  sent_count: number;
+  failed_count: number;
+  creation: string;
+}
+
 interface LeftSidebarProps {
   selectedChannel: string;
   onChannelSelect: (channel: string) => void;
@@ -35,6 +46,10 @@ interface LeftSidebarProps {
   selectedTeamFilter?: string;
   onTeamFilterChange?: (team: string) => void;
   onNewConversation?: () => void;
+  selectedBroadcast?: string;
+  onBroadcastFilterChange?: (broadcast: string) => void;
+  selectedBroadcastStatus?: string;
+  onBroadcastStatusChange?: (status: string) => void;
 }
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -62,6 +77,10 @@ export function LeftSidebar({
   selectedTeamFilter = "",
   onTeamFilterChange,
   onNewConversation,
+  selectedBroadcast = "",
+  onBroadcastFilterChange,
+  selectedBroadcastStatus = "",
+  onBroadcastStatusChange,
 }: LeftSidebarProps) {
   const { tags: allTags } = useTags();
   const [myTeams, setMyTeams] = useState<{ name: string; team_name: string }[]>([]);
@@ -72,6 +91,9 @@ export function LeftSidebar({
     "excom.excom.doctype.excom_settings.excom_settings.get_branding"
   );
   const branding = brandingRaw?.message;
+  const [recentBroadcasts, setRecentBroadcasts] = useState<BroadcastFilterItem[]>([]);
+  const [showBroadcastFilter, setShowBroadcastFilter] = useState(false);
+  const { call: fetchRecentBroadcasts } = useFrappePostCall("excom.excom.api.chat.get_recent_broadcasts_for_filter");
 
   useEffect(() => {
     fetchMyTeams({}).then((res) => {
@@ -79,6 +101,9 @@ export function LeftSidebar({
     }).catch(() => {});
     fetchMergeCount({}).then((res) => {
       setMergeBadge((res as any)?.message?.count || 0);
+    }).catch(() => {});
+    fetchRecentBroadcasts({}).then((res) => {
+      setRecentBroadcasts((res as any)?.message || []);
     }).catch(() => {});
   }, []);
   return (
@@ -242,6 +267,70 @@ export function LeftSidebar({
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {recentBroadcasts.length > 0 && onBroadcastFilterChange && (
+          <div>
+            <button
+              onClick={() => setShowBroadcastFilter(!showBroadcastFilter)}
+              className="flex items-center gap-1.5 mb-2 w-full"
+            >
+              <Radio className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-xs font-medium text-zinc-400">Broadcast Filter</span>
+              <ChevronDown className={`w-3 h-3 text-zinc-500 ml-auto transition-transform ${showBroadcastFilter ? "rotate-180" : ""}`} />
+            </button>
+            {showBroadcastFilter && (
+              <div className="space-y-1.5">
+                <button
+                  onClick={() => { onBroadcastFilterChange(""); onBroadcastStatusChange?.(""); }}
+                  className={`w-full text-left px-2 py-1.5 rounded text-[11px] font-medium transition-all border ${
+                    !selectedBroadcast
+                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500"
+                      : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                  }`}
+                >
+                  None (show all)
+                </button>
+                {recentBroadcasts.map((b) => (
+                  <button
+                    key={b.name}
+                    onClick={() => { onBroadcastFilterChange(b.name); onBroadcastStatusChange?.(""); }}
+                    className={`w-full text-left px-2 py-1.5 rounded text-[11px] transition-all border ${
+                      selectedBroadcast === b.name
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500"
+                        : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                    }`}
+                  >
+                    <div className="font-medium truncate">{b.broadcast_name}</div>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-500">
+                      <span>{b.channel}</span>
+                      <span>{b.sent_count}/{b.total_recipients} sent</span>
+                      {b.failed_count > 0 && <span className="text-red-400">{b.failed_count} failed</span>}
+                    </div>
+                  </button>
+                ))}
+                {selectedBroadcast && onBroadcastStatusChange && (
+                  <div className="flex flex-wrap gap-1 pt-1 border-t border-zinc-800">
+                    {["", "Sent", "Failed"].map((st) => (
+                      <button
+                        key={st || "all"}
+                        onClick={() => onBroadcastStatusChange(st)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all border ${
+                          selectedBroadcastStatus === st
+                            ? st === "Failed"
+                              ? "bg-red-500/20 text-red-400 border-red-500"
+                              : "bg-emerald-500/20 text-emerald-400 border-emerald-500"
+                            : "bg-zinc-800/50 text-zinc-500 border-zinc-700 hover:text-zinc-400"
+                        }`}
+                      >
+                        {st || "All"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

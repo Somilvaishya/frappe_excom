@@ -24,6 +24,7 @@ export interface ExcomThread {
   assigned_to_name?: string;
   assigned_to_avatar?: string;
   tags?: ThreadTag[];
+  broadcast_delivery_status?: string;
 }
 
 export interface ExcomMessage {
@@ -120,6 +121,7 @@ export interface UnifiedContact {
   allMessages: Message[];
   channels: string[];
   tags?: ThreadTag[];
+  broadcastDeliveryStatus?: string;
 }
 
 export interface Conversation {

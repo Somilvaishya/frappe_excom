@@ -54,9 +54,13 @@ function ExcomDashboard() {
   const [isMobile, setIsMobile] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedTeamFilter, setSelectedTeamFilter] = useState("");
+  const [selectedBroadcast, setSelectedBroadcast] = useState("");
+  const [selectedBroadcastStatus, setSelectedBroadcastStatus] = useState("");
   const [showNewConversation, setShowNewConversation] = useState(false);
 
-  const { unifiedContacts, refresh: refreshThreads } = useThreads(searchQuery, selectedTeamFilter);
+  const { unifiedContacts, refresh: refreshThreads } = useThreads(
+    searchQuery, selectedTeamFilter, selectedBroadcast, selectedBroadcastStatus,
+  );
 
   const handleThreadUpdate = useCallback(() => {
     refreshThreads();
@@ -203,6 +207,10 @@ function ExcomDashboard() {
         onNavigateToBroadcasts={() => setCurrentPage("broadcasts")}
         selectedTeamFilter={selectedTeamFilter}
         onTeamFilterChange={setSelectedTeamFilter}
+        selectedBroadcast={selectedBroadcast}
+        onBroadcastFilterChange={setSelectedBroadcast}
+        selectedBroadcastStatus={selectedBroadcastStatus}
+        onBroadcastStatusChange={setSelectedBroadcastStatus}
         onNewConversation={() => setShowNewConversation(true)}
       />
 

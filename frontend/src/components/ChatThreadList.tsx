@@ -1,7 +1,14 @@
-import { MessageCircle, Phone, Instagram, Mail } from "lucide-react";
+import { MessageCircle, Phone, Instagram, Mail, Radio } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import type { UnifiedContact } from "../types";
+
+const BROADCAST_STATUS_STYLES: Record<string, string> = {
+  Sent: "bg-emerald-500/20 text-emerald-400 border-emerald-500/40",
+  Failed: "bg-red-500/20 text-red-400 border-red-500/40",
+  Queued: "bg-amber-500/20 text-amber-400 border-amber-500/40",
+  Skipped: "bg-zinc-700/30 text-zinc-400 border-zinc-600",
+};
 
 interface ChatThreadListProps {
   conversations: UnifiedContact[];
@@ -147,6 +154,16 @@ export function ChatThreadList({
                         >
                           {contact.contactInfo.erpEntity.type}
                         </Badge>
+                      )}
+                      {contact.broadcastDeliveryStatus && (
+                        <span
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                            BROADCAST_STATUS_STYLES[contact.broadcastDeliveryStatus] || BROADCAST_STATUS_STYLES.Queued
+                          }`}
+                        >
+                          <Radio className="w-2.5 h-2.5" />
+                          {contact.broadcastDeliveryStatus}
+                        </span>
                       )}
                       {contact.totalUnreadCount > 0 && (
                         <Badge className="bg-blue-500 text-white text-xs">

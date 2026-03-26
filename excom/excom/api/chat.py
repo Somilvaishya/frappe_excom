@@ -16,7 +16,14 @@ def _check_excom_access() -> None:
 
 
 @frappe.whitelist()
-def get_threads(search: str = "", limit: int = 50, offset: int = 0, team: str = ""):
+def get_threads(
+    search: str = "",
+    limit: int = 50,
+    offset: int = 0,
+    team: str = "",
+    broadcast: str = "",
+    broadcast_status: str = "",
+):
     """
     Inbox query: returns threads ordered by last_message_at.
     Enriches each thread with contact data from Omni Identity and User.
@@ -25,6 +32,10 @@ def get_threads(search: str = "", limit: int = 50, offset: int = 0, team: str = 
     - team="" (default): threads in user's teams + General (unassigned) + directly assigned
     - team="__general__": only unassigned threads (assigned_team IS NULL)
     - team="<team_name>": only threads assigned to that team
+
+    Broadcast filtering:
+    - broadcast="EXBC-00001": only threads whose omni_identity received this broadcast
+    - broadcast_status="Sent": further filter by delivery status in the broadcast log
     """
     _check_excom_access()
     limit = int(limit)
@@ -36,6 +47,19 @@ def get_threads(search: str = "", limit: int = 50, offset: int = 0, team: str = 
     if search:
         conditions += " AND (t.display_name LIKE %(search)s OR t.primary_phone LIKE %(search)s)"
         params["search"] = f"%{search}%"
+
+    if broadcast:
+        bl_filter = ""
+        if broadcast_status:
+            bl_filter = " AND bl.status = %(broadcast_status)s"
+            params["broadcast_status"] = broadcast_status
+        conditions += (
+            " AND t.omni_identity IN ("
+            "   SELECT bl.omni_identity FROM `tabExcom Broadcast Log` bl"
+            f"   WHERE bl.broadcast = %(broadcast)s{bl_filter}"
+            " )"
+        )
+        params["broadcast"] = broadcast
 
     user_roles = set(frappe.get_roles(frappe.session.user))
     is_manager = bool(user_roles & {"System Manager", "Excom Manager"})
@@ -63,6 +87,15 @@ def get_threads(search: str = "", limit: int = 50, offset: int = 0, team: str = 
         else:
             conditions += " AND t.assigned_to = %(current_user)s"
 
+    broadcast_badge_join = ""
+    broadcast_badge_col = ""
+    if broadcast:
+        broadcast_badge_join = (
+            " LEFT JOIN `tabExcom Broadcast Log` bl_badge"
+            " ON bl_badge.omni_identity = t.omni_identity AND bl_badge.broadcast = %(broadcast)s"
+        )
+        broadcast_badge_col = ", bl_badge.status AS broadcast_delivery_status"
+
     threads = frappe.db.sql(
         f"""
         SELECT t.name, t.display_name, t.primary_phone, t.last_message_at,
@@ -72,10 +105,12 @@ def get_threads(search: str = "", limit: int = 50, offset: int = 0, team: str = 
                oi.primary_email,
                u.full_name AS assigned_to_name, u.user_image AS assigned_to_avatar,
                et.team_name AS assigned_team_name
+               {broadcast_badge_col}
         FROM `tabExcom Thread` t
         LEFT JOIN `tabOmni Identity` oi ON oi.name = t.omni_identity
         LEFT JOIN `tabUser` u ON u.name = t.assigned_to
         LEFT JOIN `tabExcom Team` et ON et.name = t.assigned_team
+        {broadcast_badge_join}
         WHERE {conditions}
         ORDER BY t.last_message_at DESC
         LIMIT %(limit)s OFFSET %(offset)s
@@ -89,6 +124,25 @@ def get_threads(search: str = "", limit: int = 50, offset: int = 0, team: str = 
         _enrich_tags(threads)
 
     return threads
+
+
+@frappe.whitelist()
+def get_recent_broadcasts_for_filter(limit: int = 20) -> list:
+    """Return recent submitted broadcasts for the inbox filter dropdown."""
+    _check_excom_access()
+    return frappe.db.sql(
+        """
+        SELECT b.name, b.broadcast_name, b.channel, b.status,
+               b.total_recipients, b.sent_count, b.failed_count,
+               b.creation
+        FROM `tabExcom Broadcast` b
+        WHERE b.docstatus = 1
+        ORDER BY b.creation DESC
+        LIMIT %(limit)s
+        """,
+        {"limit": int(limit)},
+        as_dict=True,
+    )
 
 
 def _enrich_company(threads: list):
