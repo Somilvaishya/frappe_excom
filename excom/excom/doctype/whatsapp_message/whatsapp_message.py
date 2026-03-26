@@ -16,29 +16,10 @@ class WhatsAppMessage(Document):
         self.update_profile_name()
 
     def update_profile_name(self):
-        number = self.get("from")
-        if not number:
-            return
-        from_number = format_number(number)
-
-        if (
-            self.has_value_changed("profile_name")
-            and self.profile_name
-            and from_number
-            and frappe.db.exists("WhatsApp Profiles", {"number": from_number})
-        ):
-            profile_id = frappe.get_value("WhatsApp Profiles", {"number": from_number}, "name")
-            frappe.db.set_value("WhatsApp Profiles", profile_id, "profile_name", self.profile_name)
+        pass
 
     def create_whatsapp_profile(self):
-        number = format_number(self.get("from") or self.to)
-        if not frappe.db.exists("WhatsApp Profiles", {"number": number}):
-            frappe.get_doc({
-                "doctype": "WhatsApp Profiles",
-                "profile_name": self.profile_name,
-                "number": number,
-                "whatsapp_account": self.whatsapp_account
-            }).insert(ignore_permissions=True)
+        pass
 
     def set_whatsapp_account(self):
         """Set channel account to default if missing."""

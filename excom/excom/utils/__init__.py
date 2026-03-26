@@ -270,17 +270,6 @@ def get_channel_account(phone_id=None, channel='whatsapp', account_type='incomin
     return None
 
 
-def get_whatsapp_account(phone_id=None, account_type='incoming'):
-    """Get Excom Channel Account for WhatsApp (replaces legacy WhatsApp Account).
-
-    Args:
-        phone_id: WhatsApp phone number ID.
-        account_type: 'incoming' or 'outgoing'.
-
-    Returns:
-        Excom Channel Account doc or None.
-    """
-    return get_channel_account(phone_id=phone_id, channel='whatsapp', account_type=account_type)
 
 
 def get_wa_credentials(account_doc) -> dict:

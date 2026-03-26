@@ -183,11 +183,6 @@ def send_outbound_message(
               "The generic send_message endpoint is for chat channels only.")
         )
 
-    # Resolve account: prefer Excom Channel Account; fall back to legacy WhatsApp Account
-    if account_doctype == "WhatsApp Account" and frappe.db.exists("Excom Channel Account", account_name):
-        frappe.db.set_value("Excom Thread", thread_name, "account_doctype", "Excom Channel Account")
-        account_doctype, account_name = "Excom Channel Account", account_name
-
     provider_message_id = ""
     delivery_status = "Queued"
 

@@ -23,7 +23,7 @@ def send_text_message(account, to: str, content: str) -> dict:
     Send a plain text WhatsApp message.
 
     Args:
-        account: WhatsApp Account or Excom Channel Account doc
+        account: Excom Channel Account doc
         to: Recipient phone number (E.164)
         content: Message body text
 
@@ -145,25 +145,15 @@ def wa_update_delivery_status(provider_message_id: str, status: str, timestamp: 
 # ---------------------------------------------------------------------------
 
 def _resolve_credentials(account):
-    """
-    Extract token, base_url, version, phone_id from either
-    Excom Channel Account or legacy WhatsApp Account.
-    """
+    """Extract token, base_url, version, phone_id from Excom Channel Account."""
     token = None
     try:
         token = account.get_password("wa_token")
     except Exception:
         pass
     if not token:
-        try:
-            token = account.get_password("token")
-        except Exception:
-            pass
-    if not token:
         token = get_decrypted_password(
             account.doctype, account.name, "wa_token", raise_exception=False
-        ) or get_decrypted_password(
-            account.doctype, account.name, "token", raise_exception=False
         )
     if not token:
         raise ExcomProviderError(
@@ -171,17 +161,9 @@ def _resolve_credentials(account):
             provider="whatsapp",
         )
 
-    base_url = (
-        getattr(account, "wa_url", None)
-        or getattr(account, "url", None)
-        or "https://graph.facebook.com"
-    )
-    version = (
-        getattr(account, "wa_version", None)
-        or getattr(account, "version", None)
-        or "v21.0"
-    )
-    phone_id = getattr(account, "wa_phone_id", None) or getattr(account, "phone_id", None)
+    base_url = getattr(account, "wa_url", None) or "https://graph.facebook.com"
+    version = getattr(account, "wa_version", None) or "v21.0"
+    phone_id = getattr(account, "wa_phone_id", None)
     if not phone_id:
         raise ExcomProviderError(
             f"No Phone Number ID for account {account.name}",
