@@ -22,19 +22,19 @@ def webhook():
 
 
 def get():
-	"""Verify webhook challenge."""
+	"""Verify webhook challenge — multiple accounts may share the same token."""
 	hub_challenge = frappe.form_dict.get("hub.challenge")
 	verify_token = frappe.form_dict.get("hub.verify_token")
-	webhook_verify_token = frappe.db.get_value(
+
+	if not verify_token:
+		frappe.throw("Missing verify token")
+
+	match = frappe.db.exists(
 		"Excom Channel Account",
 		{"wa_webhook_verify_token": verify_token},
-		"wa_webhook_verify_token",
 	)
-	if not webhook_verify_token:
+	if not match:
 		frappe.throw("No matching Excom Channel Account")
-
-	if verify_token != webhook_verify_token:
-		frappe.throw("Verify token does not match")
 
 	return Response(hub_challenge, status=200)
 
