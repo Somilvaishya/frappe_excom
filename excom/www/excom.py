@@ -16,7 +16,8 @@ def get_context(context):
     frappe.db.commit()  # nosemgrep
 
     if frappe.session.user == "Guest":
-        frappe.throw(_("Please login to access Excom"), frappe.AuthenticationError)
+        frappe.local.flags.redirect_location = "/login?redirect-to=/excom"
+        raise frappe.Redirect
 
     user_roles = frappe.get_roles(frappe.session.user)
     allowed = {"System Manager", "Excom Manager", "Excom User"}

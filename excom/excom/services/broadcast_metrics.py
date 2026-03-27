@@ -164,17 +164,25 @@ def attribute_inbound_reply(inbound_message_name, reply_to_provider_id, message_
 
 
 @frappe.whitelist()
-def get_broadcast_metrics(broadcast_name, time_windows=""):
-    """Compute comprehensive metrics for a broadcast."""
+def get_broadcast_metrics(broadcast_name: str, time_windows: str = "") -> dict:
+    """Compute comprehensive metrics for a broadcast.
+
+    Delivery funnel is computed from actual Excom Message delivery_status
+    data so metrics are accurate even for broadcasts sent before event
+    tracking was deployed.  Engagement data comes from Excom Broadcast Event.
+    """
     from excom.excom.api.chat import _check_excom_access
     _check_excom_access()
 
     broadcast = frappe.get_doc("Excom Broadcast", broadcast_name)
 
     if not time_windows:
-        time_windows = frappe.db.get_single_value(
-            "Excom Settings", "broadcast_time_windows",
-        ) or "1,3,6,12"
+        try:
+            time_windows = frappe.db.get_single_value(
+                "Excom Settings", "broadcast_time_windows",
+            ) or "1,3,6,12"
+        except Exception:
+            time_windows = "1,3,6,12"
 
     windows = sorted(
         int(h.strip()) for h in time_windows.split(",") if h.strip().isdigit()
@@ -185,11 +193,13 @@ def get_broadcast_metrics(broadcast_name, time_windows=""):
     total = broadcast.total_recipients or 0
     sent = broadcast.sent_count or 0
     failed = broadcast.failed_count or 0
-    delivered = broadcast.delivered_count or 0
-    read = broadcast.read_count or 0
-    replied = broadcast.replied_count or 0
-    clicked = broadcast.clicked_count or 0
-    optout_val = broadcast.optout_count or 0
+
+    funnel_from_msgs = _compute_delivery_funnel_from_messages(broadcast_name)
+    delivered = funnel_from_msgs.get("delivered", 0) or (getattr(broadcast, "delivered_count", 0) or 0)
+    read = funnel_from_msgs.get("read", 0) or (getattr(broadcast, "read_count", 0) or 0)
+    replied = getattr(broadcast, "replied_count", 0) or 0
+    clicked = getattr(broadcast, "clicked_count", 0) or 0
+    optout_val = getattr(broadcast, "optout_count", 0) or 0
 
     delivery_funnel = {
         "total_recipients": total,
@@ -203,15 +213,20 @@ def get_broadcast_metrics(broadcast_name, time_windows=""):
         "failed_rate": _pct(failed, total),
     }
 
-    response_by_window = _compute_response_windows(broadcast_name, windows, sent)
-    button_clicks = _compute_button_clicks(broadcast_name, sent)
-    reply_quality = _compute_reply_quality(broadcast_name, sent)
+    response_by_window = _safe_compute(lambda: _compute_response_windows(broadcast_name, windows, sent), [])
+    button_clicks = _safe_compute(lambda: _compute_button_clicks(broadcast_name, sent), [])
+    reply_quality = _safe_compute(
+        lambda: _compute_reply_quality(broadcast_name, sent),
+        {"text_replies": 0, "button_only": 0, "no_response": sent,
+         "text_reply_rate": 0, "button_only_rate": 0, "no_response_rate": _pct(sent, sent)},
+    )
     optout_data = {"count": optout_val, "rate": _pct(optout_val, sent)}
 
     overall_engagement = replied + clicked
+    avg_resp = _safe_compute(lambda: _compute_avg_response_time(broadcast_name), 0)
     summary = {
         "engagement_rate": _pct(overall_engagement, sent),
-        "avg_response_time_seconds": _compute_avg_response_time(broadcast_name),
+        "avg_response_time_seconds": avg_resp,
         "best_performing_cta": (
             button_clicks[0]["button_text"] if button_clicks else None
         ),
@@ -229,6 +244,45 @@ def get_broadcast_metrics(broadcast_name, time_windows=""):
         "optout": optout_data,
         "summary": summary,
     }
+
+
+def _safe_compute(fn, default):
+    """Execute fn, returning default on any error (e.g. missing table)."""
+    try:
+        return fn()
+    except Exception:
+        frappe.log_error(title="Excom: broadcast metrics compute error")
+        return default
+
+
+def _compute_delivery_funnel_from_messages(broadcast_name: str) -> dict:
+    """Compute delivered/read counts from actual Excom Message delivery_status."""
+    try:
+        rows = frappe.db.sql(
+            """
+            SELECT delivery_status, COUNT(*) AS cnt
+            FROM `tabExcom Message`
+            WHERE reference_doctype = 'Excom Broadcast'
+              AND reference_name = %(bc)s
+              AND direction = 'Outbound'
+            GROUP BY delivery_status
+            """,
+            {"bc": broadcast_name},
+            as_dict=True,
+        )
+    except Exception:
+        return {}
+
+    counts: dict = {}
+    for row in rows:
+        status = (row.delivery_status or "").lower()
+        if status in ("delivered", "read"):
+            counts.setdefault("delivered", 0)
+            counts["delivered"] += row.cnt
+        if status == "read":
+            counts.setdefault("read", 0)
+            counts["read"] += row.cnt
+    return counts
 
 
 def _compute_response_windows(broadcast_name, windows, sent):

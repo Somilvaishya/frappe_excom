@@ -1189,6 +1189,18 @@ def initiate_outbound(
         frappe.throw(_("No outgoing {0} account configured. Create one in Excom Channel Account.").format(channel))
 
     thread_name = upsert_thread(identity_name, channel, account_doc.name)
+
+    user_roles = set(frappe.get_roles(frappe.session.user))
+    is_new = not frappe.db.get_value("Excom Thread", thread_name, "assigned_to")
+    if is_new:
+        update_fields: dict = {"assigned_to": frappe.session.user}
+        if not (user_roles & {"System Manager", "Excom Manager"}):
+            from excom.excom.doctype.excom_team.excom_team import get_user_teams
+            teams = get_user_teams()
+            if teams:
+                update_fields["assigned_team"] = teams[0]
+        frappe.db.set_value("Excom Thread", thread_name, update_fields, update_modified=False)
+
     frappe.db.commit()
 
     return {"thread_id": thread_name, "omni_identity": identity_name}

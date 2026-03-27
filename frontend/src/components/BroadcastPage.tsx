@@ -211,7 +211,7 @@ function AnalyticsPanel({ broadcastName }: { broadcastName: string }) {
     }
   }, [fetchMetrics, broadcastName, customWindows]);
 
-  useEffect(() => { load(); }, [broadcastName]);
+  useEffect(() => { load(); }, [broadcastName, load]);
 
   if (loading && !metrics) {
     return (
