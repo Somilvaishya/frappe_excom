@@ -15,6 +15,7 @@ import { BroadcastPage } from "./components/BroadcastPage";
 import { NewConversationDialog } from "./components/NewConversationDialog";
 import { useThreads } from "./hooks/useContacts";
 import { useRealtimeThreads } from "./hooks/useRealtimeThreads";
+import { useNotifications } from "./hooks/useNotifications";
 import type { UnifiedContact, Conversation } from "./types";
 
 type AppPage = "inbox" | "subscribers" | "teams" | "merge_suggestions" | "subscriber_rules" | "broadcasts";
@@ -98,6 +99,8 @@ function ExcomDashboard() {
       totalUnread,
     };
   }, [filteredContacts, unifiedContacts]);
+
+  useNotifications(channelCounts.totalUnread);
 
   const selectedContact = unifiedContacts.find(
     (contact) => contact.id === selectedContactId

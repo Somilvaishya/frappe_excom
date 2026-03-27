@@ -131,6 +131,8 @@ def ingest_inbound_message(
         {"now": now, "preview": preview, "thread": thread_name},
     )
 
+    display_name = frappe.db.get_value("Excom Thread", thread_name, "display_name") or ""
+
     frappe.publish_realtime(
         "excom:message_received",
         {
@@ -139,6 +141,7 @@ def ingest_inbound_message(
             "omni_identity": identity_name,
             "direction": "Inbound",
             "preview": preview,
+            "display_name": display_name,
         },
         after_commit=True,
     )
