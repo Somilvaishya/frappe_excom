@@ -159,6 +159,24 @@ def ingest_inbound_message(
     return msg.name
 
 
+def _auto_claim_thread(thread, user: str) -> bool:
+    """Auto-assign thread to user on first reply if nobody is assigned.
+
+    Returns True if the thread was claimed.
+    """
+    if thread.assigned_to:
+        return False
+
+    from excom.excom.doctype.excom_team.excom_team import get_user_teams
+    teams = get_user_teams(user)
+    update: dict = {"assigned_to": user}
+    if teams:
+        update["assigned_team"] = teams[0]
+
+    frappe.db.set_value("Excom Thread", thread.name, update, update_modified=False)
+    return True
+
+
 def send_outbound_message(
     thread_name: str,
     content_text: str,
@@ -240,6 +258,8 @@ def send_outbound_message(
     })
     msg.insert(ignore_permissions=True)
 
+    auto_claimed = _auto_claim_thread(thread, frappe.session.user)
+
     frappe.db.sql(
         """
         UPDATE `tabExcom Thread`
@@ -253,18 +273,18 @@ def send_outbound_message(
         {"now": now, "preview": preview, "thread": thread_name},
     )
 
-    frappe.publish_realtime(
-        "excom:message_sent",
-        {
-            "thread": thread_name,
-            "message": msg.name,
-            "omni_identity": thread.omni_identity,
-            "direction": "Outbound",
-            "preview": preview,
-            "delivery_status": delivery_status,
-        },
-        after_commit=True,
-    )
+    rt_data: dict = {
+        "thread": thread_name,
+        "message": msg.name,
+        "omni_identity": thread.omni_identity,
+        "direction": "Outbound",
+        "preview": preview,
+        "delivery_status": delivery_status,
+    }
+    if auto_claimed:
+        rt_data["auto_claimed_by"] = frappe.session.user
+
+    frappe.publish_realtime("excom:message_sent", rt_data, after_commit=True)
     frappe.publish_realtime(
         "excom:thread_updated",
         {"thread": thread_name, "event": "new_outbound"},

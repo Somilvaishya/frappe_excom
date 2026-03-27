@@ -123,6 +123,9 @@ def send_email_reply(
     })
     msg.insert(ignore_permissions=True)
 
+    from excom.excom.services.thread_service import _auto_claim_thread
+    _auto_claim_thread(thread, frappe.session.user)
+
     frappe.db.sql(
         """
         UPDATE `tabExcom Thread`

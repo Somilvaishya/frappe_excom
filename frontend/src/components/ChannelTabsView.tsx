@@ -186,9 +186,15 @@ export function ChannelTabsView({
     "excom.excom.api.teams.get_all_teams"
   );
 
+  const { call: fetchTeamMembers } = useFrappePostCall(
+    "excom.excom.api.teams.get_team_members"
+  );
+
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferTeams, setTransferTeams] = useState<{ name: string; team_name: string }[]>([]);
   const [transferTarget, setTransferTarget] = useState("");
+  const [transferUser, setTransferUser] = useState("");
+  const [transferMembers, setTransferMembers] = useState<{ user: string; full_name: string; user_image: string }[]>([]);
   const [transferNote, setTransferNote] = useState("");
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
@@ -197,12 +203,25 @@ export function ChannelTabsView({
       const res = await fetchAllTeams({});
       setTransferTeams((res as any)?.message || []);
       setTransferTarget("");
+      setTransferUser("");
+      setTransferMembers([]);
       setTransferNote("");
       setShowTransferModal(true);
     } catch {
       toast.error("Failed to load teams");
     }
   }, [fetchAllTeams]);
+
+  const onTeamSelected = useCallback(async (teamName: string) => {
+    setTransferTarget(teamName);
+    setTransferUser("");
+    setTransferMembers([]);
+    if (!teamName) return;
+    try {
+      const res = await fetchTeamMembers({ team: teamName });
+      setTransferMembers((res as any)?.message || []);
+    } catch { /* keep empty */ }
+  }, [fetchTeamMembers]);
 
   const handleFileReady = useCallback(
     async (fileUrl: string, messageType: string, _fileName: string) => {
@@ -425,14 +444,14 @@ export function ChannelTabsView({
           <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-white mb-1">Transfer Conversation</h2>
             <p className="text-xs text-zinc-400 mb-4">
-              Move this thread to another team. The current team will lose access.
+              Move this thread to another team, or assign to a specific member.
             </p>
             <div className="space-y-3">
               <div>
                 <label className="text-xs text-zinc-400 mb-1 block">Target Team</label>
                 <select
                   value={transferTarget}
-                  onChange={(e) => setTransferTarget(e.target.value)}
+                  onChange={(e) => onTeamSelected(e.target.value)}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
                 >
                   <option value="">Select team...</option>
@@ -443,6 +462,25 @@ export function ChannelTabsView({
                   ))}
                 </select>
               </div>
+              {transferTarget && transferMembers.length > 0 && (
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">
+                    Assign to Member <span className="text-zinc-600">(optional — leave empty for team pickup)</span>
+                  </label>
+                  <select
+                    value={transferUser}
+                    onChange={(e) => setTransferUser(e.target.value)}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
+                  >
+                    <option value="">Anyone in the team</option>
+                    {transferMembers.map((m) => (
+                      <option key={m.user} value={m.user}>
+                        {m.full_name || m.user}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-xs text-zinc-400 mb-1 block">Note (optional)</label>
                 <Input
@@ -469,9 +507,14 @@ export function ChannelTabsView({
                     await transferThreadCall({
                       thread_id: selectedAccountId,
                       target_team: transferTarget,
+                      target_user: transferUser,
                       note: transferNote,
                     });
-                    toast.success("Thread transferred");
+                    toast.success(
+                      transferUser
+                        ? "Thread transferred and assigned"
+                        : "Thread transferred to team"
+                    );
                     setShowTransferModal(false);
                   } catch {
                     toast.error("Transfer failed");

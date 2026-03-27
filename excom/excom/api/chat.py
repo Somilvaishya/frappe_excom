@@ -562,12 +562,12 @@ def assign_thread(thread_id: str, user: str = ""):
 
 
 @frappe.whitelist()
-def transfer_thread(thread_id: str, target_team: str, note: str = "") -> dict:
-    """
-    Transfer a thread to another team.
+def transfer_thread(thread_id: str, target_team: str, target_user: str = "", note: str = "") -> dict:
+    """Transfer a thread to another team and optionally a specific member.
 
-    Clears assigned_to, sets assigned_team, creates a transfer log entry,
-    and publishes a realtime event.
+    When target_user is provided the thread is assigned directly to that
+    user within the target team.  Otherwise, assigned_to is cleared so
+    any member of the target team can pick it up.
     """
     thread = frappe.db.get_value(
         "Excom Thread", thread_id, ["assigned_team", "display_name"], as_dict=True
@@ -580,7 +580,7 @@ def transfer_thread(thread_id: str, target_team: str, note: str = "") -> dict:
     frappe.db.set_value(
         "Excom Thread",
         thread_id,
-        {"assigned_team": target_team, "assigned_to": ""},
+        {"assigned_team": target_team, "assigned_to": target_user or ""},
     )
 
     frappe.get_doc({
@@ -599,13 +599,14 @@ def transfer_thread(thread_id: str, target_team: str, note: str = "") -> dict:
             "thread": thread_id,
             "from_team": from_team,
             "to_team": target_team,
+            "target_user": target_user,
             "transferred_by": frappe.session.user,
         },
         after_commit=True,
     )
 
     frappe.db.commit()
-    return {"success": True, "from_team": from_team, "to_team": target_team}
+    return {"success": True, "from_team": from_team, "to_team": target_team, "assigned_to": target_user}
 
 
 @frappe.whitelist()
@@ -1364,6 +1365,13 @@ def send_template_to_thread(
         "template": template_name,
     })
     msg.insert(ignore_permissions=True)
+
+    from excom.excom.services.thread_service import _auto_claim_thread
+    thread_doc = frappe.db.get_value(
+        "Excom Thread", thread_id, ["name", "assigned_to"], as_dict=True,
+    )
+    if thread_doc:
+        _auto_claim_thread(thread_doc, frappe.session.user)
 
     frappe.db.sql(
         """
