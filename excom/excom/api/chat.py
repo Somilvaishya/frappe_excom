@@ -1081,6 +1081,26 @@ def get_related_documents(omni_identity: str):
 
 
 # ---------------------------------------------------------------------------
+# Navbar config
+# ---------------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def get_navbar_config() -> dict:
+    """Return navbar button config for the Frappe desk."""
+    _check_excom_access()
+    try:
+        settings = frappe.get_single("Excom Settings")
+        return {
+            "show_navbar_button": bool(getattr(settings, "show_navbar_button", 1)),
+            "gradient_from": getattr(settings, "logo_gradient_from", "#3b82f6") or "#3b82f6",
+            "gradient_to": getattr(settings, "logo_gradient_to", "#8b5cf6") or "#8b5cf6",
+        }
+    except Exception:
+        return {"show_navbar_button": True, "gradient_from": "#3b82f6", "gradient_to": "#8b5cf6"}
+
+
+# ---------------------------------------------------------------------------
 # Initiate outbound conversation
 # ---------------------------------------------------------------------------
 

@@ -9,6 +9,7 @@
   "logo_gradient_to",
   "column_break_branding",
   "show_app_name",
+  "show_navbar_button",
   "broadcast_metrics_section",
   "broadcast_time_windows",
   "identity_sync_section",
@@ -49,6 +50,13 @@
    "fieldname": "show_app_name",
    "fieldtype": "Check",
    "label": "Show App Name in Header"
+  },
+  {
+   "default": "1",
+   "description": "Show an 'Excom Inbox' button in the Frappe desk navbar (top-right, before the Help menu) for users with Excom access.",
+   "fieldname": "show_navbar_button",
+   "fieldtype": "Check",
+   "label": "Show Navbar Button"
   },
   {
    "fieldname": "broadcast_metrics_section",
