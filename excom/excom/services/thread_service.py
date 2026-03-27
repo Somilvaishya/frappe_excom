@@ -148,6 +148,12 @@ def ingest_inbound_message(
         after_commit=True,
     )
 
+    try:
+        from excom.excom.services.broadcast_metrics import attribute_inbound_reply
+        attribute_inbound_reply(msg.name, reply_to_provider_id, message_type, content_text)
+    except Exception:
+        frappe.log_error(title="Excom: broadcast reply attribution failed")
+
     frappe.db.commit()
 
     return msg.name
@@ -299,6 +305,12 @@ def update_delivery_status(provider_message_id: str, status: str, conversation_i
         },
         after_commit=True,
     )
+
+    try:
+        from excom.excom.services.broadcast_metrics import attribute_delivery_status
+        attribute_delivery_status(provider_message_id, status)
+    except Exception:
+        frappe.log_error(title="Excom: broadcast metric attribution failed")
 
     frappe.db.commit()
 

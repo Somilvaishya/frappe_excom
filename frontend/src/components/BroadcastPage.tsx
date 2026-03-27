@@ -22,6 +22,13 @@ import {
   Upload,
   Trash2,
   X,
+  BarChart3,
+  TrendingUp,
+  MousePointerClick,
+  UserX,
+  Timer,
+  Activity,
+  Settings2,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -123,6 +130,235 @@ function ChannelIcon({ channel }: { channel: string }) {
   return <Mail className="w-4 h-4 text-blue-400" />;
 }
 
+function formatDuration(seconds: number): string {
+  if (!seconds) return "—";
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+interface MetricsData {
+  broadcast_name: string;
+  channel: string;
+  status: string;
+  time_windows: number[];
+  delivery_funnel: {
+    total_recipients: number; sent: number; delivered: number; read: number;
+    sent_rate: number; delivered_rate: number; read_rate: number;
+    failed: number; failed_rate: number;
+  };
+  response_by_window: { window_hours: number; window_label: string; count: number; rate: number }[];
+  button_clicks: { button_text: string; click_count: number; rate: number }[];
+  reply_quality: {
+    text_replies: number; button_only: number; no_response: number;
+    text_reply_rate: number; button_only_rate: number; no_response_rate: number;
+  };
+  optout: { count: number; rate: number };
+  summary: { engagement_rate: number; avg_response_time_seconds: number; best_performing_cta: string | null };
+}
+
+function FunnelBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+  const pct = total > 0 ? (value / total) * 100 : 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs">
+        <span className="text-zinc-400">{label}</span>
+        <span className="text-zinc-300 font-medium">{value} ({pct.toFixed(1)}%)</span>
+      </div>
+      <div className="h-2.5 bg-zinc-800 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ icon: Icon, label, value, sub, color = "text-white" }: {
+  icon: any; label: string; value: string | number; sub?: string; color?: string;
+}) {
+  return (
+    <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800">
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className={`w-4 h-4 ${color}`} />
+        <span className="text-xs text-zinc-500 font-medium uppercase tracking-wider">{label}</span>
+      </div>
+      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+      {sub && <div className="text-xs text-zinc-500 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+function AnalyticsPanel({ broadcastName }: { broadcastName: string }) {
+  const [metrics, setMetrics] = useState<MetricsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [customWindows, setCustomWindows] = useState("");
+  const [editingWindows, setEditingWindows] = useState(false);
+
+  const { call: fetchMetrics } = useFrappePostCall(
+    "excom.excom.services.broadcast_metrics.get_broadcast_metrics"
+  );
+
+  const load = useCallback(async (tw?: string) => {
+    setLoading(true);
+    try {
+      const res = await fetchMetrics({ broadcast_name: broadcastName, time_windows: tw || customWindows });
+      setMetrics((res as any)?.message || null);
+    } catch {
+      toast.error("Failed to load metrics");
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchMetrics, broadcastName, customWindows]);
+
+  useEffect(() => { load(); }, [broadcastName]);
+
+  if (loading && !metrics) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!metrics) return null;
+
+  const { delivery_funnel: df, response_by_window: rw, button_clicks: bc, reply_quality: rq, optout, summary } = metrics;
+
+  return (
+    <div className="p-6 space-y-6 overflow-y-auto">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MetricCard icon={Activity} label="Engagement" value={`${summary.engagement_rate}%`} sub="Replies + Clicks / Sent" color="text-emerald-400" />
+        <MetricCard icon={Timer} label="Avg Response" value={formatDuration(summary.avg_response_time_seconds)} sub="Time to first reply" color="text-blue-400" />
+        <MetricCard icon={MousePointerClick} label="Best CTA" value={summary.best_performing_cta || "—"} sub="Most clicked button" color="text-purple-400" />
+        <MetricCard icon={UserX} label="Opt-outs" value={optout.count} sub={`${optout.rate}% of sent`} color="text-red-400" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-zinc-900/50 rounded-xl p-5 border border-zinc-800">
+          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-blue-400" /> Delivery Funnel
+          </h3>
+          <div className="space-y-3">
+            <FunnelBar label="Sent" value={df.sent} total={df.total_recipients} color="bg-blue-500" />
+            <FunnelBar label="Delivered" value={df.delivered} total={df.sent} color="bg-emerald-500" />
+            <FunnelBar label="Read" value={df.read} total={df.delivered} color="bg-purple-500" />
+            <FunnelBar label="Failed" value={df.failed} total={df.total_recipients} color="bg-red-500" />
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 rounded-xl p-5 border border-zinc-800">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-emerald-400" /> Response by Time Window
+            </h3>
+            <button
+              onClick={() => setEditingWindows(!editingWindows)}
+              className="p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+              title="Customize time windows"
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {editingWindows && (
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                placeholder="e.g. 1,3,6,12,24"
+                value={customWindows}
+                onChange={(e) => setCustomWindows(e.target.value)}
+                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-300 focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={() => load(customWindows)}
+                className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-500"
+              >
+                Apply
+              </button>
+            </div>
+          )}
+          <div className="space-y-2">
+            {rw.map((w) => (
+              <div key={w.window_hours} className="flex items-center gap-3">
+                <span className="text-xs text-zinc-500 w-20 shrink-0">{w.window_label}</span>
+                <div className="flex-1 h-6 bg-zinc-800 rounded-lg overflow-hidden relative">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-lg transition-all duration-700"
+                    style={{ width: `${Math.min(w.rate, 100)}%` }}
+                  />
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white">
+                    {w.count} ({w.rate}%)
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {bc.length > 0 && (
+          <div className="bg-zinc-900/50 rounded-xl p-5 border border-zinc-800">
+            <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+              <MousePointerClick className="w-4 h-4 text-purple-400" /> CTA Button Clicks
+            </h3>
+            <div className="space-y-2">
+              {bc.map((b, i) => (
+                <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg bg-zinc-800/50">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded bg-purple-500/20 text-purple-400 text-xs font-bold flex items-center justify-center">
+                      {i + 1}
+                    </span>
+                    <span className="text-sm text-zinc-300">{b.button_text}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-white">{b.click_count}</span>
+                    <span className="text-xs text-zinc-500">{b.rate}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="bg-zinc-900/50 rounded-xl p-5 border border-zinc-800">
+          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-blue-400" /> Reply Quality
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                <span className="text-sm text-zinc-400">Text Replies</span>
+              </div>
+              <span className="text-sm text-zinc-300 font-medium">{rq.text_replies} ({rq.text_reply_rate}%)</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-purple-500" />
+                <span className="text-sm text-zinc-400">Button Only</span>
+              </div>
+              <span className="text-sm text-zinc-300 font-medium">{rq.button_only} ({rq.button_only_rate}%)</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-zinc-600" />
+                <span className="text-sm text-zinc-400">No Response</span>
+              </div>
+              <span className="text-sm text-zinc-300 font-medium">{rq.no_response} ({rq.no_response_rate}%)</span>
+            </div>
+            <div className="h-3 flex rounded-full overflow-hidden mt-2">
+              {rq.text_reply_rate > 0 && <div className="bg-emerald-500" style={{ width: `${rq.text_reply_rate}%` }} />}
+              {rq.button_only_rate > 0 && <div className="bg-purple-500" style={{ width: `${rq.button_only_rate}%` }} />}
+              {rq.no_response_rate > 0 && <div className="bg-zinc-600" style={{ width: `${rq.no_response_rate}%` }} />}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BroadcastDetailView({
   broadcastName,
   onBack,
@@ -134,6 +370,7 @@ function BroadcastDetailView({
   const [logs, setLogs] = useState<BroadcastLog[]>([]);
   const [logFilter, setLogFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"logs" | "analytics">("logs");
 
   const { call: fetchDetail } = useFrappePostCall("excom.excom.api.broadcast.get_broadcast_detail");
   const { call: fetchLogs } = useFrappePostCall("excom.excom.api.broadcast.get_broadcast_logs");
@@ -237,22 +474,45 @@ function BroadcastDetailView({
         )}
       </div>
 
-      <div className="px-6 py-3 border-b border-zinc-800 flex items-center gap-3">
-        <span className="text-sm text-zinc-400 font-medium">Delivery Log</span>
-        <select
-          value={logFilter}
-          onChange={(e) => setLogFilter(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-300 focus:outline-none"
+      <div className="px-6 py-3 border-b border-zinc-800 flex items-center gap-4">
+        <button
+          onClick={() => setActiveTab("logs")}
+          className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
+            activeTab === "logs"
+              ? "bg-zinc-800 text-white"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
         >
-          <option value="">All</option>
-          <option value="Sent">Sent</option>
-          <option value="Failed">Failed</option>
-          <option value="Skipped">Skipped</option>
-        </select>
+          <span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Delivery Log</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("analytics")}
+          className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
+            activeTab === "analytics"
+              ? "bg-zinc-800 text-white"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          <span className="flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" /> Analytics</span>
+        </button>
+        {activeTab === "logs" && (
+          <select
+            value={logFilter}
+            onChange={(e) => setLogFilter(e.target.value)}
+            className="ml-auto bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-300 focus:outline-none"
+          >
+            <option value="">All</option>
+            <option value="Sent">Sent</option>
+            <option value="Failed">Failed</option>
+            <option value="Skipped">Skipped</option>
+          </select>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {logs.length === 0 ? (
+        {activeTab === "analytics" ? (
+          <AnalyticsPanel broadcastName={broadcastName} />
+        ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-center">
             <Clock className="w-10 h-10 text-zinc-600 mb-2" />
             <p className="text-zinc-500 text-sm">
@@ -274,7 +534,7 @@ function BroadcastDetailView({
               {logs.map((log, idx) => (
                 <tr key={idx} className="border-b border-zinc-800/50 hover:bg-zinc-900/50">
                   <td className="px-6 py-2.5 text-sm text-white">{log.display_name || log.omni_identity}</td>
-                  <td className="px-6 py-2.5 text-sm text-zinc-400">{log.recipient_address || "—"}</td>
+                  <td className="px-6 py-2.5 text-sm text-zinc-400">{log.recipient_address || "\u2014"}</td>
                   <td className="px-6 py-2.5">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       log.status === "Sent" ? "bg-green-500/10 text-green-400" :
@@ -284,9 +544,9 @@ function BroadcastDetailView({
                       {log.status}
                     </span>
                   </td>
-                  <td className="px-6 py-2.5 text-xs text-red-400 max-w-xs truncate">{log.error_message || "—"}</td>
+                  <td className="px-6 py-2.5 text-xs text-red-400 max-w-xs truncate">{log.error_message || "\u2014"}</td>
                   <td className="px-6 py-2.5 text-xs text-zinc-500">
-                    {log.sent_at ? new Date(log.sent_at).toLocaleTimeString() : "—"}
+                    {log.sent_at ? new Date(log.sent_at).toLocaleTimeString() : "\u2014"}
                   </td>
                 </tr>
               ))}

@@ -33,7 +33,15 @@
   "total_recipients",
   "column_break_stats",
   "sent_count",
-  "failed_count"
+  "failed_count",
+  "engagement_section",
+  "delivered_count",
+  "read_count",
+  "column_break_engagement",
+  "replied_count",
+  "clicked_count",
+  "column_break_engagement_2",
+  "optout_count"
  ],
  "fields": [
   {
@@ -231,6 +239,64 @@
    "fieldname": "failed_count",
    "fieldtype": "Int",
    "label": "Failed",
+   "read_only": 1,
+   "default": "0",
+   "allow_on_submit": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "engagement_section",
+   "fieldtype": "Section Break",
+   "label": "Engagement Metrics"
+  },
+  {
+   "fieldname": "delivered_count",
+   "fieldtype": "Int",
+   "label": "Delivered",
+   "read_only": 1,
+   "default": "0",
+   "allow_on_submit": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "read_count",
+   "fieldtype": "Int",
+   "label": "Read",
+   "read_only": 1,
+   "default": "0",
+   "allow_on_submit": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "column_break_engagement",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "replied_count",
+   "fieldtype": "Int",
+   "label": "Replied",
+   "read_only": 1,
+   "default": "0",
+   "allow_on_submit": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "clicked_count",
+   "fieldtype": "Int",
+   "label": "Button Clicks",
+   "read_only": 1,
+   "default": "0",
+   "allow_on_submit": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "column_break_engagement_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "optout_count",
+   "fieldtype": "Int",
+   "label": "Opt-outs",
    "read_only": 1,
    "default": "0",
    "allow_on_submit": 1,

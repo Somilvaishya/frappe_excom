@@ -13,7 +13,13 @@
   "detail_section",
   "recipient_address",
   "column_break_detail",
-  "sent_at"
+  "sent_at",
+  "engagement_section",
+  "delivered_at",
+  "read_at",
+  "column_break_engagement",
+  "first_reply_at",
+  "response_time_seconds"
  ],
  "fields": [
   {
@@ -74,6 +80,40 @@
    "fieldtype": "Datetime",
    "label": "Sent At",
    "read_only": 1
+  },
+  {
+   "fieldname": "engagement_section",
+   "fieldtype": "Section Break",
+   "label": "Engagement"
+  },
+  {
+   "fieldname": "delivered_at",
+   "fieldtype": "Datetime",
+   "label": "Delivered At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "read_at",
+   "fieldtype": "Datetime",
+   "label": "Read At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_engagement",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "first_reply_at",
+   "fieldtype": "Datetime",
+   "label": "First Reply At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "response_time_seconds",
+   "fieldtype": "Int",
+   "label": "Response Time (sec)",
+   "read_only": 1,
+   "description": "Seconds from send to first reply"
   }
  ],
  "index_web_pages_for_search": 0,

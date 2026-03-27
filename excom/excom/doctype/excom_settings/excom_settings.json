@@ -9,6 +9,8 @@
   "logo_gradient_to",
   "column_break_branding",
   "show_app_name",
+  "broadcast_metrics_section",
+  "broadcast_time_windows",
   "identity_sync_section",
   "identity_sync_html",
   "cleanup_section",
@@ -47,6 +49,18 @@
    "fieldname": "show_app_name",
    "fieldtype": "Check",
    "label": "Show App Name in Header"
+  },
+  {
+   "fieldname": "broadcast_metrics_section",
+   "fieldtype": "Section Break",
+   "label": "Broadcast Metrics"
+  },
+  {
+   "default": "1,3,6,12",
+   "description": "Comma-separated hours for response time windows, e.g. 1,3,6,12,24",
+   "fieldname": "broadcast_time_windows",
+   "fieldtype": "Data",
+   "label": "Response Time Windows (hours)"
   },
   {
    "fieldname": "identity_sync_section",

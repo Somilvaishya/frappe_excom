@@ -1,0 +1,125 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-03-09 20:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "broadcast",
+  "omni_identity",
+  "column_break_main",
+  "event_type",
+  "event_at",
+  "detail_section",
+  "response_time_seconds",
+  "button_text",
+  "column_break_detail",
+  "message",
+  "broadcast_message"
+ ],
+ "fields": [
+  {
+   "fieldname": "broadcast",
+   "fieldtype": "Link",
+   "label": "Broadcast",
+   "options": "Excom Broadcast",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "omni_identity",
+   "fieldtype": "Link",
+   "label": "Omni Identity",
+   "options": "Omni Identity",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "event_type",
+   "fieldtype": "Select",
+   "label": "Event Type",
+   "options": "Delivered\nRead\nReply\nButton Click\nOpt-out",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "event_at",
+   "fieldtype": "Datetime",
+   "label": "Event At",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "detail_section",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "response_time_seconds",
+   "fieldtype": "Int",
+   "label": "Response Time (seconds)",
+   "description": "Seconds between broadcast send and this event"
+  },
+  {
+   "fieldname": "button_text",
+   "fieldtype": "Data",
+   "label": "Button Text",
+   "description": "Text of the CTA button clicked (for Button Click events)"
+  },
+  {
+   "fieldname": "column_break_detail",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "message",
+   "fieldtype": "Link",
+   "label": "Inbound Message",
+   "options": "Excom Message",
+   "description": "The inbound message that triggered this event"
+  },
+  {
+   "fieldname": "broadcast_message",
+   "fieldtype": "Link",
+   "label": "Broadcast Message",
+   "options": "Excom Message",
+   "description": "The outbound broadcast message this event relates to"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-03-09 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Excom",
+ "name": "Excom Broadcast Event",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Excom Manager"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Excom User"
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
