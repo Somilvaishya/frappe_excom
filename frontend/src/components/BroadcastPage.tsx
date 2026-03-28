@@ -592,7 +592,9 @@ function ComposeDialog({
   const [loadingLists, setLoadingLists] = useState(true);
 
   // WhatsApp
-  const [waAccounts, setWaAccounts] = useState<{ name: string; account_name: string }[]>([]);
+  const [waAccounts, setWaAccounts] = useState<
+    { name: string; account_name: string; wa_phone_id?: string }[]
+  >([]);
   const [waChannelAccount, setWaChannelAccount] = useState("");
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
@@ -627,18 +629,24 @@ function ComposeDialog({
     .finally(() => setLoadingLists(false));
   }, []);
 
-  const loadTemplates = useCallback(async (search: string = "") => {
-    try {
-      const res = await fetchTemplates({ search });
-      setTemplates((res as any)?.message || []);
-    } catch {
-      toast.error("Failed to load templates");
-    }
-  }, [fetchTemplates]);
+  const loadTemplates = useCallback(
+    async (search: string = "") => {
+      if (!waChannelAccount) {
+        setTemplates([]);
+        return;
+      }
+      try {
+        const res = await fetchTemplates({ search, whatsapp_account: waChannelAccount });
+        setTemplates((res as any)?.message || []);
+      } catch {
+        toast.error("Failed to load templates");
+      }
+    },
+    [fetchTemplates, waChannelAccount]
+  );
 
   useEffect(() => {
     if (step === 2 && channel === "WhatsApp") {
-      loadTemplates(templateSearch);
       if (waAccounts.length === 0) {
         fetchWaAccounts({ channel: "whatsapp" }).then((res) => {
           const accs = (res as any)?.message || [];
@@ -652,7 +660,22 @@ function ComposeDialog({
         }).catch(() => {});
       }
     }
-  }, [step, channel, templateSearch, loadTemplates]);
+  }, [step, channel, waAccounts.length, fetchWaAccounts, fetchSubFields]);
+
+  useEffect(() => {
+    if (!waChannelAccount) return;
+    setSelectedTemplate(null);
+    setVariableSlots([]);
+    setHeaderMediaUrl("");
+    setHeaderFileName("");
+    setButtonUrls([]);
+  }, [waChannelAccount]);
+
+  useEffect(() => {
+    if (step === 2 && channel === "WhatsApp" && waChannelAccount) {
+      loadTemplates(templateSearch);
+    }
+  }, [step, channel, templateSearch, waChannelAccount, loadTemplates]);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -875,11 +898,18 @@ function ComposeDialog({
             <div className="space-y-4">
               {waAccounts.length > 0 && (
                 <div>
-                  <label className="text-sm text-zinc-300 font-medium mb-2 block">Send From Account</label>
+                  <label className="text-sm text-zinc-300 font-medium mb-1 block">
+                    WhatsApp phone number
+                  </label>
+                  <p className="text-xs text-zinc-500 mb-2">
+                    Choose the sender first. Only templates linked to this number in Excom (same
+                    Business Account can use multiple numbers) appear below.
+                  </p>
                   <div className="space-y-2">
                     {waAccounts.map((acc) => (
                       <button
                         key={acc.name}
+                        type="button"
                         onClick={() => setWaChannelAccount(acc.name)}
                         className={`w-full text-left px-4 py-2.5 rounded-lg border transition-all ${
                           waChannelAccount === acc.name
@@ -887,14 +917,25 @@ function ComposeDialog({
                             : "border-zinc-800 hover:border-zinc-600"
                         }`}
                       >
-                        <span className="text-sm text-white">{acc.account_name || acc.name}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm text-white">{acc.account_name || acc.name}</span>
+                          {acc.wa_phone_id ? (
+                            <span className="text-[11px] text-zinc-500 font-mono">
+                              Phone number ID · {acc.wa_phone_id}
+                            </span>
+                          ) : null}
+                        </div>
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {!selectedTemplate ? (
+              {!waChannelAccount && waAccounts.length > 0 ? (
+                <p className="text-sm text-amber-400/90 text-center py-8 border border-dashed border-zinc-700 rounded-lg">
+                  Select a WhatsApp account above to load templates for that number.
+                </p>
+              ) : !selectedTemplate ? (
                 <>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />

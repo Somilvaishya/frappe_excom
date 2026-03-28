@@ -22,6 +22,8 @@
   "section_break_fxqh",
   "template",
   "sample_values",
+  "body_variable_samples",
+  "linked_whatsapp_accounts",
   "for_doctype",
   "field_names",
   "column_break_6",
@@ -161,7 +163,21 @@
   {
    "fieldname": "sample_values",
    "fieldtype": "Small Text",
-   "label": "Sample Values"
+   "label": "Sample Values (legacy)",
+   "description": "Deprecated: comma-separated examples — breaks when a sample contains a comma. Use Body Variable Samples (JSON array) instead. Migrated automatically where possible."
+  },
+  {
+   "fieldname": "body_variable_samples",
+   "fieldtype": "JSON",
+   "label": "Body Variable Samples",
+   "description": "JSON array of strings, one per {{1}}, {{2}}, … e.g. [\"ACME, Inc.\",\"₹500\"]. Preferred over Sample Values."
+  },
+  {
+   "fieldname": "linked_whatsapp_accounts",
+   "fieldtype": "Table",
+   "label": "Linked WhatsApp Accounts",
+   "options": "WhatsApp Template Linked Account",
+   "description": "Phone numbers (channel accounts) allowed to send this template. Use when several numbers share one Business Account ID."
   },
   {
    "fieldname": "column_break_bthp",

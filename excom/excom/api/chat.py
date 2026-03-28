@@ -1233,8 +1233,33 @@ def initiate_outbound(
 
 
 @frappe.whitelist()
-def get_whatsapp_templates(search: str = "") -> list:
-    """Return approved WhatsApp templates with language variants and buttons."""
+def get_thread_channel_account(thread_id: str) -> dict:
+    """Return channel account linked to a thread (for template filtering)."""
+    _check_excom_access()
+    row = frappe.db.get_value(
+        "Excom Thread",
+        thread_id,
+        ["channel", "account", "account_doctype"],
+        as_dict=True,
+    )
+    if not row:
+        frappe.throw(_("Thread not found"))
+    return {
+        "channel": row.get("channel") or "",
+        "account": row.get("account") or "",
+        "account_doctype": row.get("account_doctype") or "",
+    }
+
+
+@frappe.whitelist()
+def get_whatsapp_templates(search: str = "", whatsapp_account: str = "") -> list:
+    """Return approved WhatsApp templates with language variants and buttons.
+
+    When ``whatsapp_account`` is set, only templates linked to that
+    ``Excom Channel Account`` (primary or child table) are returned.
+    """
+    from excom.excom.whatsapp_template_utils import get_body_variable_samples
+
     filters = {"status": "APPROVED"}
     if search:
         filters["template_name"] = ["like", f"%{search}%"]
@@ -1243,13 +1268,41 @@ def get_whatsapp_templates(search: str = "") -> list:
         "WhatsApp Templates",
         filters=filters,
         fields=[
-            "name", "template_name", "actual_name", "template",
-            "language_code", "category", "header_type",
-            "sample_values", "field_names", "header", "footer",
+            "name",
+            "template_name",
+            "actual_name",
+            "template",
+            "language_code",
+            "category",
+            "header_type",
+            "sample_values",
+            "body_variable_samples",
+            "field_names",
+            "header",
+            "footer",
+            "whatsapp_account",
         ],
         order_by="template_name asc",
         limit=100,
     )
+
+    if whatsapp_account:
+        linked_parents = set(
+            frappe.get_all(
+                "WhatsApp Template Linked Account",
+                filters={"channel_account": whatsapp_account},
+                pluck="parent",
+            )
+        )
+        primary_parents = set(
+            frappe.get_all(
+                "WhatsApp Templates",
+                filters={"whatsapp_account": whatsapp_account, "status": "APPROVED"},
+                pluck="name",
+            )
+        )
+        allowed = linked_parents | primary_parents
+        templates = [t for t in templates if t.name in allowed]
 
     all_names = [t.name for t in templates]
     buttons_by_parent: dict = {}
@@ -1265,9 +1318,7 @@ def get_whatsapp_templates(search: str = "") -> list:
 
     lang_groups: dict = {}
     for t in templates:
-        variables = []
-        if t.sample_values:
-            variables = [v.strip() for v in t.sample_values.split(",") if v.strip()]
+        variables = get_body_variable_samples(t)
         t["variable_count"] = len(variables)
         t["sample_variables"] = variables
         t["buttons"] = buttons_by_parent.get(t.name, [])
@@ -1336,6 +1387,15 @@ def send_template_to_thread(
         frappe.throw(_("Templates are only supported for WhatsApp"))
 
     template_doc = frappe.get_doc("WhatsApp Templates", template_name)
+
+    from excom.excom.whatsapp_template_utils import template_is_linked_to_account
+
+    if not template_is_linked_to_account(template_name, thread.account):
+        frappe.throw(
+            _("This template is not linked to the WhatsApp number used in this conversation ({0}).").format(
+                thread.account or _("unknown")
+            )
+        )
 
     if template_doc.header_type in ("IMAGE", "DOCUMENT") and not header_media_url:
         frappe.throw(

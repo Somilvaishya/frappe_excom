@@ -7,11 +7,15 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import now_datetime
 
+from excom.excom.whatsapp_template_utils import (
+    get_body_variable_samples,
+    template_is_linked_to_account,
+)
+
 
 def _wa_template_variable_count(template_name: str) -> int:
-    """Body placeholder count from WhatsApp Templates sample_values (comma-separated)."""
-    sample = frappe.db.get_value("WhatsApp Templates", template_name, "sample_values") or ""
-    return len([p for p in (s.strip() for s in sample.split(",")) if p])
+    """Body placeholder count from JSON or legacy WhatsApp Templates samples."""
+    return len(get_body_variable_samples(template_name))
 
 
 class ExcomBroadcast(Document):
@@ -25,6 +29,12 @@ class ExcomBroadcast(Document):
                 frappe.throw(_("Email Body is required for Email broadcasts"))
 
         if self.channel == "WhatsApp" and self.wa_template:
+            if self.wa_channel_account and not template_is_linked_to_account(
+                self.wa_template, self.wa_channel_account
+            ):
+                frappe.throw(
+                    _("This WhatsApp template is not linked to the selected channel account (phone number).")
+                )
             self._validate_whatsapp_variables()
 
     def _validate_whatsapp_variables(self) -> None:

@@ -12,12 +12,16 @@ from frappe.integrations.utils import make_post_request, make_request
 from frappe.desk.form.utils import get_pdf_link
 
 from excom.excom.utils import get_channel_account, get_wa_credentials
+from excom.excom.whatsapp_template_utils import get_body_variable_samples
+
 
 class WhatsAppTemplates(Document):
     """Create whatsapp template."""
 
     def validate(self):
+        self._validate_body_variable_samples_json()
         self.set_whatsapp_account()
+        self._ensure_whatsapp_account_in_linked_accounts()
         if not self.language_code or self.has_value_changed("language"):
             lang_code = frappe.db.get_value("Language", self.language) or "en"
             self.language_code = lang_code.replace("-", "_")
@@ -46,14 +50,54 @@ class WhatsAppTemplates(Document):
                 _("CTA buttons (Visit Website / Call Phone) cannot exceed 2 (found {0})").format(cta)
             )
 
+    def _validate_body_variable_samples_json(self) -> None:
+        """Ensure ``body_variable_samples`` is a JSON array of scalars when set."""
+        val = self.get("body_variable_samples")
+        if val in (None, "", []):
+            return
+        data = val
+        if isinstance(val, str):
+            if not val.strip():
+                self.body_variable_samples = None
+                return
+            try:
+                data = json.loads(val)
+            except json.JSONDecodeError:
+                frappe.throw(_("Body Variable Samples must be valid JSON"))
+        if not isinstance(data, list):
+            frappe.throw(_("Body Variable Samples must be a JSON array"))
+        for i, x in enumerate(data):
+            if x is not None and not isinstance(x, (str, int, float)):
+                frappe.throw(
+                    _("Body variable sample {0} must be a string or number").format(i + 1)
+                )
+
     def set_whatsapp_account(self):
-        """Set channel account to default if missing."""
+        """Prefer primary from linked accounts; else default outgoing channel account."""
+        links = self.get("linked_whatsapp_accounts") or []
+        if links and links[0].channel_account and not self.whatsapp_account:
+            self.whatsapp_account = links[0].channel_account
         if not self.whatsapp_account:
-            default_account = get_channel_account(channel='whatsapp', account_type='outgoing')
+            default_account = get_channel_account(channel="whatsapp", account_type="outgoing")
             if not default_account:
                 frappe.throw(_("Please set a default outgoing WhatsApp Channel Account"))
-            else:
-                self.whatsapp_account = default_account.name
+            self.whatsapp_account = default_account.name
+
+    def _ensure_whatsapp_account_in_linked_accounts(self) -> None:
+        """Primary WhatsApp account must appear in linked accounts (multi-phone WABA)."""
+        if not self.whatsapp_account:
+            return
+        linked = self.get("linked_whatsapp_accounts") or []
+        paths = {getattr(r, "channel_account", None) for r in linked}
+        if self.whatsapp_account not in paths:
+            self.append("linked_whatsapp_accounts", {"channel_account": self.whatsapp_account})
+
+        seen: set[str] = set()
+        for row in self.get("linked_whatsapp_accounts") or []:
+            acc = row.channel_account
+            if acc in seen:
+                frappe.throw(_("Duplicate linked WhatsApp account: {0}").format(acc))
+            seen.add(acc)
 
     def get_session_id(self):
         """Upload media to Meta for template header sample."""
@@ -113,8 +157,9 @@ class WhatsAppTemplates(Document):
             "type": "BODY",
             "text": self.template,
         }
-        if self.sample_values:
-            body.update({"example": {"body_text": [self.sample_values.split(",")]}})
+        samples = get_body_variable_samples(self)
+        if samples:
+            body.update({"example": {"body_text": [samples]}})
 
         data["components"].append(body)
         if self.header_type:
@@ -169,8 +214,9 @@ class WhatsAppTemplates(Document):
             "type": "BODY",
             "text": self.template,
         }
-        if self.sample_values:
-            body.update({"example": {"body_text": [self.sample_values.split(",")]}})
+        samples = get_body_variable_samples(self)
+        if samples:
+            body.update({"example": {"body_text": [samples]}})
         data["components"].append(body)
         if self.header_type:
             data["components"].append(self.get_header())
@@ -245,6 +291,18 @@ class WhatsAppTemplates(Document):
 
         return header
 
+
+def _merge_template_linked_account(doc, account_name: str) -> None:
+    """Register that this Meta template can be sent from the given channel account."""
+    existing = {
+        getattr(r, "channel_account", None) for r in doc.get("linked_whatsapp_accounts") or []
+    }
+    if account_name not in existing:
+        doc.append("linked_whatsapp_accounts", {"channel_account": account_name})
+    if not doc.whatsapp_account:
+        doc.whatsapp_account = account_name
+
+
 @frappe.whitelist()
 def fetch():
     """Fetch templates from Meta for all active WhatsApp channel accounts."""
@@ -286,7 +344,7 @@ def fetch():
                 doc.language_code = template["language"]
                 doc.category = template["category"]
                 doc.id = template["id"]
-                doc.whatsapp_account = acct.name
+                _merge_template_linked_account(doc, acct.name)
 
                 # update components
                 for component in template["components"]:
@@ -306,11 +364,10 @@ def fetch():
                     elif component["type"] == "BODY":
                         doc.template = component["text"]
                         if component.get("example"):
-    			            # Check if 'body_text' exists before trying to access it
                             if component["example"].get("body_text"):
-                                doc.sample_values = ",".join(
-            	                    component["example"]["body_text"][0]
-                    	        )
+                                examples_row = component["example"]["body_text"][0]
+                                doc.body_variable_samples = examples_row
+                                doc.sample_values = ""
 
                     # Update buttons
                     elif component["type"] == "BUTTONS":

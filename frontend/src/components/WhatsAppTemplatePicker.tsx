@@ -75,6 +75,9 @@ export function WhatsAppTemplatePicker({
   const { call: fetchTemplates } = useFrappePostCall(
     "excom.excom.api.chat.get_whatsapp_templates"
   );
+  const { call: fetchThreadAccount } = useFrappePostCall(
+    "excom.excom.api.chat.get_thread_channel_account"
+  );
   const { call: sendTemplate } = useFrappePostCall(
     "excom.excom.api.chat.send_template_to_thread"
   );
@@ -83,11 +86,22 @@ export function WhatsAppTemplatePicker({
   );
   const { upload } = useFrappeFileUpload();
 
+  const [threadWaAccount, setThreadWaAccount] = useState<string | null>(null);
+  const [threadMetaLoading, setThreadMetaLoading] = useState(true);
+
   const loadTemplates = useCallback(
     async (search: string = "") => {
+      if (!threadWaAccount) {
+        setTemplates([]);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
-        const res = await fetchTemplates({ search });
+        const res = await fetchTemplates({
+          search,
+          whatsapp_account: threadWaAccount,
+        });
         setTemplates((res as any)?.message || []);
       } catch {
         toast.error("Failed to load templates");
@@ -95,17 +109,37 @@ export function WhatsAppTemplatePicker({
         setLoading(false);
       }
     },
-    [fetchTemplates]
+    [fetchTemplates, threadWaAccount]
   );
 
   useEffect(() => {
-    loadTemplates();
+    let cancelled = false;
+    setThreadMetaLoading(true);
+    fetchThreadAccount({ thread_id: threadId })
+      .then((res) => {
+        if (cancelled) return;
+        const msg = (res as any)?.message;
+        if (msg?.channel === "whatsapp" && msg?.account) {
+          setThreadWaAccount(msg.account);
+        } else {
+          setThreadWaAccount(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setThreadWaAccount(null);
+      })
+      .finally(() => {
+        if (!cancelled) setThreadMetaLoading(false);
+      });
     checkWindow({ thread_id: threadId })
       .then((res) => {
         setWindowInfo((res as any)?.message || null);
       })
       .catch(() => {});
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [threadId, fetchThreadAccount]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -260,30 +294,44 @@ export function WhatsAppTemplatePicker({
         <div className="flex-1 min-h-0 overflow-y-auto">
           {step === "list" && (
             <div className="p-5 space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <Input
-                  placeholder="Search templates..."
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  className="pl-10 bg-zinc-800 border-zinc-700 text-white"
-                  autoFocus
-                />
-              </div>
-
-              {loading && (
+              {threadMetaLoading ? (
                 <div className="flex items-center justify-center py-10">
                   <Loader2 className="w-6 h-6 text-green-400 animate-spin" />
                 </div>
-              )}
-
-              {!loading && templates.length === 0 && (
-                <div className="text-center py-10 text-sm text-zinc-500">
-                  No approved templates found
+              ) : !threadWaAccount ? (
+                <div className="text-center py-10 text-sm text-amber-400/90 px-2">
+                  This thread is not tied to a WhatsApp channel account, so templates cannot be
+                  filtered. Open a WhatsApp conversation or check Excom Thread account linkage.
                 </div>
-              )}
+              ) : (
+                <>
+                  <p className="text-[11px] text-zinc-500">
+                    Showing templates linked to this conversation&apos;s phone number (WABA).
+                  </p>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <Input
+                      placeholder="Search templates..."
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                      className="pl-10 bg-zinc-800 border-zinc-700 text-white"
+                      autoFocus
+                    />
+                  </div>
 
-              <div className="space-y-2">
+                  {loading && (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className="w-6 h-6 text-green-400 animate-spin" />
+                    </div>
+                  )}
+
+                  {!loading && templates.length === 0 && (
+                    <div className="text-center py-10 text-sm text-zinc-500">
+                      No approved templates for this WhatsApp number
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
                 {templates.map((t) => (
                   <button
                     key={t.name}
@@ -320,7 +368,9 @@ export function WhatsAppTemplatePicker({
                     </div>
                   </button>
                 ))}
-              </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
