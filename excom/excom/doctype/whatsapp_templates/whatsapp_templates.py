@@ -366,7 +366,7 @@ def fetch():
                         if component.get("example"):
                             if component["example"].get("body_text"):
                                 examples_row = component["example"]["body_text"][0]
-                                doc.body_variable_samples = examples_row
+                                doc.body_variable_samples = json.dumps(examples_row)
                                 doc.sample_values = ""
 
                     # Update buttons
