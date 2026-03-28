@@ -7,6 +7,8 @@ to either Frappe Cloud's push relay or the Excom Cloud server.
 import frappe
 from frappe.model.document import Document
 
+from excom.excom.notification import EXCOM_RELAY_PROJECT_NAME
+
 
 class ExcomPushToken(Document):
 	"""Stores an FCM token for a user (web or mobile)."""
@@ -14,11 +16,11 @@ class ExcomPushToken(Document):
 	def after_insert(self) -> None:
 		push_service = self._get_push_service()
 
-		if push_service == "Frappe Cloud" and _frappe_push_enabled():
+		if push_service == "Frappe Cloud" and _relay_subscribe_allowed():
 			try:
 				from frappe.push_notification import subscribe
 
-				subscribe(self.fcm_token, "excom")
+				subscribe(self.fcm_token, EXCOM_RELAY_PROJECT_NAME)
 			except ImportError:
 				pass
 			except Exception:
@@ -31,11 +33,11 @@ class ExcomPushToken(Document):
 	def on_trash(self) -> None:
 		push_service = self._get_push_service()
 
-		if push_service == "Frappe Cloud" and _frappe_push_enabled():
+		if push_service == "Frappe Cloud" and _relay_subscribe_allowed():
 			try:
 				from frappe.push_notification import unsubscribe
 
-				unsubscribe(self.fcm_token, "excom")
+				unsubscribe(self.fcm_token, EXCOM_RELAY_PROJECT_NAME)
 			except ImportError:
 				pass
 			except Exception:
@@ -52,13 +54,8 @@ class ExcomPushToken(Document):
 		)
 
 
-def _frappe_push_enabled() -> bool:
-	"""Check if Frappe Cloud push notification relay is enabled."""
-	try:
-		return bool(
-			frappe.db.get_single_value(
-				"Push Notification Settings", "enable_push_notification_relay"
-			)
-		)
-	except frappe.DoesNotExistError:
-		return False
+def _relay_subscribe_allowed() -> bool:
+	"""Same gate as Settings UI: relay on + push_relay_server_url (mirrors practical Raven + FC setup)."""
+	from excom.excom.api.notification import are_push_notifications_enabled
+
+	return bool(are_push_notifications_enabled())

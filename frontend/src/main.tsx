@@ -2,13 +2,16 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { EXCOM_RELAY_PROJECT_NAME } from "./pushRelay";
 
 // @ts-ignore -- plain JS module from public/
 import FrappePushNotification from "../public/frappe-push-notification";
 
 function registerServiceWorker() {
   // @ts-ignore
-  window.frappePushNotification = new FrappePushNotification("excom");
+  window.frappePushNotification = new FrappePushNotification(
+    EXCOM_RELAY_PROJECT_NAME
+  );
 
   if ("serviceWorker" in navigator) {
     // @ts-ignore

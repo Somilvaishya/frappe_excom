@@ -242,9 +242,12 @@ export function SettingsPage({ onNavigateBack }: SettingsPageProps) {
           </div>
           {serverPushEnabled && notifPerm === "granted" && !fcmRegistered && (
             <p className="text-xs text-amber-400/90 mb-4">
-              Permission alone does not register you. Tap &quot;Allow push notifications&quot; to complete
-              relay registration (requires <code className="text-zinc-400">push_relay_server_url</code> in site
-              config, same as Raven).
+              Permission alone does not register you. Tap &quot;Allow push notifications&quot; to finish.
+              In <code className="text-zinc-400">site_config.json</code>,{" "}
+              <code className="text-zinc-400">push_relay_server_url</code> must be the{" "}
+              <strong className="text-zinc-400">Frappe notification relay</strong> host (the site that runs
+              the <code className="text-zinc-400">notification_relay</code> app)—not your ERPNext URL. Frappe
+              Cloud sets this automatically; self-hosted needs a real relay URL.
             </p>
           )}
           <div className="flex flex-wrap gap-2">
@@ -309,6 +312,15 @@ export function SettingsPage({ onNavigateBack }: SettingsPageProps) {
                   </Button>
                 ) : null}
               </dd>
+              <p className="text-xs text-zinc-500 mt-2 max-w-xl">
+                Detected from your current request or{" "}
+                <code className="text-zinc-400">host_name</code> in site config,
+                without the bench web port. If it is still wrong, set{" "}
+                <strong className="text-zinc-400">Mobile public site URL</strong>{" "}
+                on Excom Settings in Desk (or{" "}
+                <code className="text-zinc-400">mobile_public_site_url</code> in{" "}
+                <code className="text-zinc-400">site_config.json</code>).
+              </p>
             </div>
             <div>
               <dt className="text-zinc-500 text-xs uppercase tracking-wide mb-1">

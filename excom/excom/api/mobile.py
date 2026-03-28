@@ -6,6 +6,62 @@ and create_oauth_client (manager) for the Excom mobile app.
 
 import frappe
 from frappe.utils.change_log import get_versions
+from frappe.utils.data import get_host_name_from_request
+
+
+def _mobile_public_base_url() -> str:
+	"""Origin for OAuth PKCE / deep links — public URL without bench webserver_port.
+
+	Frappe's ``get_url()`` appends ``:webserver_port`` when the host has no port in
+	the string, which breaks TLS reverse-proxy setups (e.g. ``https://dev.example.com:8002``).
+
+	Resolution order:
+	1. ``mobile_public_site_url`` in site_config
+	2. ``mobile_public_site_url`` on Excom Settings (Desk)
+	3. Same host logic as ``get_url`` but **without** the port suffix
+	4. Last resort: ``get_url()`` (may still include port if no host/request)
+	"""
+	override = (frappe.conf.get("mobile_public_site_url") or "").strip()
+	if not override:
+		override = (frappe.db.get_single_value("Excom Settings", "mobile_public_site_url") or "").strip()
+	if override:
+		override = override.rstrip("/")
+		if not override.startswith(("http://", "https://")):
+			override = "https://" + override
+		return override
+
+	host_name = frappe.local.conf.host_name or frappe.local.conf.hostname
+	if host_name:
+		if not host_name.startswith(("http://", "https://")):
+			host_name = "http://" + host_name
+		return host_name.rstrip("/")
+
+	request_host_name = get_host_name_from_request()
+	if request_host_name:
+		return request_host_name.rstrip("/")
+
+	if frappe.local.site:
+		protocol = "http://"
+		if frappe.local.conf.ssl_certificate:
+			protocol = "https://"
+		elif frappe.local.conf.wildcard:
+			domain = frappe.local.conf.wildcard.get("domain")
+			if (
+				domain
+				and frappe.local.site.endswith(domain)
+				and frappe.local.conf.wildcard.get("ssl_certificate")
+			):
+				protocol = "https://"
+		return (protocol + frappe.local.site).rstrip("/")
+
+	subdomain = frappe.db.get_single_value("Website Settings", "subdomain")
+	if subdomain:
+		subdomain = subdomain.strip()
+		if not subdomain.startswith(("http://", "https://")):
+			subdomain = "http://" + subdomain
+		return subdomain.rstrip("/")
+
+	return frappe.utils.get_url()
 
 
 @frappe.whitelist(allow_guest=True)
@@ -43,7 +99,7 @@ def get_client_id() -> dict:
 			or "/assets/excom/excom/excom-logo.svg"
 		),
 		"can_manage_mobile_oauth": can_manage,
-		"site_url": frappe.utils.get_url(),
+		"site_url": _mobile_public_base_url(),
 	}
 
 

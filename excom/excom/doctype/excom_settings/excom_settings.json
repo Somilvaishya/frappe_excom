@@ -21,6 +21,7 @@
   "cleanup_channels",
   "mobile_app_tab",
   "oauth_client",
+  "mobile_public_site_url",
   "push_notifications_tab",
   "push_notification_service",
   "push_notification_server_url",
@@ -136,6 +137,12 @@
    "fieldtype": "Link",
    "label": "OAuth Client",
    "options": "OAuth Client"
+  },
+  {
+   "description": "Optional. Public origin for mobile OAuth (https://your.domain, no path). Use when users reach the site via a reverse proxy but the bench port would otherwise appear (e.g. :8002). Can also set site_config key mobile_public_site_url.",
+   "fieldname": "mobile_public_site_url",
+   "fieldtype": "Data",
+   "label": "Mobile public site URL"
   },
   {
    "fieldname": "push_notifications_tab",

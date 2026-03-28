@@ -17,6 +17,8 @@ from pytz import timezone, utc
 
 MAX_NOTIFICATION_CONTENT_LENGTH = 1000
 
+# Frappe push relay project id — must match ``new FrappePushNotification("…")`` and relay/Frappe Cloud registration.
+EXCOM_RELAY_PROJECT_NAME = "excom"
 
 # ── Public entry point ────────────────────────────────────────────
 
@@ -49,7 +51,7 @@ def _send_via_frappe_cloud(thread_name: str, message_name: str) -> None:
 	try:
 		from frappe.push_notification import PushNotification
 
-		push = PushNotification("excom")
+		push = PushNotification(EXCOM_RELAY_PROJECT_NAME)
 		if not push.is_enabled():
 			return
 	except ImportError:

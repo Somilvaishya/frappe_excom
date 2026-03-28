@@ -8,6 +8,15 @@ class ExcomSettings(Document):
 		if self.auto_cleanup_enabled and (not self.cleanup_retention_days or self.cleanup_retention_days < 1):
 			self.cleanup_retention_days = 1
 
+		pub = (getattr(self, "mobile_public_site_url", None) or "").strip()
+		if pub:
+			pub = pub.rstrip("/")
+			if not pub.startswith(("http://", "https://")):
+				pub = "https://" + pub
+			if " " in pub or "\n" in pub:
+				frappe.throw(_("Mobile public site URL must be a single URL"))
+			self.mobile_public_site_url = pub
+
 		if getattr(self, "push_notification_service", None) == "Excom Cloud":
 			if not self.push_notification_server_url:
 				frappe.throw(_("Please enter the Push Notification Server URL"))

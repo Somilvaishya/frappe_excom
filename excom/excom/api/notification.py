@@ -6,11 +6,117 @@ check if push is enabled, and manage Excom Cloud registration.
 
 from __future__ import annotations
 
+import json
 from urllib.parse import urlparse
 
 import frappe
 from frappe import _
 from frappe.frappeclient import FrappeClient
+from frappe.utils import get_request_session
+
+from excom.excom.notification import EXCOM_RELAY_PROJECT_NAME
+
+
+def _excom_roles_allowed_for_relay_config() -> bool:
+	user = frappe.session.user
+	if not user or user == "Guest":
+		return False
+	return bool(set(frappe.get_roles(user)) & {"System Manager", "Excom Manager", "Excom User"})
+
+
+@frappe.whitelist()
+def get_frappe_relay_push_config() -> dict[str, object]:
+	"""Fetch Firebase web config + VAPID from the Frappe push relay via the app server.
+
+	Raven calls the relay directly from the browser; that requires the relay to allow
+	cross-origin requests and breaks when ``push_relay_server_url`` is mistakenly set
+	to this site's URL (no ``notification_relay`` app). This endpoint:
+
+	- Runs same-origin in the browser (session cookie).
+	- Ensures one-time relay registration so **Push Notification Settings** gets
+	  ``api_key`` / ``api_secret`` (Frappe's "first push" credential flow), matching
+	  desk behaviour for ``notification_relay.api.auth.get_credential``.
+	"""
+	if not _excom_roles_allowed_for_relay_config():
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	push_service = (
+		frappe.db.get_single_value("Excom Settings", "push_notification_service") or "Frappe Cloud"
+	)
+	if push_service != "Frappe Cloud":
+		frappe.throw(
+			_("Excom push service is not Frappe Cloud; use boot firebase config or switch service.")
+		)
+
+	if not frappe.db.get_single_value("Push Notification Settings", "enable_push_notification_relay"):
+		frappe.throw(_("Enable Push Notification Relay under Integrations > Push Notification Settings."))
+
+	relay_base = (frappe.conf.get("push_relay_server_url") or "").strip().rstrip("/")
+	if not relay_base:
+		frappe.throw(
+			_(
+				"Set `push_relay_server_url` in site_config to the **Frappe notification relay** base URL "
+				"(the host that runs the `notification_relay` app), not your ERPNext site URL."
+			)
+		)
+
+	pns = frappe.get_single("Push Notification Settings")
+	needs_relay_credential = not (pns.api_key and pns.get_password("api_secret"))
+	if pns.enable_push_notification_relay and needs_relay_credential:
+		try:
+			from frappe.push_notification import PushNotification
+
+			PushNotification(EXCOM_RELAY_PROJECT_NAME)._get_credential()  # noqa: SLF001
+		except Exception as exc:
+			frappe.log_error(title="Excom: push relay credential registration failed")
+			frappe.throw(
+				_(
+					"Could not register this site with the push relay at {0}. "
+					"Confirm `push_relay_server_url` points at the central relay (see Frappe Cloud / "
+					"self-hosted relay docs), not this site. {1}"
+				).format(relay_base, str(exc))
+			)
+
+	url = f"{relay_base}/api/method/notification_relay.api.get_config"
+	try:
+		sess = get_request_session()
+		resp = sess.get(
+			url,
+			params={"project_name": EXCOM_RELAY_PROJECT_NAME},
+			timeout=30,
+		)
+		body = resp.json()
+	except json.JSONDecodeError:
+		frappe.throw(_("Push relay returned a non-JSON response for get_config."))
+	except Exception as exc:
+		frappe.log_error(title="Excom: relay get_config request failed")
+		frappe.throw(_("Failed to reach push relay get_config: {0}").format(str(exc)))
+
+	if not resp.ok:
+		exc_msg = str(body.get("exception") or body.get("exc_type") or "")
+		hint = _(
+			"`push_relay_server_url` must be the base URL of the Frappe notification relay "
+			"(a site with the `notification_relay` Frappe app), not your own bench URL."
+		)
+		if "not installed" in exc_msg.lower() or "AppNotInstalled" in exc_msg:
+			frappe.throw(f"{hint} {exc_msg}")
+		frappe.throw(_("Push relay get_config failed ({0}). {1}").format(resp.status_code, exc_msg or body))
+
+	payload = body.get("message")
+	if isinstance(payload, str):
+		try:
+			payload = json.loads(payload)
+		except json.JSONDecodeError:
+			payload = None
+
+	data = payload if isinstance(payload, dict) else body
+	config = data.get("config") if isinstance(data, dict) else None
+	vapid = data.get("vapid_public_key") if isinstance(data, dict) else None
+
+	if not isinstance(config, dict) or not vapid or not str(vapid).strip():
+		frappe.throw(_("Push relay returned an incomplete get_config payload for project {0}.").format(EXCOM_RELAY_PROJECT_NAME))
+
+	return {"config": config, "vapid_public_key": str(vapid).strip()}
 
 
 @frappe.whitelist()

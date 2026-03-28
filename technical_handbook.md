@@ -1101,3 +1101,38 @@ Inbound messages processed in background jobs (via `frappe.enqueue`) were not re
 - `frontend/src/hooks/useRealtimeMessages.ts` — polling fallback
 - `frontend/src/hooks/useRealtimeThreads.ts` — polling fallback
 - `excom/public/widget/` — Preact source + build tooling
+
+---
+
+## Mobile OAuth site URL (2026-03-28)
+
+### What changed
+- `excom.excom.api.mobile.get_client_id` no longer uses `frappe.utils.get_url()` for `site_url`. That helper appends `webserver_port` when the configured host has no explicit port, which produced URLs like `https://dev.example.com:8002` behind a reverse proxy while browsers use `https://dev.example.com`.
+- New `_mobile_public_base_url()` mirrors Frappe host resolution **without** the port-suffix block, prefers `X-Forwarded-Proto` + `Host` when resolving from the request, and supports overrides.
+
+### Why it changed
+Mobile PKCE and native apps must use the same public origin users type in the browser (TLS on 443), not the internal Werkzeug/gunicorn port.
+
+### Impacted modules
+- `excom/excom/api/mobile.py`
+- `excom/excom/doctype/excom_settings/` — optional field `mobile_public_site_url` (and validation)
+
+### Migration
+- `bench migrate` to add `mobile_public_site_url` on Excom Settings.
+- Optional: set `mobile_public_site_url` in `site_config.json` without migrating (same key as conf override).
+
+---
+
+## Frappe push relay browser path (2026-03-28)
+
+### What changed
+- New `excom.excom.api.notification.get_frappe_relay_push_config` whitelisted API: same-origin fetch of Firebase web config + VAPID from the **configured** `push_relay_server_url`, plus automatic `notification_relay.api.auth.get_credential` when **Push Notification Settings** has no `api_key` / secret yet (mirrors desk “first relay use” registration).
+- `frontend/public/frappe-push-notification.js` (bundled in Excom) calls this API instead of hitting `notification_relay.api.get_config` directly from the browser (Raven pattern).
+
+### Why it changed
+- Mis-setting `push_relay_server_url` to the **same** ERPNext host makes the browser call `get_config` on a site without the `notification_relay` app → HTTP 417 / “App notification_relay is not installed”.
+- Server-side fetch gives clearer errors and avoids CORS assumptions. It does **not** remove the need for a valid relay base URL: `push_relay_server_url` must still point at a host that actually runs the relay.
+
+### Impacted modules
+- `excom/excom/api/notification.py`
+- `frontend/public/frappe-push-notification.js` → production bundle under `excom/public/excom/assets/`

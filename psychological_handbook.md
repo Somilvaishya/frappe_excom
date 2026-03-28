@@ -119,3 +119,13 @@ The immediate objective is to establish a coherent architecture and language bef
 - **Optimistic send** creates the perception of speed even when the backend is processing. Error recovery restores the message to input, preserving the operator's work.
 - **Mobile contacts and calls tabs** complete the bottom navigation. "Coming Soon" for calls is honest about scope while establishing the navigation pattern.
 
+### 2026-03-28 — Mobile OAuth public origin
+
+- Operators expect the "site URL" shown for mobile login to match what they type in a browser (HTTPS on the public hostname). Showing an internal bench port erodes trust and breaks OAuth on real devices.
+- Preference order: honor explicit admin override, then the same mental model of "public hostname" Frappe uses, without silently tacking on the dev server port.
+
+### 2026-03-28 — Push relay discovery
+
+- Frappe's relay is a **different** deployment than the ERP site; conflating `push_relay_server_url` with "our site URL" produces confusing 417 errors, not a product bug in Excom.
+- First-time relay registration (API key/secret in Push Notification Settings) should happen in line with Frappe's server-side flow; the UI should not depend on the browser successfully guessing the relay host.
+
