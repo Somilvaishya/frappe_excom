@@ -27,11 +27,14 @@ def are_push_notifications_enabled() -> bool:
 		)
 
 		if push_service == "Frappe Cloud":
-			return bool(
+			if not bool(
 				frappe.db.get_single_value(
 					"Push Notification Settings", "enable_push_notification_relay"
 				)
-			)
+			):
+				return False
+			# Relay cannot work without site_config (same requirement as desk / Raven www).
+			return bool(frappe.conf.get("push_relay_server_url"))
 		return True
 	except frappe.DoesNotExistError:
 		return False
@@ -74,16 +77,22 @@ def subscribe(
 def unsubscribe(fcm_token: str) -> str:
 	"""Remove an FCM token for the current user (e.g. on logout).
 
+	Uses delete_doc so ``Excom Push Token.on_trash`` runs and deregisters
+	from the Frappe push relay (``frappe.db.delete`` would skip that).
+
 	Args:
 		fcm_token: The token to remove.
 
 	Returns:
 		'Unsubscribed' on success.
 	"""
-	frappe.db.delete(
+	names = frappe.get_all(
 		"Excom Push Token",
-		{"fcm_token": fcm_token, "user": frappe.session.user},
+		filters={"fcm_token": fcm_token, "user": frappe.session.user},
+		pluck="name",
 	)
+	for name in names:
+		frappe.delete_doc("Excom Push Token", name, ignore_permissions=True)
 	return "Unsubscribed"
 
 

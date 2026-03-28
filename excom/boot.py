@@ -10,6 +10,10 @@ import frappe
 
 def boot_session(bootinfo: dict) -> None:
 	"""Extend Frappe boot with Excom push configuration."""
+	relay_url = frappe.conf.get("push_relay_server_url")
+	if relay_url:
+		bootinfo.push_relay_server_url = relay_url
+
 	try:
 		settings = frappe.get_single("Excom Settings")
 	except Exception:

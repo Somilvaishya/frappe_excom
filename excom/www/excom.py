@@ -32,6 +32,9 @@ def get_context(context):
     except Exception as e:
         raise frappe.SessionBootFailed from e
 
+    # Web push: frappe-push-notification.js reads this for the v15 relay (Raven-style).
+    boot["push_relay_server_url"] = frappe.conf.get("push_relay_server_url")
+
     boot_json = frappe.as_json(boot, indent=None, separators=(",", ":"))
     boot_json = SCRIPT_TAG_PATTERN.sub("", boot_json)
     boot_json = CLOSING_SCRIPT_TAG_PATTERN.sub("", boot_json)
@@ -74,6 +77,8 @@ def get_boot():
         boot = frappe.sessions.get()
     except Exception as e:
         raise frappe.SessionBootFailed from e
+
+    boot["push_relay_server_url"] = frappe.conf.get("push_relay_server_url")
 
     boot_json = frappe.as_json(boot, indent=None, separators=(",", ":"))
     boot_json = SCRIPT_TAG_PATTERN.sub("", boot_json)

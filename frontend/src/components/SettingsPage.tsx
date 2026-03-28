@@ -64,7 +64,8 @@ export function SettingsPage({ onNavigateBack }: SettingsPageProps) {
   const [pushBusy, setPushBusy] = useState(false);
   const [fcmRegistered, setFcmRegistered] = useState(false);
 
-  const checkFcmLocal = useCallback(() => {
+  /** Relay stores the token under this key (Firebase Messaging is used only as the browser API; site uses Frappe relay). */
+  const checkRelayTokenLocal = useCallback(() => {
     try {
       const v =
         typeof localStorage !== "undefined" &&
@@ -79,8 +80,8 @@ export function SettingsPage({ onNavigateBack }: SettingsPageProps) {
     setNotifPerm(
       typeof Notification !== "undefined" ? Notification.permission : "denied"
     );
-    checkFcmLocal();
-  }, [checkFcmLocal]);
+    checkRelayTokenLocal();
+  }, [checkRelayTokenLocal]);
 
   const copyText = (label: string, text: string) => {
     void navigator.clipboard.writeText(text);
@@ -108,7 +109,7 @@ export function SettingsPage({ onNavigateBack }: SettingsPageProps) {
       }
       const result = await helper.enableNotification();
       setNotifPerm(Notification.permission);
-      checkFcmLocal();
+      checkRelayTokenLocal();
       if (result.permission_granted) {
         toast.success("Push notifications enabled for this browser.");
         await refreshPushFlag();
@@ -130,7 +131,7 @@ export function SettingsPage({ onNavigateBack }: SettingsPageProps) {
     setPushBusy(true);
     try {
       await window.frappePushNotification?.disableNotification();
-      checkFcmLocal();
+      checkRelayTokenLocal();
       toast.success("This device was unsubscribed from push.");
     } catch {
       toast.error("Could not disable push on this device.");
@@ -208,9 +209,10 @@ export function SettingsPage({ onNavigateBack }: SettingsPageProps) {
             Browser notifications
           </div>
           <p className="text-sm text-zinc-400 mb-4">
-            Allow notifications so new inbound messages can alert you with sound,
-            desktop banners, and favicon badges when the tab is in the
-            background.
+            Excom uses the same{" "}
+            <span className="text-zinc-300 font-medium">Push Notification relay</span> as
+            desk (Push Notification Settings). You still need to subscribe this browser: grant permission
+            below so your device registers with the relay.
           </p>
           <div className="flex flex-wrap items-center gap-3 mb-4 text-sm">
             <span className="text-zinc-500">Browser permission:</span>
@@ -226,18 +228,25 @@ export function SettingsPage({ onNavigateBack }: SettingsPageProps) {
               {permLabel}
             </span>
             <span className="text-zinc-600">·</span>
-            <span className="text-zinc-500">Server push relay:</span>
+            <span className="text-zinc-500">Server relay:</span>
             <span
               className={serverPushEnabled ? "text-emerald-400" : "text-zinc-500"}
             >
-              {serverPushEnabled ? "Enabled" : "Off (desk: Push Notification Settings)"}
+              {serverPushEnabled ? "On (desk)" : "Off — enable in Push Notification Settings"}
             </span>
             <span className="text-zinc-600">·</span>
-            <span className="text-zinc-500">FCM on this device:</span>
+            <span className="text-zinc-500">This browser:</span>
             <span className={fcmRegistered ? "text-emerald-400" : "text-zinc-500"}>
-              {fcmRegistered ? "Registered" : "Not registered"}
+              {fcmRegistered ? "Subscribed" : "Not subscribed"}
             </span>
           </div>
+          {serverPushEnabled && notifPerm === "granted" && !fcmRegistered && (
+            <p className="text-xs text-amber-400/90 mb-4">
+              Permission alone does not register you. Tap &quot;Allow push notifications&quot; to complete
+              relay registration (requires <code className="text-zinc-400">push_relay_server_url</code> in site
+              config, same as Raven).
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => void handleEnablePush()}
