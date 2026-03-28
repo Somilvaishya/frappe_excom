@@ -10,7 +10,7 @@ from typing import Optional
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 
 def _check_broadcast_access() -> None:
@@ -65,6 +65,7 @@ def get_broadcasts(
                sl.list_name AS subscriber_list_name,
                b.channel, b.status, b.docstatus,
                b.wa_template, b.email_subject,
+               b.scheduled_at,
                b.total_recipients, b.sent_count, b.failed_count,
                b.creation, b.modified
         FROM `tabExcom Broadcast` b
@@ -103,6 +104,7 @@ def create_broadcast(
     email_body: str = "",
     sender_email_account: str = "",
     sender_company: str = "",
+    scheduled_at: str = "",
 ) -> dict:
     """
     Create a new broadcast in Draft state.
@@ -124,6 +126,10 @@ def create_broadcast(
         if isinstance(parsed_slots, list) and len(parsed_slots) > 0:
             mode_final = "mixed"
 
+    sched = (scheduled_at or "").strip() or None
+    if sched and get_datetime(sched) <= now_datetime():
+        frappe.throw(_("Scheduled At must be in the future"))
+
     doc = frappe.get_doc({
         "doctype": "Excom Broadcast",
         "broadcast_name": broadcast_name,
@@ -142,6 +148,7 @@ def create_broadcast(
         "email_body": email_body,
         "sender_email_account": sender_email_account or None,
         "sender_company": sender_company or None,
+        "scheduled_at": sched,
     })
     doc.insert()
     frappe.db.commit()
@@ -218,6 +225,7 @@ def get_broadcast_detail(broadcast_name: str) -> dict:
         "email_body": doc.email_body,
         "sender_email_account": doc.sender_email_account,
         "sender_company": doc.sender_company,
+        "scheduled_at": str(doc.scheduled_at) if doc.get("scheduled_at") else "",
         "total_recipients": doc.total_recipients,
         "sent_count": doc.sent_count,
         "failed_count": doc.failed_count,

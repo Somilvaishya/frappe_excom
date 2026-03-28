@@ -5,7 +5,7 @@ import json
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 from excom.excom.whatsapp_template_utils import (
     get_body_variable_samples,
@@ -36,6 +36,14 @@ class ExcomBroadcast(Document):
                     _("This WhatsApp template is not linked to the selected channel account (phone number).")
                 )
             self._validate_whatsapp_variables()
+
+    def before_submit(self) -> None:
+        """Ensure a future ``scheduled_at`` when the user schedules a send."""
+        scheduled = self.get("scheduled_at")
+        if scheduled:
+            at = get_datetime(scheduled)
+            if at <= now_datetime():
+                frappe.throw(_("Scheduled At must be in the future"))
 
     def _validate_whatsapp_variables(self) -> None:
         """Validate legacy same/per mode or per-slot JSON (wa_variable_slots)."""
@@ -110,12 +118,18 @@ class ExcomBroadcast(Document):
                     frappe.throw(_("Variable {0}: mapping must be a dotted field path").format(idx + 1))
 
     def on_submit(self):
-        """Queue the broadcast for sending."""
+        """Queue the broadcast for sending, or defer until ``scheduled_at``."""
         active = frappe.db.count(
             "Excom Subscriber",
             {"subscriber_list": self.subscriber_list, "status": "Subscribed"},
         )
         self.db_set("total_recipients", active, update_modified=False)
+
+        scheduled = self.get("scheduled_at")
+        if scheduled and get_datetime(scheduled) > now_datetime():
+            self.db_set("status", "Scheduled", update_modified=False)
+            return
+
         self.db_set("status", "Queued", update_modified=False)
 
         frappe.enqueue(

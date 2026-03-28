@@ -44,6 +44,7 @@ interface BroadcastItem {
   docstatus: number;
   wa_template: string;
   email_subject: string;
+  scheduled_at?: string | null;
   total_recipients: number;
   sent_count: number;
   failed_count: number;
@@ -121,6 +122,7 @@ function emptyVariableSlots(count: number): WaVariableSlotState[] {
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; icon: typeof Clock }> = {
   Draft: { bg: "bg-zinc-500/10", text: "text-zinc-400", icon: Clock },
+  Scheduled: { bg: "bg-violet-500/10", text: "text-violet-400", icon: Timer },
   Queued: { bg: "bg-blue-500/10", text: "text-blue-400", icon: Clock },
   Sending: { bg: "bg-amber-500/10", text: "text-amber-400", icon: Loader2 },
   Completed: { bg: "bg-green-500/10", text: "text-green-400", icon: CheckCircle2 },
@@ -156,6 +158,21 @@ function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.round((seconds % 3600) / 60);
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function localDatetimeInputMin(): string {
+  const n = new Date();
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())}T${p(n.getHours())}:${p(n.getMinutes())}`;
+}
+
+/** Frappe Datetime parse (site timezone) from browser datetime-local value. */
+function frappeDatetimeFromLocalInput(dt: string): string {
+  if (!dt.trim()) return "";
+  const [d, t] = dt.split("T");
+  if (!d || !t) return "";
+  const hm = t.slice(0, 5);
+  return `${d} ${hm}:00`;
 }
 
 interface MetricsData {
@@ -411,7 +428,12 @@ function BroadcastDetailView({
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    if (!detail || detail.status === "Sending") {
+    if (
+      !detail ||
+      detail.status === "Sending" ||
+      detail.status === "Scheduled" ||
+      detail.status === "Queued"
+    ) {
       const interval = setInterval(load, 5000);
       return () => clearInterval(interval);
     }
@@ -457,6 +479,9 @@ function BroadcastDetailView({
                 <h1 className="text-lg font-semibold text-white">{detail.broadcast_name}</h1>
                 <p className="text-xs text-zinc-500">
                   {detail.subscriber_list} &middot; {new Date(detail.creation).toLocaleDateString()}
+                  {detail.scheduled_at
+                    ? ` · Sends ${new Date(detail.scheduled_at).toLocaleString()}`
+                    : ""}
                 </p>
               </div>
             </div>
@@ -535,7 +560,11 @@ function BroadcastDetailView({
           <div className="flex flex-col items-center justify-center h-48 text-center">
             <Clock className="w-10 h-10 text-zinc-600 mb-2" />
             <p className="text-zinc-500 text-sm">
-              {detail.status === "Draft" ? "Submit the broadcast to start sending" : "No delivery logs yet"}
+              {detail.status === "Draft"
+                ? "Submit the broadcast to start sending"
+                : detail.status === "Scheduled" && detail.scheduled_at
+                  ? `Scheduled for ${new Date(detail.scheduled_at).toLocaleString()}`
+                  : "No delivery logs yet"}
             </p>
           </div>
         ) : (
@@ -611,6 +640,9 @@ function ComposeDialog({
   // Email
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
+
+  /** Empty = send immediately after submit */
+  const [scheduleAt, setScheduleAt] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -730,6 +762,8 @@ function ComposeDialog({
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
+      const scheduledAtFrappe = frappeDatetimeFromLocalInput(scheduleAt);
+
       const res = await createBroadcast({
         broadcast_name: name.trim(),
         subscriber_list: subscriberList,
@@ -754,13 +788,18 @@ function ComposeDialog({
         wa_button_urls: channel === "WhatsApp" ? JSON.stringify(buttonUrls.filter(Boolean)) : "[]",
         email_subject: channel === "Email" ? emailSubject : "",
         email_body: channel === "Email" ? emailBody : "",
+        scheduled_at: scheduledAtFrappe,
       });
 
       const bcName = (res as any)?.message?.name;
       if (!bcName) throw new Error("No broadcast name returned");
 
       await submitBroadcast({ broadcast_name: bcName });
-      toast.success("Broadcast submitted — sending started");
+      toast.success(
+        scheduledAtFrappe
+          ? "Broadcast scheduled — it will send at the time you chose"
+          : "Broadcast submitted — sending started"
+      );
       onCreated(bcName);
     } catch (err: any) {
       let msg = "Failed to create broadcast";
@@ -1326,6 +1365,26 @@ function ComposeDialog({
                     <span className="text-sm text-white">{emailSubject}</span>
                   </div>
                 )}
+                <div className="flex justify-between px-4 py-3">
+                  <span className="text-sm text-zinc-400">Send time</span>
+                  <span className="text-sm text-white">
+                    {scheduleAt ? new Date(scheduleAt).toLocaleString() : "Immediately"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300 font-medium block">Schedule send (optional)</label>
+                <p className="text-xs text-zinc-500">
+                  Pick a future date and time in your local timezone, or leave empty to send as soon as you confirm.
+                </p>
+                <input
+                  type="datetime-local"
+                  min={localDatetimeInputMin()}
+                  value={scheduleAt}
+                  onChange={(e) => setScheduleAt(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
+                />
               </div>
 
               {channel === "WhatsApp" && selectedTemplate && (
@@ -1351,7 +1410,9 @@ function ComposeDialog({
                 <div>
                   <p className="text-sm text-amber-400 font-medium">This action cannot be undone</p>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    The broadcast will be sent immediately to all active subscribers in the list.
+                    {scheduleAt
+                      ? "At the scheduled time, Excom will send to all active subscribers on the list."
+                      : "The broadcast will be sent immediately to all active subscribers in the list."}
                   </p>
                 </div>
               </div>
@@ -1389,8 +1450,8 @@ function ComposeDialog({
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>
-                  <Send className="w-4 h-4 mr-1.5" />
-                  Send Broadcast
+                  {scheduleAt ? <Timer className="w-4 h-4 mr-1.5" /> : <Send className="w-4 h-4 mr-1.5" />}
+                  {scheduleAt ? "Schedule broadcast" : "Send broadcast"}
                 </>
               )}
             </Button>
@@ -1482,6 +1543,7 @@ export function BroadcastPage({ onNavigateBack }: { onNavigateBack: () => void }
         >
           <option value="">All Status</option>
           <option value="Draft">Draft</option>
+          <option value="Scheduled">Scheduled</option>
           <option value="Queued">Queued</option>
           <option value="Sending">Sending</option>
           <option value="Completed">Completed</option>
@@ -1556,7 +1618,9 @@ export function BroadcastPage({ onNavigateBack }: { onNavigateBack: () => void }
                     </span>
                   </td>
                   <td className="px-6 py-3 text-right text-xs text-zinc-500">
-                    {new Date(bc.creation).toLocaleDateString()}
+                    {bc.status === "Scheduled" && bc.scheduled_at
+                      ? new Date(bc.scheduled_at).toLocaleString()
+                      : new Date(bc.creation).toLocaleDateString()}
                   </td>
                 </tr>
               ))}

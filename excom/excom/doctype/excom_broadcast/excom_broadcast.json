@@ -87,7 +87,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Draft\nQueued\nSending\nCompleted\nPartially Failed\nFailed",
+   "options": "Draft\nScheduled\nQueued\nSending\nCompleted\nPartially Failed\nFailed",
    "default": "Draft",
    "read_only": 1,
    "in_list_view": 1,

@@ -184,6 +184,7 @@ scheduler_events = {
 		"excom.excom.utils.process_pending_whatsapp_notification_logs",
 		"excom.excom.utils.trigger_whatsapp_notifications_all",
 		"excom.excom.channels.email.inbound.poll_all_email_accounts",
+		"excom.excom.services.broadcast_schedule.process_due_scheduled_broadcasts",
 	],
 	"hourly": [
 		"excom.excom.utils.trigger_whatsapp_notifications_hourly",
