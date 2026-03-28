@@ -85,6 +85,8 @@ app_include_js = "/assets/excom/js/excom_navbar.js"
 after_install = "excom.setup.after_install"
 after_migrate = ["excom.setup.after_migrate"]
 
+boot_session = "excom.boot.boot_session"
+
 # Uninstallation
 # ------------
 
@@ -192,6 +194,9 @@ scheduler_events = {
 		"excom.excom.utils.trigger_whatsapp_notifications_daily_long",
 		"excom.excom.tasks.cleanup.cleanup_stale_identities",
 		"excom.excom.services.identity_hooks.scan_merge_suggestions",
+	],
+	"daily_maintenance": [
+		"excom.excom.scheduler.daily.sync_invalid_tokens",
 	],
 	"weekly": [
 		"excom.excom.utils.trigger_whatsapp_notifications_weekly",

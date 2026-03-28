@@ -1,7 +1,9 @@
-import { Search, MessageCircle, Mail, Phone, Instagram, Bot, UserCheck } from "lucide-react";
+import { Search, MessageCircle, Mail, Phone, Instagram, Bot, UserCheck, Settings } from "lucide-react";
 import { Input } from "../ui/input";
 import { Badge } from "../ui/badge";
 import type { UnifiedContact } from "../../types";
+import { useExcomBranding } from "../../hooks/useBranding";
+import { Button } from "../ui/button";
 import { format } from "date-fns";
 
 interface MobileConversationListProps {
@@ -9,6 +11,7 @@ interface MobileConversationListProps {
   onSelectConversation: (email: string) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  onOpenSettings?: () => void;
 }
 
 const CHANNEL_ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
@@ -30,18 +33,45 @@ export function MobileConversationList({
   onSelectConversation,
   searchQuery,
   onSearchChange,
+  onOpenSettings,
 }: MobileConversationListProps) {
+  const { branding } = useExcomBranding();
+  const gFrom = branding?.logo_gradient_from ?? "#3b82f6";
+  const gTo = branding?.logo_gradient_to ?? "#9333ea";
+
   return (
     <div className="flex flex-col h-full overflow-hidden bg-zinc-950">
       <div className="shrink-0 p-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border-b border-zinc-800">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            style={{
+              background: `linear-gradient(to bottom right, ${gFrom}, ${gTo})`,
+            }}
+          >
             <MessageCircle className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <h1 className="text-lg font-semibold text-white">Excom</h1>
+          <div className="min-w-0 flex-1">
+            {branding?.show_app_name && (
+              <p className="text-[10px] font-semibold tracking-wider uppercase text-zinc-500 truncate mb-0.5">
+                {branding.app_name || "Excom"}
+              </p>
+            )}
+            <h1 className="text-lg font-semibold text-white leading-tight">Excom</h1>
             <p className="text-xs text-zinc-400">On-the-go messaging</p>
           </div>
+          {onOpenSettings && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 text-zinc-400 hover:text-white"
+              onClick={onOpenSettings}
+              aria-label="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </Button>
+          )}
         </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />

@@ -54,6 +54,11 @@ def get_context(context):
 
     context["sitename"] = boot.get("sitename")
 
+    favicon = frappe.get_website_settings("favicon")
+    context["icon_96"] = favicon or "/assets/excom/excom/manifest/favicon-96x96.png"
+    context["apple_touch_icon"] = favicon or "/assets/excom/excom/manifest/apple-touch-icon.png"
+    context["favicon_svg"] = favicon or "/assets/excom/excom/manifest/favicon.svg"
+
     return context
 
 

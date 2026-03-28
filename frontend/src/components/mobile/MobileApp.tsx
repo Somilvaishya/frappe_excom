@@ -12,9 +12,13 @@ type View = "list" | "conversation" | "call" | "contact" | "contacts_tab" | "cal
 
 interface MobileAppProps {
   unifiedContacts: UnifiedContact[];
+  onOpenSettings?: () => void;
 }
 
-export function MobileApp({ unifiedContacts }: MobileAppProps) {
+export function MobileApp({
+  unifiedContacts,
+  onOpenSettings,
+}: MobileAppProps) {
   const [currentView, setCurrentView] = useState<View>("list");
   const [activeTab, setActiveTab] = useState<"chats" | "calls" | "contacts">("chats");
   const [selectedContactEmail, setSelectedContactEmail] = useState<string | null>(null);
@@ -67,6 +71,7 @@ export function MobileApp({ unifiedContacts }: MobileAppProps) {
             onSelectConversation={handleSelectContact}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
+            onOpenSettings={onOpenSettings}
           />
         </div>
       )}

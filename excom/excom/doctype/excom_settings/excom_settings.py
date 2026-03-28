@@ -1,11 +1,20 @@
 import frappe
+from frappe import _
 from frappe.model.document import Document
 
 
 class ExcomSettings(Document):
-	def validate(self):
+	def validate(self) -> None:
 		if self.auto_cleanup_enabled and (not self.cleanup_retention_days or self.cleanup_retention_days < 1):
 			self.cleanup_retention_days = 1
+
+		if getattr(self, "push_notification_service", None) == "Excom Cloud":
+			if not self.push_notification_server_url:
+				frappe.throw(_("Please enter the Push Notification Server URL"))
+			if not self.push_notification_api_key:
+				frappe.throw(_("Please enter the Push Notification API Key"))
+			if not self.push_notification_api_secret:
+				frappe.throw(_("Please enter the Push Notification API Secret"))
 
 
 @frappe.whitelist()
@@ -20,8 +29,11 @@ def get_branding() -> dict:
 	}
 
 	if result["show_app_name"]:
-		result["app_name"] = frappe.db.get_single_value(
-			"Website Settings", "app_name"
-		) or ""
+		ws_name = frappe.db.get_single_value("Website Settings", "app_name")
+		sys_name = frappe.get_system_settings("app_name")
+		name = (ws_name or sys_name or "").strip()
+		if not name or name == "Frappe":
+			name = "Excom"
+		result["app_name"] = name
 
 	return result

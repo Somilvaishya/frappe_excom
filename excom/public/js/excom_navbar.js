@@ -32,12 +32,12 @@ function addToNavbar(cfg, helpMenu) {
     <li class="nav-item d-none d-sm-block">
       <a class="nav-link excom-navbar-btn" href="/excom"
          title="Open Excom Inbox"
-         style="display:flex;align-items:center;gap:6px;padding:4px 12px;margin:4px 2px;border-radius:8px;background:linear-gradient(135deg,${gradFrom},${gradTo});color:#fff;font-weight:600;font-size:12px;text-decoration:none;transition:opacity .2s;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         aria-label="Open Excom Inbox"
+         style="display:flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem;padding:0;margin:4px 6px;border-radius:9px;background:linear-gradient(135deg,${gradFrom},${gradTo});color:#fff;text-decoration:none;transition:opacity .2s;flex-shrink:0;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
-        Excom
       </a>
     </li>
   `);

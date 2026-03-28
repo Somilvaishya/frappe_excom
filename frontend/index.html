@@ -5,8 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>{{ app_name }}</title>
   <meta name="description" content="Omnichannel External Communication Platform">
+
+  <!-- PWA theme -->
   <meta name="theme-color" content="#0b141a">
-  <link rel="icon" type="image/svg+xml" href="/assets/excom/excom/manifest/favicon.svg">
+  <meta name="msapplication-TileColor" content="#0b141a">
+
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ apple_touch_icon }}">
+  <link rel="icon" type="image/png" sizes="96x96" href="{{ icon_96 }}">
+  <link rel="icon" type="image/svg+xml" href="{{ favicon_svg }}">
+
+  <!-- iOS PWA: Add to Home Screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="{{ app_name }}">
+  <meta name="apple-touch-fullscreen" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="screen-orientation" content="portrait">
+
+  <!-- {{ preload_links }} -->
 </head>
 <body>
   <div id="root"></div>

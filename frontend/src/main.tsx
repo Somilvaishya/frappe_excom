@@ -3,6 +3,33 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
+// @ts-ignore -- plain JS module from public/
+import FrappePushNotification from "../public/frappe-push-notification";
+
+function registerServiceWorker() {
+  // @ts-ignore
+  window.frappePushNotification = new FrappePushNotification("excom");
+
+  if ("serviceWorker" in navigator) {
+    // @ts-ignore
+    window.frappePushNotification
+      .appendConfigToServiceWorkerURL("/assets/excom/excom/sw.js")
+      .then((url: string) => {
+        navigator.serviceWorker
+          .register(url, { type: "classic" })
+          .then((registration: ServiceWorkerRegistration) => {
+            // @ts-ignore
+            window.frappePushNotification.initialize(registration).then(() => {
+              console.info("Excom Push Notification initialized");
+            });
+          });
+      })
+      .catch((err: unknown) => {
+        console.error("Failed to register service worker", err);
+      });
+  }
+}
+
 if (import.meta.env.DEV) {
   fetch("/api/method/excom.www.excom.get_context_for_dev", {
     method: "POST",
@@ -14,6 +41,7 @@ if (import.meta.env.DEV) {
       if (!window.frappe) window.frappe = {};
       // @ts-expect-error
       window.frappe.boot = v;
+      registerServiceWorker();
       ReactDOM.createRoot(
         document.getElementById("root") as HTMLElement
       ).render(
@@ -23,6 +51,7 @@ if (import.meta.env.DEV) {
       );
     });
 } else {
+  registerServiceWorker();
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
       <App />

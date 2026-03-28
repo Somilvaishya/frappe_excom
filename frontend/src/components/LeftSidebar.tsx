@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, MessageCircle, ChevronDown, Tag, X, Users, Shield, GitMerge, Cog, Plus, Radio } from "lucide-react";
+import { Search, MessageCircle, ChevronDown, Tag, X, Users, Shield, GitMerge, Cog, Plus, Radio, Settings } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import {
@@ -9,14 +9,8 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { useTags } from "../hooks/useTags";
-import { useFrappePostCall, useFrappeGetCall } from "frappe-react-sdk";
-
-interface BrandingData {
-  logo_gradient_from: string;
-  logo_gradient_to: string;
-  show_app_name: boolean;
-  app_name: string;
-}
+import { useFrappePostCall } from "frappe-react-sdk";
+import { useExcomBranding } from "../hooks/useBranding";
 
 interface BroadcastFilterItem {
   name: string;
@@ -43,6 +37,7 @@ interface LeftSidebarProps {
   onNavigateToMergeSuggestions?: () => void;
   onNavigateToSubscriberRules?: () => void;
   onNavigateToBroadcasts?: () => void;
+  onNavigateToSettings?: () => void;
   selectedTeamFilter?: string;
   onTeamFilterChange?: (team: string) => void;
   onNewConversation?: () => void;
@@ -74,6 +69,7 @@ export function LeftSidebar({
   onNavigateToMergeSuggestions,
   onNavigateToSubscriberRules,
   onNavigateToBroadcasts,
+  onNavigateToSettings,
   selectedTeamFilter = "",
   onTeamFilterChange,
   onNewConversation,
@@ -87,10 +83,7 @@ export function LeftSidebar({
   const [mergeBadge, setMergeBadge] = useState(0);
   const { call: fetchMyTeams } = useFrappePostCall("excom.excom.api.teams.get_my_teams");
   const { call: fetchMergeCount } = useFrappePostCall("excom.excom.api.merge_suggestions.get_suggestion_count");
-  const { data: brandingRaw } = useFrappeGetCall<{ message: BrandingData }>(
-    "excom.excom.doctype.excom_settings.excom_settings.get_branding"
-  );
-  const branding = brandingRaw?.message;
+  const { branding } = useExcomBranding();
   const [recentBroadcasts, setRecentBroadcasts] = useState<BroadcastFilterItem[]>([]);
   const [showBroadcastFilter, setShowBroadcastFilter] = useState(false);
   const { call: fetchRecentBroadcasts } = useFrappePostCall("excom.excom.api.chat.get_recent_broadcasts_for_filter");
@@ -109,9 +102,9 @@ export function LeftSidebar({
   return (
     <div className="w-64 bg-gradient-to-b from-zinc-900 to-zinc-950 border-r border-zinc-800 flex flex-col h-full shrink-0 overflow-hidden">
       <div className="shrink-0 p-4 border-b border-zinc-800">
-        {branding?.show_app_name && branding.app_name && (
+        {branding?.show_app_name && (
           <div className="mb-3 text-[11px] font-semibold tracking-wider uppercase text-zinc-400">
-            {branding.app_name}
+            {branding.app_name || "Excom"}
           </div>
         )}
         <div className="flex items-center gap-3 mb-6">
@@ -389,6 +382,16 @@ export function LeftSidebar({
             >
               <Radio className="w-4 h-4 text-emerald-400" />
               Broadcasts
+            </button>
+          )}
+
+          {onNavigateToSettings && (
+            <button
+              onClick={onNavigateToSettings}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+            >
+              <Settings className="w-4 h-4 text-zinc-400" />
+              Settings
             </button>
           )}
         </div>

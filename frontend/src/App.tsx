@@ -12,13 +12,21 @@ import { TeamManagementPage } from "./components/TeamManagementPage";
 import { MergeSuggestionsPage } from "./components/MergeSuggestionsPage";
 import { SubscriberRulesPage } from "./components/SubscriberRulesPage";
 import { BroadcastPage } from "./components/BroadcastPage";
+import { SettingsPage } from "./components/SettingsPage";
 import { NewConversationDialog } from "./components/NewConversationDialog";
 import { useThreads } from "./hooks/useContacts";
 import { useRealtimeThreads } from "./hooks/useRealtimeThreads";
 import { useNotifications } from "./hooks/useNotifications";
 import type { UnifiedContact, Conversation } from "./types";
 
-type AppPage = "inbox" | "subscribers" | "teams" | "merge_suggestions" | "subscriber_rules" | "broadcasts";
+type AppPage =
+  | "inbox"
+  | "subscribers"
+  | "teams"
+  | "merge_suggestions"
+  | "subscriber_rules"
+  | "broadcasts"
+  | "settings";
 
 const getSiteName = (): string => {
   // Priority: frappe boot → env var → current hostname
@@ -155,8 +163,21 @@ function ExcomDashboard() {
     [refreshThreads]
   );
 
+  if (currentPage === "settings") {
+    return (
+      <div className="h-full min-h-0 w-full flex flex-col">
+        <SettingsPage onNavigateBack={() => setCurrentPage("inbox")} />
+      </div>
+    );
+  }
+
   if (isMobile) {
-    return <MobileApp unifiedContacts={unifiedContacts} />;
+    return (
+      <MobileApp
+        unifiedContacts={unifiedContacts}
+        onOpenSettings={() => setCurrentPage("settings")}
+      />
+    );
   }
 
   if (currentPage === "subscribers") {
@@ -208,6 +229,7 @@ function ExcomDashboard() {
         onNavigateToMergeSuggestions={() => setCurrentPage("merge_suggestions")}
         onNavigateToSubscriberRules={() => setCurrentPage("subscriber_rules")}
         onNavigateToBroadcasts={() => setCurrentPage("broadcasts")}
+        onNavigateToSettings={() => setCurrentPage("settings")}
         selectedTeamFilter={selectedTeamFilter}
         onTeamFilterChange={setSelectedTeamFilter}
         selectedBroadcast={selectedBroadcast}

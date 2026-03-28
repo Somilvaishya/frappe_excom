@@ -151,6 +151,8 @@ def ingest_inbound_message(
         after_commit=True,
     )
 
+    _schedule_push_notification(thread_name, msg.name)
+
     try:
         from excom.excom.services.broadcast_metrics import attribute_inbound_reply
         attribute_inbound_reply(msg.name, reply_to_provider_id, message_type, content_text)
@@ -160,6 +162,21 @@ def ingest_inbound_message(
     frappe.db.commit()
 
     return msg.name
+
+
+def _schedule_push_notification(thread_name: str, message_name: str) -> None:
+    """Schedule push notification delivery after the HTTP response completes."""
+    try:
+        from excom.excom.notification import send_push_for_inbound_message
+
+        if frappe.request and hasattr(frappe.request, "after_response"):
+            frappe.request.after_response.add(
+                lambda: send_push_for_inbound_message(thread_name, message_name)
+            )
+        else:
+            send_push_for_inbound_message(thread_name, message_name)
+    except Exception:
+        frappe.log_error(title="Excom: failed to schedule push notification")
 
 
 def _auto_claim_thread(thread, user: str) -> bool:

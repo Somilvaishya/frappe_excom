@@ -18,7 +18,18 @@
   "auto_cleanup_enabled",
   "cleanup_retention_days",
   "column_break_cleanup",
-  "cleanup_channels"
+  "cleanup_channels",
+  "mobile_app_tab",
+  "oauth_client",
+  "push_notifications_tab",
+  "push_notification_service",
+  "push_notification_server_url",
+  "column_break_push",
+  "push_notification_api_key",
+  "push_notification_api_secret",
+  "push_config_section",
+  "push_config",
+  "vapid_public_key"
  ],
  "fields": [
   {
@@ -113,6 +124,76 @@
    "fieldname": "cleanup_channels",
    "fieldtype": "Small Text",
    "label": "Cleanup Channels"
+  },
+  {
+   "fieldname": "mobile_app_tab",
+   "fieldtype": "Tab Break",
+   "label": "Mobile App"
+  },
+  {
+   "description": "OAuth Client used by the Excom mobile app for authentication. Click 'Create OAuth Client' in api/mobile.py to set up automatically.",
+   "fieldname": "oauth_client",
+   "fieldtype": "Link",
+   "label": "OAuth Client",
+   "options": "OAuth Client"
+  },
+  {
+   "fieldname": "push_notifications_tab",
+   "fieldtype": "Tab Break",
+   "label": "Push Notifications"
+  },
+  {
+   "default": "Frappe Cloud",
+   "description": "Choose the push notification delivery service. 'Frappe Cloud' uses the built-in Frappe relay. 'Excom Cloud' uses a self-hosted push server.",
+   "fieldname": "push_notification_service",
+   "fieldtype": "Select",
+   "label": "Push Notification Service",
+   "options": "Frappe Cloud\nExcom Cloud"
+  },
+  {
+   "depends_on": "eval:doc.push_notification_service=='Excom Cloud'",
+   "description": "URL of the Excom Cloud push notification server.",
+   "fieldname": "push_notification_server_url",
+   "fieldtype": "Data",
+   "label": "Push Notification Server URL"
+  },
+  {
+   "fieldname": "column_break_push",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.push_notification_service=='Excom Cloud'",
+   "description": "API Key for authenticating with the Excom Cloud push server.",
+   "fieldname": "push_notification_api_key",
+   "fieldtype": "Data",
+   "label": "Push Notification API Key"
+  },
+  {
+   "depends_on": "eval:doc.push_notification_service=='Excom Cloud'",
+   "description": "API Secret for authenticating with the Excom Cloud push server.",
+   "fieldname": "push_notification_api_secret",
+   "fieldtype": "Password",
+   "label": "Push Notification API Secret"
+  },
+  {
+   "fieldname": "push_config_section",
+   "fieldtype": "Section Break",
+   "hidden": 1,
+   "label": "Push Configuration"
+  },
+  {
+   "fieldname": "push_config",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Push Config",
+   "read_only": 1
+  },
+  {
+   "fieldname": "vapid_public_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "VAPID Public Key",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,

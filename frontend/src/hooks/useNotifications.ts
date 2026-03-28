@@ -144,13 +144,6 @@ function playNotificationSound() {
 
 // ── Browser push notifications ───────────────────────────────────
 
-function requestNotificationPermission() {
-  if (!("Notification" in window)) return;
-  if (Notification.permission === "default") {
-    Notification.requestPermission();
-  }
-}
-
 function showDesktopNotification(title: string, body: string) {
   if (!("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
@@ -159,7 +152,7 @@ function showDesktopNotification(title: string, body: string) {
   try {
     const n = new Notification(title, {
       body,
-      icon: "/assets/excom/excom/manifest/icon-192.png",
+      icon: "/assets/excom/excom/manifest/android-chrome-192x192.png",
       tag: "excom-new-message",
       renotify: true,
       silent: true,
@@ -191,7 +184,6 @@ export function useNotifications(totalUnread: number) {
   useEffect(() => {
     getOriginalFavicon();
     drawBadgeFavicon(totalUnread);
-    requestNotificationPermission();
   }, []);
 
   useEffect(() => {
