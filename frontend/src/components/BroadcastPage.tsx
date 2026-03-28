@@ -100,6 +100,25 @@ interface SubscriberField {
   label: string;
 }
 
+/** Matches Excom Broadcast.wa_variable_slots JSON (server: kind literal | subscriber_field). */
+type WaVariableSlotKind = "literal" | "subscriber_field";
+
+interface WaVariableSlotState {
+  kind: WaVariableSlotKind;
+  /** Used when kind === "literal" */
+  value: string;
+  /** subscriber_variable_fields value when kind === "subscriber_field" */
+  field: string;
+}
+
+function emptyVariableSlots(count: number): WaVariableSlotState[] {
+  return Array.from({ length: count }, () => ({
+    kind: "literal",
+    value: "",
+    field: "",
+  }));
+}
+
 const STATUS_STYLES: Record<string, { bg: string; text: string; icon: typeof Clock }> = {
   Draft: { bg: "bg-zinc-500/10", text: "text-zinc-400", icon: Clock },
   Queued: { bg: "bg-blue-500/10", text: "text-blue-400", icon: Clock },
@@ -579,9 +598,7 @@ function ComposeDialog({
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
   const [templateSearch, setTemplateSearch] = useState("");
   const [selectedLanguage, setSelectedLanguage] = useState("");
-  const [variableMode, setVariableMode] = useState<"same_for_all" | "per_subscriber">("same_for_all");
-  const [variables, setVariables] = useState<string[]>([]);
-  const [variableMapping, setVariableMapping] = useState<string[]>([]);
+  const [variableSlots, setVariableSlots] = useState<WaVariableSlotState[]>([]);
   const [buttonUrls, setButtonUrls] = useState<string[]>([]);
   const [subscriberFields, setSubscriberFields] = useState<SubscriberField[]>([]);
   const [headerMediaUrl, setHeaderMediaUrl] = useState("");
@@ -659,27 +676,31 @@ function ComposeDialog({
   const needsMedia = selectedTemplate?.header_type === "IMAGE" || selectedTemplate?.header_type === "DOCUMENT";
 
   const canProceedStep1 = name.trim() && subscriberList;
+  const variableSlotsComplete =
+    !selectedTemplate ||
+    selectedTemplate.variable_count === 0 ||
+    (variableSlots.length === selectedTemplate.variable_count &&
+      variableSlots.every((slot) =>
+        slot.kind === "literal"
+          ? slot.value.trim() !== ""
+          : slot.field.trim() !== ""
+      ));
+
   const canProceedStep2 = channel === "WhatsApp"
-    ? selectedTemplate && (!needsMedia || headerMediaUrl) && waChannelAccount && (
-        variableMode === "per_subscriber"
-          ? variableMapping.every((m) => !!m)
-          : true
-      )
+    ? selectedTemplate && (!needsMedia || headerMediaUrl) && waChannelAccount && variableSlotsComplete
     : emailSubject.trim() && emailBody.trim();
 
   const getPreview = (): string => {
     if (!selectedTemplate) return "";
     let text = selectedTemplate.template || "";
-    if (variableMode === "per_subscriber") {
-      variableMapping.forEach((mapped, i) => {
-        const field = subscriberFields.find((f) => f.value === mapped);
-        text = text.replace(`{{${i + 1}}}`, field ? `{${field.label}}` : `{{${i + 1}}}`);
-      });
-    } else {
-      variables.forEach((val, i) => {
-        text = text.replace(`{{${i + 1}}}`, val || `{{${i + 1}}}`);
-      });
-    }
+    variableSlots.forEach((slot, i) => {
+      if (slot.kind === "subscriber_field") {
+        const sf = subscriberFields.find((f) => f.value === slot.field);
+        text = text.replace(`{{${i + 1}}}`, sf ? `{${sf.label}}` : `{{${i + 1}}}`);
+      } else {
+        text = text.replace(`{{${i + 1}}}`, slot.value || `{{${i + 1}}}`);
+      }
+    });
     return text;
   };
 
@@ -693,9 +714,19 @@ function ComposeDialog({
         wa_channel_account: channel === "WhatsApp" ? waChannelAccount : "",
         wa_template: channel === "WhatsApp" ? selectedTemplate?.name : "",
         wa_language_code: channel === "WhatsApp" ? selectedLanguage : "",
-        wa_variable_mode: channel === "WhatsApp" ? variableMode : "same_for_all",
-        wa_template_variables: channel === "WhatsApp" && variableMode === "same_for_all" ? JSON.stringify(variables) : "[]",
-        wa_variable_mapping: channel === "WhatsApp" && variableMode === "per_subscriber" ? JSON.stringify(variableMapping) : "[]",
+        wa_variable_mode: channel === "WhatsApp" ? "same_for_all" : "same_for_all",
+        wa_variable_slots:
+          channel === "WhatsApp"
+            ? JSON.stringify(
+                variableSlots.map((s) =>
+                  s.kind === "literal"
+                    ? { kind: "literal", value: s.value }
+                    : { kind: "subscriber_field", field: s.field }
+                )
+              )
+            : "",
+        wa_template_variables: "[]",
+        wa_variable_mapping: "[]",
         wa_header_media: channel === "WhatsApp" ? headerMediaUrl : "",
         wa_button_urls: channel === "WhatsApp" ? JSON.stringify(buttonUrls.filter(Boolean)) : "[]",
         email_subject: channel === "Email" ? emailSubject : "",
@@ -889,9 +920,7 @@ function ComposeDialog({
                           onClick={() => {
                             setSelectedTemplate(t);
                             setSelectedLanguage(t.language_code);
-                            setVariables(new Array(t.variable_count).fill(""));
-                            setVariableMapping(new Array(t.variable_count).fill(""));
-                            setVariableMode("same_for_all");
+                            setVariableSlots(emptyVariableSlots(t.variable_count));
                             setHeaderMediaUrl("");
                             setHeaderFileName("");
                             const dynBtns = (t.buttons || []).filter(
@@ -964,8 +993,7 @@ function ComposeDialog({
                               );
                               if (match && match.name !== selectedTemplate.name) {
                                 setSelectedTemplate(match);
-                                setVariables(new Array(match.variable_count).fill(""));
-                                setVariableMapping(new Array(match.variable_count).fill(""));
+                                setVariableSlots(emptyVariableSlots(match.variable_count));
                               }
                             }}
                             className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
@@ -1035,72 +1063,100 @@ function ComposeDialog({
                     </div>
                   )}
 
-                  {/* Variables — mode toggle + inputs */}
+                  {/* Variables — per-slot: same value for everyone vs subscriber field */}
                   {selectedTemplate.variable_count > 0 && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-zinc-400 font-medium">Template Variables</p>
-                        <div className="flex gap-1 bg-zinc-800 rounded-lg p-0.5">
-                          <button
-                            onClick={() => setVariableMode("same_for_all")}
-                            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-                              variableMode === "same_for_all" ? "bg-zinc-700 text-white" : "text-zinc-500 hover:text-zinc-300"
-                            }`}
-                          >
-                            Same for all
-                          </button>
-                          <button
-                            onClick={() => setVariableMode("per_subscriber")}
-                            className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
-                              variableMode === "per_subscriber" ? "bg-zinc-700 text-white" : "text-zinc-500 hover:text-zinc-300"
-                            }`}
-                          >
-                            Per subscriber
-                          </button>
-                        </div>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-xs text-zinc-400 font-medium">Template variables</p>
+                        <p className="text-[11px] text-zinc-500 mt-1">
+                          Choose for each <code className="text-zinc-400">{`{{1}}`}</code>,{" "}
+                          <code className="text-zinc-400">{`{{2}}`}</code>, … whether the value is{" "}
+                          <strong className="text-zinc-400">the same for everyone</strong> or{" "}
+                          <strong className="text-zinc-400">different per subscriber</strong>.
+                        </p>
                       </div>
 
-                      {variableMode === "same_for_all" ? (
-                        variables.map((val, idx) => (
-                          <div key={idx}>
-                            <label className="text-xs text-zinc-500 mb-1 block">
+                      {variableSlots.map((slot, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-lg border border-zinc-700/80 bg-zinc-800/40 p-3 space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <label className="text-xs text-zinc-300 font-medium">
                               {labels[idx] || `Variable {{${idx + 1}}}`}
                             </label>
+                            <div className="flex gap-1 bg-zinc-900 rounded-lg p-0.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = [...variableSlots];
+                                  next[idx] = { kind: "literal", value: slot.value, field: "" };
+                                  setVariableSlots(next);
+                                }}
+                                className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
+                                  slot.kind === "literal"
+                                    ? "bg-zinc-700 text-white"
+                                    : "text-zinc-500 hover:text-zinc-300"
+                                }`}
+                              >
+                                Same for everyone
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = [...variableSlots];
+                                  next[idx] = {
+                                    kind: "subscriber_field",
+                                    value: "",
+                                    field: slot.field,
+                                  };
+                                  setVariableSlots(next);
+                                }}
+                                className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${
+                                  slot.kind === "subscriber_field"
+                                    ? "bg-zinc-700 text-white"
+                                    : "text-zinc-500 hover:text-zinc-300"
+                                }`}
+                              >
+                                Per subscriber
+                              </button>
+                            </div>
+                          </div>
+
+                          {slot.kind === "literal" ? (
                             <Input
-                              placeholder={selectedTemplate.sample_variables?.[idx] || `Value for {{${idx + 1}}}`}
-                              value={val}
+                              placeholder={
+                                selectedTemplate.sample_variables?.[idx] ||
+                                `Value for {{${idx + 1}}}`
+                              }
+                              value={slot.value}
                               onChange={(e) => {
-                                const next = [...variables];
-                                next[idx] = e.target.value;
-                                setVariables(next);
+                                const next = [...variableSlots];
+                                next[idx] = { ...next[idx], value: e.target.value };
+                                setVariableSlots(next);
                               }}
                               className="bg-zinc-800 border-zinc-700 text-white"
                             />
-                          </div>
-                        ))
-                      ) : (
-                        variableMapping.map((mapped, idx) => (
-                          <div key={idx}>
-                            <label className="text-xs text-zinc-500 mb-1 block">
-                              {labels[idx] || `Variable {{${idx + 1}}}`}
-                            </label>
+                          ) : (
                             <select
-                              value={mapped}
+                              value={slot.field}
                               onChange={(e) => {
-                                const next = [...variableMapping];
-                                next[idx] = e.target.value;
-                                setVariableMapping(next);
+                                const next = [...variableSlots];
+                                next[idx] = { ...next[idx], field: e.target.value };
+                                setVariableSlots(next);
                               }}
                               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
                             >
-                              <option value="">Select subscriber field...</option>
+                              <option value="">Select subscriber field…</option>
                               {subscriberFields.map((f) => (
-                                <option key={f.value} value={f.value}>{f.label}</option>
+                                <option key={f.value} value={f.value}>
+                                  {f.label}
+                                </option>
                               ))}
                             </select>
-                          </div>
-                        ))
-                      )}
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -1211,7 +1267,15 @@ function ComposeDialog({
                     </div>
                     <div className="flex justify-between px-4 py-3">
                       <span className="text-sm text-zinc-400">Variables</span>
-                      <span className="text-sm text-white capitalize">{variableMode.replace("_", " ")}</span>
+                      <span className="text-sm text-white text-right">
+                        {selectedTemplate.variable_count === 0
+                          ? "None"
+                          : (() => {
+                              const same = variableSlots.filter((s) => s.kind === "literal").length;
+                              const per = variableSlots.filter((s) => s.kind === "subscriber_field").length;
+                              return `${same} same for everyone · ${per} per subscriber`;
+                            })()}
+                      </span>
                     </div>
                   </>
                 )}

@@ -252,17 +252,11 @@ def _send_whatsapp_to_subscriber(broadcast, omni_identity_name: str) -> bool:
 
     template = frappe.get_doc("WhatsApp Templates", broadcast.wa_template)
 
-    variable_mode = broadcast.get("wa_variable_mode") or "same_for_all"
     header_media = broadcast.get("wa_header_media") or ""
     button_urls = json.loads(broadcast.get("wa_button_urls") or "[]")
     language_code = broadcast.get("wa_language_code") or template.language_code or "en_US"
 
-    if variable_mode == "per_subscriber":
-        mapping = json.loads(broadcast.get("wa_variable_mapping") or "[]")
-        context = _build_subscriber_context(omni_identity_name)
-        variables = _resolve_variable_mapping(mapping, context)
-    else:
-        variables = json.loads(broadcast.get("wa_template_variables") or "[]")
+    variables = _resolve_whatsapp_body_variables(broadcast, omni_identity_name)
 
     from excom.excom.api.chat import _build_template_components
 
@@ -301,6 +295,53 @@ def _send_whatsapp_to_subscriber(broadcast, omni_identity_name: str) -> bool:
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
+
+def _resolve_whatsapp_body_variables(broadcast, omni_identity_name: str) -> list[str]:
+    """Build ordered body variable values for WhatsApp template send.
+
+    Prefer ``wa_variable_slots`` (per-variable literal vs subscriber field). If
+    absent, use legacy ``wa_variable_mode`` + template_variables / mapping.
+    """
+    slots_raw = (broadcast.get("wa_variable_slots") or "").strip()
+    if slots_raw:
+        try:
+            slots = json.loads(slots_raw)
+        except json.JSONDecodeError:
+            slots = []
+        if isinstance(slots, list) and len(slots) > 0:
+            context = _build_subscriber_context(omni_identity_name)
+            return _resolve_variable_slots(slots, context)
+
+    variable_mode = broadcast.get("wa_variable_mode") or "same_for_all"
+    if variable_mode == "per_subscriber":
+        mapping = json.loads(broadcast.get("wa_variable_mapping") or "[]")
+        context = _build_subscriber_context(omni_identity_name)
+        return _resolve_variable_mapping(mapping, context)
+
+    return json.loads(broadcast.get("wa_template_variables") or "[]")
+
+
+def _resolve_variable_slots(slots: list, context: dict) -> list[str]:
+    """Resolve per-slot definitions to a list of strings for Meta body parameters."""
+    values: list[str] = []
+    for slot in slots:
+        if not isinstance(slot, dict):
+            values.append("")
+            continue
+        kind = slot.get("kind")
+        if kind == "literal":
+            values.append(str(slot.get("value", "") or ""))
+        elif kind == "subscriber_field":
+            path = (slot.get("field") or "").strip()
+            if path and "." in path:
+                resolved = _resolve_variable_mapping([path], context)
+                values.append(resolved[0] if resolved else "")
+            else:
+                values.append("")
+        else:
+            values.append(str(slot.get("value", "") or ""))
+    return values
 
 
 def _resolve_variable_mapping(mapping: list, context: dict) -> list:

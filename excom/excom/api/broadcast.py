@@ -94,6 +94,7 @@ def create_broadcast(
     wa_template: str = "",
     wa_language_code: str = "",
     wa_variable_mode: str = "same_for_all",
+    wa_variable_slots: str = "",
     wa_template_variables: str = "[]",
     wa_variable_mapping: str = "[]",
     wa_header_media: str = "",
@@ -111,6 +112,18 @@ def create_broadcast(
     """
     _check_broadcast_access()
 
+    slots_final = (wa_variable_slots or "").strip() if wa_template else ""
+    if wa_template and not slots_final:
+        slots_final = "[]"
+    mode_final = wa_variable_mode if wa_template else "same_for_all"
+    if wa_template and slots_final:
+        try:
+            parsed_slots = json.loads(slots_final)
+        except json.JSONDecodeError:
+            frappe.throw(_("wa_variable_slots must be valid JSON"))
+        if isinstance(parsed_slots, list) and len(parsed_slots) > 0:
+            mode_final = "mixed"
+
     doc = frappe.get_doc({
         "doctype": "Excom Broadcast",
         "broadcast_name": broadcast_name,
@@ -119,7 +132,8 @@ def create_broadcast(
         "wa_channel_account": wa_channel_account or None,
         "wa_template": wa_template or None,
         "wa_language_code": wa_language_code if wa_template else "",
-        "wa_variable_mode": wa_variable_mode if wa_template else "same_for_all",
+        "wa_variable_mode": mode_final,
+        "wa_variable_slots": slots_final if wa_template else "",
         "wa_template_variables": wa_template_variables if wa_template else "[]",
         "wa_variable_mapping": wa_variable_mapping if wa_template else "[]",
         "wa_header_media": wa_header_media if wa_template else "",

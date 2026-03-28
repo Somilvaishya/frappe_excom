@@ -18,6 +18,7 @@
   "wa_template",
   "wa_language_code",
   "wa_variable_mode",
+  "wa_variable_slots",
   "wa_template_variables",
   "wa_variable_mapping",
   "wa_header_media",
@@ -132,24 +133,31 @@
    "fieldname": "wa_variable_mode",
    "fieldtype": "Select",
    "label": "Variable Mode",
-   "options": "same_for_all\nper_subscriber",
+   "options": "same_for_all\nper_subscriber\nmixed",
    "default": "same_for_all",
    "depends_on": "eval:doc.channel=='WhatsApp' && doc.wa_template",
-   "description": "Same values for all subscribers or map to subscriber fields"
+   "description": "Legacy single mode for all body variables, or mixed (use Variable Slots below). When Variable Slots JSON is set from Excom, mode is stored as mixed."
+  },
+  {
+   "fieldname": "wa_variable_slots",
+   "fieldtype": "Small Text",
+   "label": "Variable Slots",
+   "depends_on": "eval:doc.channel=='WhatsApp' && doc.wa_template",
+   "description": "JSON array: one object per {{n}} — {\"kind\":\"literal\",\"value\":\"...\"} or {\"kind\":\"subscriber_field\",\"field\":\"subscriber.display_name\"}. Preferred over Template Variables / Variable Mapping when set."
   },
   {
    "fieldname": "wa_template_variables",
    "fieldtype": "Small Text",
    "label": "Template Variables",
-   "depends_on": "eval:doc.channel=='WhatsApp' && doc.wa_template",
-   "description": "JSON array of variable values or field mappings"
+   "depends_on": "eval:doc.channel=='WhatsApp' && doc.wa_template && doc.wa_variable_mode!='mixed' && doc.wa_variable_mode!='per_subscriber'",
+   "description": "Legacy: JSON array of values when Variable Mode is Same for all (ignored if Variable Slots is set)"
   },
   {
    "fieldname": "wa_variable_mapping",
    "fieldtype": "Small Text",
    "label": "Variable Mapping",
    "depends_on": "eval:doc.channel=='WhatsApp' && doc.wa_variable_mode=='per_subscriber'",
-   "description": "JSON array of subscriber field paths, e.g. [\"subscriber.display_name\"]"
+   "description": "Legacy: JSON array of subscriber field paths when all variables are per subscriber (ignored if Variable Slots is set)"
   },
   {
    "fieldname": "wa_header_media",

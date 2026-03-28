@@ -1,9 +1,17 @@
 """Excom Broadcast controller — submittable doctype for sending bulk messages."""
 
+import json
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import now_datetime
+
+
+def _wa_template_variable_count(template_name: str) -> int:
+    """Body placeholder count from WhatsApp Templates sample_values (comma-separated)."""
+    sample = frappe.db.get_value("WhatsApp Templates", template_name, "sample_values") or ""
+    return len([p for p in (s.strip() for s in sample.split(",")) if p])
 
 
 class ExcomBroadcast(Document):
@@ -15,6 +23,81 @@ class ExcomBroadcast(Document):
                 frappe.throw(_("Subject is required for Email broadcasts"))
             if not self.email_body:
                 frappe.throw(_("Email Body is required for Email broadcasts"))
+
+        if self.channel == "WhatsApp" and self.wa_template:
+            self._validate_whatsapp_variables()
+
+    def _validate_whatsapp_variables(self) -> None:
+        """Validate legacy same/per mode or per-slot JSON (wa_variable_slots)."""
+        n = _wa_template_variable_count(self.wa_template)
+        slots_raw = (self.get("wa_variable_slots") or "").strip()
+
+        if slots_raw:
+            try:
+                slots = json.loads(slots_raw)
+            except json.JSONDecodeError:
+                frappe.throw(_("Variable Slots must be valid JSON"))
+            if not isinstance(slots, list):
+                frappe.throw(_("Variable Slots must be a JSON array"))
+            if len(slots) > 0:
+                if n == 0:
+                    frappe.throw(_("This template has no body variables; clear Variable Slots"))
+                if len(slots) != n:
+                    frappe.throw(
+                        _("Variable Slots has {0} entries but the template has {1} placeholders").format(
+                            len(slots), n
+                        )
+                    )
+                for idx, slot in enumerate(slots):
+                    if not isinstance(slot, dict):
+                        frappe.throw(_("Variable slot {0} must be an object").format(idx + 1))
+                    kind = slot.get("kind")
+                    if kind == "literal":
+                        val = slot.get("value")
+                        if val is None or (isinstance(val, str) and val.strip() == ""):
+                            frappe.throw(
+                                _("Variable {0}: enter a value for \"same for everyone\"").format(
+                                    idx + 1
+                                )
+                            )
+                    elif kind == "subscriber_field":
+                        field = (slot.get("field") or "").strip()
+                        if not field or "." not in field:
+                            frappe.throw(
+                                _("Variable {0}: choose a valid subscriber field").format(idx + 1)
+                            )
+                    else:
+                        frappe.throw(
+                            _('Variable {0}: `kind` must be "literal" or "subscriber_field"').format(
+                                idx + 1
+                            )
+                        )
+                return
+
+        mode = self.wa_variable_mode or "same_for_all"
+        if mode == "mixed":
+            frappe.throw(_("Set Variable Slots JSON for mixed mode, or choose Same / Per subscriber"))
+        if n > 0 and mode == "same_for_all":
+            try:
+                vals = json.loads(self.get("wa_template_variables") or "[]")
+            except json.JSONDecodeError:
+                frappe.throw(_("Template Variables must be valid JSON"))
+            if not isinstance(vals, list) or len(vals) != n:
+                frappe.throw(
+                    _("Template Variables must be a JSON array of {0} strings").format(n)
+                )
+        if n > 0 and mode == "per_subscriber":
+            try:
+                mapping = json.loads(self.get("wa_variable_mapping") or "[]")
+            except json.JSONDecodeError:
+                frappe.throw(_("Variable Mapping must be valid JSON"))
+            if not isinstance(mapping, list) or len(mapping) != n:
+                frappe.throw(
+                    _("Variable Mapping must be a JSON array of {0} field paths").format(n)
+                )
+            for idx, path in enumerate(mapping):
+                if not path or "." not in str(path):
+                    frappe.throw(_("Variable {0}: mapping must be a dotted field path").format(idx + 1))
 
     def on_submit(self):
         """Queue the broadcast for sending."""
