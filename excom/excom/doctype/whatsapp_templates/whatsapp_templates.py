@@ -18,6 +18,11 @@ from excom.excom.whatsapp_template_utils import (
     is_text_header,
 )
 
+_TEMPLATE_CONTENT_FIELDS = frozenset({
+    "template", "header_type", "header", "footer", "category",
+    "header_variable_samples", "body_variable_samples", "sample",
+})
+
 
 class WhatsAppTemplates(Document):
     """Create whatsapp template."""
@@ -26,7 +31,7 @@ class WhatsAppTemplates(Document):
         self._validate_body_variable_samples_json()
         self._validate_header_variable_samples_json()
         self.set_whatsapp_account()
-        self._ensure_whatsapp_account_in_linked_accounts()
+        self._auto_link_same_business_accounts()
         if not self.language_code or self.has_value_changed("language"):
             lang_code = frappe.db.get_value("Language", self.language) or "en"
             self.language_code = lang_code.replace("-", "_")
@@ -37,7 +42,7 @@ class WhatsAppTemplates(Document):
             self.get_session_id()
             self.get_media_id()
 
-        if not self.is_new():
+        if not self.is_new() and self._has_content_changed():
             self.update_template()
 
     def validate_button_count(self):
@@ -110,21 +115,73 @@ class WhatsAppTemplates(Document):
                 frappe.throw(_("Please set a default outgoing WhatsApp Channel Account"))
             self.whatsapp_account = default_account.name
 
-    def _ensure_whatsapp_account_in_linked_accounts(self) -> None:
-        """Primary WhatsApp account must appear in linked accounts (multi-phone WABA)."""
+    def _auto_link_same_business_accounts(self) -> None:
+        """Auto-link all WhatsApp channel accounts sharing the same WABA business ID.
+
+        Templates belong to a WABA (business ID), not a single phone number.
+        All active accounts under the same business ID can send this template.
+        """
         if not self.whatsapp_account:
             return
-        linked = self.get("linked_whatsapp_accounts") or []
-        paths = {getattr(r, "channel_account", None) for r in linked}
-        if self.whatsapp_account not in paths:
-            self.append("linked_whatsapp_accounts", {"channel_account": self.whatsapp_account})
 
-        seen: set[str] = set()
-        for row in self.get("linked_whatsapp_accounts") or []:
-            acc = row.channel_account
-            if acc in seen:
-                frappe.throw(_("Duplicate linked WhatsApp account: {0}").format(acc))
-            seen.add(acc)
+        biz_id = frappe.db.get_value(
+            "Excom Channel Account", self.whatsapp_account, "wa_business_id"
+        )
+        if not biz_id:
+            return
+
+        sibling_accounts = frappe.get_all(
+            "Excom Channel Account",
+            filters={
+                "status": "Active",
+                "channel": "WhatsApp",
+                "wa_business_id": biz_id,
+            },
+            pluck="name",
+        )
+
+        existing = {
+            getattr(r, "channel_account", None)
+            for r in self.get("linked_whatsapp_accounts") or []
+        }
+
+        for acct_name in sibling_accounts:
+            if acct_name not in existing:
+                self.append("linked_whatsapp_accounts", {"channel_account": acct_name})
+                existing.add(acct_name)
+
+    def _has_content_changed(self) -> bool:
+        """Return True if any template content field changed (triggers Meta API update).
+
+        Linking accounts or editing metadata should not push to Meta.
+        Button child table changes are also tracked.
+        """
+        for field in _TEMPLATE_CONTENT_FIELDS:
+            if self.has_value_changed(field):
+                return True
+
+        old_buttons = frappe.get_all(
+            "WhatsApp Button",
+            filters={"parent": self.name, "parenttype": self.doctype},
+            fields=["button_type", "button_label", "website_url", "example_url",
+                     "url_type", "phone_number"],
+            order_by="idx asc",
+        )
+        new_buttons = [
+            {
+                "button_type": b.button_type, "button_label": b.button_label,
+                "website_url": b.get("website_url"), "example_url": b.get("example_url"),
+                "url_type": b.get("url_type"), "phone_number": b.get("phone_number"),
+            }
+            for b in (self.buttons or [])
+        ]
+        if len(old_buttons) != len(new_buttons):
+            return True
+        for old, new in zip(old_buttons, new_buttons):
+            if dict(old) != new:
+                return True
+
+        return False
 
     def get_session_id(self):
         """Upload media to Meta for template header sample."""
@@ -186,7 +243,7 @@ class WhatsAppTemplates(Document):
         }
         samples = get_body_variable_samples(self)
         if samples:
-            body.update({"example": {"body_text": [samples]}})
+            body["example"] = {"body_text": [samples]}
 
         data["components"].append(body)
         if self.header_type:
@@ -204,7 +261,7 @@ class WhatsAppTemplates(Document):
                     b["type"] = "URL"
                     b["url"] = btn.website_url
                     if btn.url_type == "Dynamic" and btn.example_url:
-                        b["example"] = btn.example_url.split(",")
+                        b["example"] = [v.strip() for v in btn.example_url.split(",")]
                 elif btn.button_type == "Call Phone":
                     b["type"] = "PHONE_NUMBER"
                     b["phone_number"] = btn.phone_number
@@ -212,7 +269,6 @@ class WhatsAppTemplates(Document):
                     b["type"] = "QUICK_REPLY"
 
                 button_block["buttons"].append(b)
-
             data["components"].append(button_block)
 
         try:
@@ -225,15 +281,21 @@ class WhatsAppTemplates(Document):
             self.status = response["status"]
             self.db_update()
         except Exception:
-            res = frappe.flags.integration_request.json().get("error", {})
-            error_message = res.get("error_user_msg", res.get("message"))
+            error_detail = _extract_meta_error()
             frappe.throw(
-                msg=error_message,
-                title=res.get("error_user_title", "Error"),
+                msg=_("Meta rejected the template: {0}").format(error_detail),
+                title=_("Template Creation Failed"),
             )
 
     def update_template(self):
-        """Update template on Meta."""
+        """Update template on Meta.
+
+        Only called when content fields have actually changed
+        (guarded by ``_has_content_changed`` in validate).
+        """
+        if not self.id:
+            return
+
         creds = self._get_creds()
         data = {"components": []}
 
@@ -243,12 +305,15 @@ class WhatsAppTemplates(Document):
         }
         samples = get_body_variable_samples(self)
         if samples:
-            body.update({"example": {"body_text": [samples]}})
+            body["example"] = {"body_text": [samples]}
         data["components"].append(body)
+
         if self.header_type:
             data["components"].append(self.get_header())
+
         if self.footer:
             data["components"].append({"type": "FOOTER", "text": self.footer})
+
         if self.buttons:
             button_block = {"type": "BUTTONS", "buttons": []}
             for btn in self.buttons:
@@ -258,7 +323,7 @@ class WhatsAppTemplates(Document):
                     b["type"] = "URL"
                     b["url"] = btn.website_url
                     if btn.url_type == "Dynamic" and btn.example_url:
-                        b["example"] = btn.example_url.split(",")
+                        b["example"] = [v.strip() for v in btn.example_url.split(",")]
                 elif btn.button_type == "Call Phone":
                     b["type"] = "PHONE_NUMBER"
                     b["phone_number"] = btn.phone_number
@@ -266,7 +331,6 @@ class WhatsAppTemplates(Document):
                     b["type"] = "QUICK_REPLY"
 
                 button_block["buttons"].append(b)
-
             data["components"].append(button_block)
 
         try:
@@ -275,8 +339,16 @@ class WhatsAppTemplates(Document):
                 headers=creds['headers'],
                 data=json.dumps(data),
             )
-        except Exception as e:
-            raise e
+        except Exception:
+            error_detail = _extract_meta_error()
+            frappe.log_error(
+                title="WhatsApp Template Update Failed",
+                message=f"Template: {self.name}\nMeta error: {error_detail}",
+            )
+            frappe.throw(
+                msg=_("Meta rejected the template update: {0}").format(error_detail),
+                title=_("Template Update Failed"),
+            )
 
     def _get_creds(self) -> dict:
         """Get WhatsApp API credentials from the linked Excom Channel Account."""
@@ -289,46 +361,68 @@ class WhatsAppTemplates(Document):
         try:
             make_request("DELETE", url, headers=creds['headers'])
         except Exception:
-            res = frappe.flags.integration_request.json().get("error", {})
-            if res.get("error_user_title") == "Message Template Not Found":
+            error_detail = _extract_meta_error()
+            if "not found" in error_detail.lower():
                 frappe.msgprint(
-                    "Deleted locally", res.get("error_user_title", "Error"), alert=True
+                    _("Template already deleted on Meta — removed locally."),
+                    alert=True,
                 )
             else:
                 frappe.throw(
-                    msg=res.get("error_user_msg"),
-                    title=res.get("error_user_title", "Error"),
+                    msg=_("Meta rejected the delete: {0}").format(error_detail),
+                    title=_("Template Delete Failed"),
                 )
 
     def get_header(self):
-        """Build Meta API header component for template create/update."""
+        """Build Meta API header component for template create/update.
+
+        Meta format: header_text is a flat list ``["val"]``, NOT nested
+        like body_text which is ``[["v1","v2"]]``.
+        """
         fmt = (self.header_type or "").strip().upper()
-        header = {"type": "header", "format": fmt}
+        header = {"type": "HEADER", "format": fmt}
         if is_text_header(self.header_type):
             header["text"] = self.header
             h_samples = get_header_variable_samples(self)
             if h_samples:
-                header.update({"example": {"header_text": [h_samples]}})
-        else:
-            pdf_link = ''
-            if not self.sample:
-                key = frappe.get_doc(self.doctype, self.name).get_document_share_key()
-                link = get_pdf_link(self.doctype, self.name)
-                pdf_link = f"{frappe.utils.get_url()}{link}&key={key}"
-            header.update({"example": {"header_handle": [self._media_id]}})
+                header["example"] = {"header_text": h_samples}
+        elif hasattr(self, "_media_id") and self._media_id:
+            header["example"] = {"header_handle": [self._media_id]}
 
         return header
 
 
-def _merge_template_linked_account(doc, account_name: str) -> None:
-    """Register that this Meta template can be sent from the given channel account."""
+def _extract_meta_error() -> str:
+    """Extract a human-readable error message from the last Meta API response."""
+    try:
+        resp = getattr(frappe.flags, "integration_request", None)
+        if resp and hasattr(resp, "json"):
+            err = resp.json().get("error", {})
+            user_msg = err.get("error_user_msg") or ""
+            api_msg = err.get("message") or ""
+            title = err.get("error_user_title") or ""
+            parts = [p for p in (title, user_msg, api_msg) if p]
+            if parts:
+                return " — ".join(parts)
+        if resp and hasattr(resp, "text"):
+            return resp.text[:300]
+    except Exception:
+        pass
+    return "Unknown error (no details from Meta)"
+
+
+def _merge_template_linked_accounts(doc, account_names: list[str]) -> None:
+    """Link multiple channel accounts to a template doc (dedup-safe)."""
     existing = {
-        getattr(r, "channel_account", None) for r in doc.get("linked_whatsapp_accounts") or []
+        getattr(r, "channel_account", None)
+        for r in doc.get("linked_whatsapp_accounts") or []
     }
-    if account_name not in existing:
-        doc.append("linked_whatsapp_accounts", {"channel_account": account_name})
-    if not doc.whatsapp_account:
-        doc.whatsapp_account = account_name
+    for name in account_names:
+        if name not in existing:
+            doc.append("linked_whatsapp_accounts", {"channel_account": name})
+            existing.add(name)
+    if not doc.whatsapp_account and account_names:
+        doc.whatsapp_account = account_names[0]
 
 
 def _extract_header_samples(example: dict) -> str | None:
@@ -363,130 +457,124 @@ def _extract_header_samples(example: dict) -> str | None:
 
 @frappe.whitelist()
 def fetch():
-    """Fetch templates from Meta for all active WhatsApp channel accounts."""
+    """Fetch templates from Meta for all active WhatsApp channel accounts.
+
+    Groups accounts by ``wa_business_id`` so each WABA is queried once,
+    and every account under that business ID is auto-linked to each template.
+    """
     accounts = frappe.get_all(
-        'Excom Channel Account',
-        filters={'status': 'Active', 'channel': 'WhatsApp'},
-        fields=['name'],
+        "Excom Channel Account",
+        filters={"status": "Active", "channel": "WhatsApp"},
+        fields=["name", "wa_business_id"],
     )
 
+    biz_groups: dict[str, list[str]] = {}
     for acct in accounts:
-        account_doc = frappe.get_doc("Excom Channel Account", acct.name)
-        creds = get_wa_credentials(account_doc)
-        token = creds['token']
-        url = creds['url']
-        version = creds['version']
-        business_id = creds['business_id']
+        bid = acct.wa_business_id or ""
+        if not bid:
+            continue
+        biz_groups.setdefault(bid, []).append(acct.name)
 
-        headers = {"authorization": f"Bearer {token}", "content-type": "application/json"}
+    errors: list[str] = []
+
+    for biz_id, acct_names in biz_groups.items():
+        representative = acct_names[0]
+        account_doc = frappe.get_doc("Excom Channel Account", representative)
+        creds = get_wa_credentials(account_doc)
 
         try:
             response = make_request(
                 "GET",
-                f"{url}/{version}/{business_id}/message_templates",
-                headers=headers,
+                f"{creds['url']}/{creds['version']}/{biz_id}/message_templates",
+                headers=creds["headers"],
             )
+        except Exception:
+            errors.append(f"{representative}: {_extract_meta_error()}")
+            continue
 
-            for template in response["data"]:
-                # set flag to insert or update
-                flags = 1
-                if frappe.db.exists("WhatsApp Templates", {"actual_name": template["name"]}):
-                    doc = frappe.get_doc("WhatsApp Templates", {"actual_name": template["name"]})
-                else:
-                    flags = 0
-                    doc = frappe.new_doc("WhatsApp Templates")
-                    doc.template_name = template["name"]
-                    doc.actual_name = template["name"]
-
-                doc.status = template["status"]
-                doc.language_code = template["language"]
-                doc.category = template["category"]
-                doc.id = template["id"]
-                _merge_template_linked_account(doc, acct.name)
-
-                # update components
-                for component in template["components"]:
-                    ctype = (component.get("type") or "").upper()
-
-                    # update header
-                    if ctype == "HEADER":
-                        fmt = (component.get("format") or "").upper()
-                        doc.header_type = fmt
-
-                        if fmt == "TEXT":
-                            doc.header = component.get("text") or ""
-                            doc.header_variable_samples = _extract_header_samples(
-                                component.get("example") or {}
-                            )
-                        else:
-                            doc.header_variable_samples = None
-                    # Update footer text
-                    elif ctype == "FOOTER":
-                        doc.footer = component["text"]
-
-                    # update template text
-                    elif ctype == "BODY":
-                        doc.template = component["text"]
-                        if component.get("example"):
-                            if component["example"].get("body_text"):
-                                examples_row = component["example"]["body_text"][0]
-                                doc.body_variable_samples = json.dumps(examples_row)
-                                doc.sample_values = ""
-
-                    # Update buttons
-                    elif ctype == "BUTTONS":
-                        doc.set("buttons", [])
-                        frappe.db.delete("WhatsApp Button", {"parent": doc.name, "parenttype": "WhatsApp Templates"})
-                        typeMap = {
-                            "URL": "Visit Website",
-                            "PHONE_NUMBER": "Call Phone",
-                            "QUICK_REPLY": "Quick Reply",
-                            "FLOW": "Flow"
-                        }
-
-                        for i, button in enumerate(component.get("buttons", []), start=1):
-                            btn = {}
-                            btn["button_type"] = typeMap[button["type"]]
-                            btn["button_label"] = button.get("text")
-                            btn["sequence"] = i
-
-                            if button["type"] == "URL":
-                                btn["website_url"] = button.get("url")
-                                if "{{" in btn["website_url"]:
-                                    btn["url_type"] = "Dynamic"
-                                else:
-                                    btn["url_type"] = "Static"
-
-                                if button.get("example"):
-                                    btn["example_url"] = ",".join(button["example"])
-                            elif button["type"] == "PHONE_NUMBER":
-                                btn["phone_number"] = button.get("phone_number")
-                            elif button["type"] == "FLOW":
-                                btn["flow"] = button.get("flow")
-
-                            doc.append("buttons", btn)
-
-                upsert_doc_without_hooks(doc, "WhatsApp Button", "buttons")
-                _persist_linked_accounts(doc)
-
-            return "Successfully fetched templates from meta"
-
-        except Exception as e:
-            # Check if frappe.flags.integration_request is set and has a .json() method
-            if hasattr(frappe.flags.integration_request, 'json'):
-                try:
-                    res = frappe.flags.integration_request.json().get("error", {})
-                    error_message = res.get("error_user_msg", res.get("message"))
-                    frappe.throw(
-                        msg=error_message,
-                        title=res.get("error_user_title", "Error"),
-                    )
-                except (json.JSONDecodeError, KeyError):
-                    # Handle cases where the response is not valid JSON or lacks the 'error' key
-                    frappe.throw(f"An unexpected error occurred while fetching templates: {e}")
+        for template in response.get("data") or []:
+            if frappe.db.exists("WhatsApp Templates", {"actual_name": template["name"]}):
+                doc = frappe.get_doc("WhatsApp Templates", {"actual_name": template["name"]})
             else:
-                # Handle cases where frappe.flags.integration_request doesn't exist or isn't a proper response object
-                frappe.throw(f"An unexpected server error occurred: {e}")
+                doc = frappe.new_doc("WhatsApp Templates")
+                doc.template_name = template["name"]
+                doc.actual_name = template["name"]
+
+            doc.status = template["status"]
+            doc.language_code = template["language"]
+            doc.category = template["category"]
+            doc.id = template["id"]
+            _merge_template_linked_accounts(doc, acct_names)
+
+            for component in template.get("components") or []:
+                ctype = (component.get("type") or "").upper()
+
+                if ctype == "HEADER":
+                    fmt = (component.get("format") or "").upper()
+                    doc.header_type = fmt
+                    if fmt == "TEXT":
+                        doc.header = component.get("text") or ""
+                        doc.header_variable_samples = _extract_header_samples(
+                            component.get("example") or {}
+                        )
+                    else:
+                        doc.header_variable_samples = None
+
+                elif ctype == "FOOTER":
+                    doc.footer = component.get("text") or ""
+
+                elif ctype == "BODY":
+                    doc.template = component.get("text") or ""
+                    if component.get("example"):
+                        body_text = component["example"].get("body_text")
+                        if body_text and isinstance(body_text, list) and body_text:
+                            doc.body_variable_samples = json.dumps(body_text[0])
+                            doc.sample_values = ""
+
+                elif ctype == "BUTTONS":
+                    doc.set("buttons", [])
+                    frappe.db.delete(
+                        "WhatsApp Button",
+                        {"parent": doc.name, "parenttype": "WhatsApp Templates"},
+                    )
+                    type_map = {
+                        "URL": "Visit Website",
+                        "PHONE_NUMBER": "Call Phone",
+                        "QUICK_REPLY": "Quick Reply",
+                        "FLOW": "Flow",
+                    }
+                    for i, button in enumerate(component.get("buttons", []), start=1):
+                        btn: dict = {
+                            "button_type": type_map.get(button["type"], button["type"]),
+                            "button_label": button.get("text"),
+                            "sequence": i,
+                        }
+                        if button["type"] == "URL":
+                            btn["website_url"] = button.get("url") or ""
+                            btn["url_type"] = (
+                                "Dynamic" if "{{" in btn["website_url"] else "Static"
+                            )
+                            if button.get("example"):
+                                btn["example_url"] = ",".join(button["example"])
+                        elif button["type"] == "PHONE_NUMBER":
+                            btn["phone_number"] = button.get("phone_number")
+                        elif button["type"] == "FLOW":
+                            btn["flow"] = button.get("flow")
+
+                        doc.append("buttons", btn)
+
+            upsert_doc_without_hooks(doc, "WhatsApp Button", "buttons")
+            _persist_linked_accounts(doc)
+
+    if errors:
+        frappe.msgprint(
+            _("Some accounts failed: {0}").format("<br>".join(errors)),
+            title=_("Partial Fetch"),
+            indicator="orange",
+        )
+        return f"Fetched with {len(errors)} error(s)"
+
+    return "Successfully fetched templates from Meta"
 
 def _persist_linked_accounts(doc) -> None:
     """Insert linked_whatsapp_accounts rows that don't already exist in the DB."""

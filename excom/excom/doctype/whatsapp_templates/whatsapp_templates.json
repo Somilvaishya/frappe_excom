@@ -187,7 +187,8 @@
    "fieldtype": "Table MultiSelect",
    "label": "WhatsApp Accounts",
    "options": "WhatsApp Template Linked Account",
-   "description": "Select every Excom Channel Account (phone number) that may send this template. Same WABA can power multiple numbers—add each account here."
+   "read_only": 1,
+   "description": "Auto-populated: all active channel accounts sharing the same WABA Business ID. Managed automatically on save and fetch."
   },
   {
    "fieldname": "column_break_bthp",

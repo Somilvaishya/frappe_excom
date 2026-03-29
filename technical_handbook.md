@@ -1236,3 +1236,35 @@ Mobile PKCE and native apps must use the same public origin users type in the br
 - `frontend/src/components/ui/date-time-picker.tsx` — new component
 - `frontend/src/components/ui/popover.tsx` — new Radix wrapper
 - `frontend/package.json` — `@radix-ui/react-popover` added
+
+---
+
+## WABA Auto-Linking and Template Update Fix (March 2026)
+
+### What changed
+
+#### Auto-link accounts by WABA Business ID
+- **Before**: Users had to manually add linked WhatsApp accounts to each template via Table MultiSelect. Primary/secondary distinction added confusion.
+- **After**: On validate, `_auto_link_same_business_accounts()` queries all active WhatsApp channel accounts sharing the same `wa_business_id` and auto-links them. The `linked_whatsapp_accounts` field is now read-only.
+- **fetch()**: Grouped by `wa_business_id` so each WABA is queried once from Meta. All accounts under that business ID are linked to every template in one pass. Fixed the bug where `return` inside the first account's loop prevented fetching for other accounts.
+
+#### Fix update_template() 400 error
+- **Root cause 1**: `get_header()` wrapped `header_text` as `[h_samples]` producing `[["val"]]`, but Meta expects a flat list `["val"]` (unlike `body_text` which is nested `[["v1","v2"]]`). Fixed to `header["example"] = {"header_text": h_samples}`.
+- **Root cause 2**: `update_template()` fired on every save, even metadata-only changes (adding linked accounts). Now guarded by `_has_content_changed()` which checks only content fields (`template`, `header`, `footer`, `category`, `header_type`, samples, buttons).
+- **Root cause 3**: Error handling was `except Exception as e: raise e` with no details. Now uses `_extract_meta_error()` to parse Meta's response body (`error_user_msg`, `message`, `error_user_title`) and shows a clear error in Frappe UI + logs to Error Log.
+
+#### Centralized Meta error extraction
+- `_extract_meta_error()` helper replaces ad-hoc error parsing in `after_insert`, `update_template`, `on_trash`, and `fetch`. Safely handles missing response, non-JSON bodies, and partial error objects.
+
+### Architecture decisions
+- Templates belong to a WABA (business ID), not a phone number. Multiple phone numbers under the same WABA share identical templates. This is Meta's model and Excom now mirrors it.
+- `_has_content_changed()` checks `_TEMPLATE_CONTENT_FIELDS` (frozenset) plus button child table diffs. Only content changes trigger Meta API calls.
+- `linked_whatsapp_accounts` made read-only to prevent manual edits that could desync from the auto-link logic.
+
+### Impacted modules
+- `excom/excom/doctype/whatsapp_templates/whatsapp_templates.py` — auto-link, content change detection, header_text format, error handling, fetch grouping
+- `excom/excom/doctype/whatsapp_templates/whatsapp_templates.json` — `linked_whatsapp_accounts` read_only
+
+### Migration
+- Run `bench migrate` after deploy (JSON schema change on `linked_whatsapp_accounts`).
+- Run **Fetch templates** to re-link all accounts by business ID automatically.
