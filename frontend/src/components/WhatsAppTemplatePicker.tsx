@@ -48,7 +48,10 @@ interface TemplateItem {
   variable_count: number;
   /** TEXT header ``{{n}}`` count; inbox sends header values first in ``variables`` JSON. */
   header_variable_count?: number;
+  /** Example strings for body placeholders. */
   sample_variables: string[];
+  /** Example strings for TEXT header placeholders. */
+  header_sample_variables?: string[];
   buttons?: TemplateButton[];
   has_dynamic_url?: boolean;
 }
@@ -198,20 +201,38 @@ export function WhatsAppTemplatePicker({
     [upload]
   );
 
-  const getPreview = (): string => {
-    if (!selectedTemplate) return "";
-    const h = selectedTemplate.header_variable_count ?? 0;
-    let text = selectedTemplate.template || "";
-    const bodyVars = variables.slice(h);
-    bodyVars.forEach((val, i) => {
-      text = text.replace(`{{${i + 1}}}`, val || `{{${i + 1}}}`);
+  const replacePlaceholders = (text: string, vals: string[]): string => {
+    const placeholders: string[] = [];
+    const re = /\{\{([^}]+)\}\}/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null) {
+      const name = match[1].trim();
+      if (!placeholders.includes(name)) placeholders.push(name);
+    }
+    placeholders.forEach((name, i) => {
+      if (i < vals.length) {
+        text = text.replaceAll(`{{${name}}}`, vals[i] || `{{${name}}}`);
+      }
     });
     return text;
   };
 
-  const needsMedia =
-    selectedTemplate?.header_type === "IMAGE" ||
-    selectedTemplate?.header_type === "DOCUMENT";
+  const getHeaderPreview = (): string => {
+    if (!selectedTemplate) return "";
+    const ht = (selectedTemplate.header_type || "").toUpperCase();
+    if (ht !== "TEXT" || !selectedTemplate.header) return "";
+    const h = selectedTemplate.header_variable_count ?? 0;
+    return replacePlaceholders(selectedTemplate.header, variables.slice(0, h));
+  };
+
+  const getPreview = (): string => {
+    if (!selectedTemplate) return "";
+    const h = selectedTemplate.header_variable_count ?? 0;
+    return replacePlaceholders(selectedTemplate.template || "", variables.slice(h));
+  };
+
+  const htUpper = (selectedTemplate?.header_type || "").toUpperCase();
+  const needsMedia = htUpper === "IMAGE" || htUpper === "DOCUMENT";
 
   const hVar = selectedTemplate?.header_variable_count ?? 0;
   const bVar = selectedTemplate?.variable_count ?? 0;
@@ -236,7 +257,7 @@ export function WhatsAppTemplatePicker({
     if (!selectedTemplate) return;
     if (needsMedia && !headerMediaUrl) {
       toast.error(
-        `Please attach a ${selectedTemplate.header_type === "IMAGE" ? "photo" : "document"} for this template`
+        `Please attach a ${htUpper === "IMAGE" ? "photo" : "document"} for this template`
       );
       return;
     }
@@ -394,17 +415,18 @@ export function WhatsAppTemplatePicker({
                     <div className="flex items-center gap-3 text-[10px] text-zinc-500">
                       <span className="bg-zinc-800 px-1.5 py-0.5 rounded">{t.category}</span>
                       <span>{t.language_code}</span>
-                      {t.variable_count > 0 && (
+                      {((t.header_variable_count ?? 0) + (t.variable_count ?? 0)) > 0 && (
                         <span className="text-blue-400">
-                          {t.variable_count} variable{t.variable_count > 1 ? "s" : ""}
+                          {(t.header_variable_count ?? 0) + (t.variable_count ?? 0)} variable
+                          {(t.header_variable_count ?? 0) + (t.variable_count ?? 0) > 1 ? "s" : ""}
                         </span>
                       )}
-                      {t.header_type === "IMAGE" && (
+                      {(t.header_type || "").toUpperCase() === "IMAGE" && (
                         <span className="text-purple-400 flex items-center gap-0.5">
                           <ImageIcon className="w-3 h-3" /> Photo required
                         </span>
                       )}
-                      {t.header_type === "DOCUMENT" && (
+                      {(t.header_type || "").toUpperCase() === "DOCUMENT" && (
                         <span className="text-orange-400 flex items-center gap-0.5">
                           <Paperclip className="w-3 h-3" /> PDF/Doc required
                         </span>
@@ -432,6 +454,11 @@ export function WhatsAppTemplatePicker({
                 <p className="text-xs text-zinc-400 mb-1 font-medium">
                   {selectedTemplate.template_name}
                 </p>
+                {getHeaderPreview() && (
+                  <p className="text-sm text-white font-semibold mb-1">
+                    {getHeaderPreview()}
+                  </p>
+                )}
                 <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
                   {getPreview()}
                 </p>
@@ -445,13 +472,13 @@ export function WhatsAppTemplatePicker({
               {needsMedia && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    {selectedTemplate.header_type === "IMAGE" ? (
+                    {htUpper === "IMAGE" ? (
                       <ImageIcon className="w-4 h-4 text-purple-400" />
                     ) : (
                       <Paperclip className="w-4 h-4 text-orange-400" />
                     )}
                     <p className="text-xs text-zinc-400 font-medium">
-                      {selectedTemplate.header_type === "IMAGE"
+                      {htUpper === "IMAGE"
                         ? "Attach Header Image"
                         : "Attach Header Document (PDF)"}
                       <span className="text-red-400 ml-1">*</span>
@@ -460,7 +487,7 @@ export function WhatsAppTemplatePicker({
 
                   {headerMediaUrl ? (
                     <div className="flex items-center gap-3 bg-zinc-800/70 border border-zinc-700 rounded-lg p-3">
-                      {selectedTemplate.header_type === "IMAGE" ? (
+                      {htUpper === "IMAGE" ? (
                         <img
                           src={headerMediaUrl}
                           alt="Header"
@@ -501,7 +528,7 @@ export function WhatsAppTemplatePicker({
                       <span className="text-xs text-zinc-500 group-hover:text-zinc-300 transition-colors">
                         {uploading
                           ? "Uploading..."
-                          : selectedTemplate.header_type === "IMAGE"
+                          : htUpper === "IMAGE"
                           ? "Click to upload image (JPEG, PNG, WebP)"
                           : "Click to upload document (PDF, DOC, XLS)"}
                       </span>
@@ -519,11 +546,12 @@ export function WhatsAppTemplatePicker({
                   {variables.slice(0, hVar + bVar).map((val, idx) => {
                     const isHeader = idx < hVar;
                     const bodyIdx = idx - hVar;
+                    const hdrSamples = selectedTemplate.header_sample_variables || [];
                     const sampleHint = isHeader
-                      ? selectedTemplate.sample_variables[0] || ""
+                      ? hdrSamples[idx] || ""
                       : selectedTemplate.sample_variables[bodyIdx] || "";
                     const labelHint = isHeader
-                      ? `var ${idx + 1}`
+                      ? `Header {{${idx + 1}}}`
                       : labels[bodyIdx] || `{{${bodyIdx + 1}}}`;
                     return (
                       <div key={idx}>

@@ -34,6 +34,7 @@
   "section_break_lupb",
   "header_type",
   "header",
+  "header_variable_samples",
   "sample",
   "column_break_tbvf",
   "footer",
@@ -155,10 +156,11 @@
    "options": "\nTEXT\nDOCUMENT\nIMAGE"
   },
   {
-   "depends_on": "eval:doc.header_type",
+   "depends_on": "eval:doc.header_type && doc.header_type !== 'TEXT'",
    "fieldname": "sample",
    "fieldtype": "Attach",
-   "label": "Sample"
+   "label": "Header Media Sample",
+   "description": "Upload a sample image or document for IMAGE/DOCUMENT header types. Required by Meta for template approval."
   },
   {
    "fieldname": "sample_values",
@@ -171,6 +173,14 @@
    "fieldtype": "JSON",
    "label": "Body Variable Samples",
    "description": "JSON array of strings, one per {{1}}, {{2}}, … e.g. [\"ACME, Inc.\",\"₹500\"]. Preferred over Sample Values."
+  },
+  {
+   "depends_on": "eval:doc.header_type == 'TEXT'",
+   "fieldname": "header_variable_samples",
+   "fieldtype": "JSON",
+   "label": "Header Variable Samples",
+   "description": "JSON array of strings for TEXT header {{1}}, {{2}}, … Populated from Meta on Fetch; used when counting header slots and for template example blocks.",
+   "read_only": 1
   },
   {
    "fieldname": "linked_whatsapp_accounts",

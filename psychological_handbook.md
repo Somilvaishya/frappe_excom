@@ -129,3 +129,13 @@ The immediate objective is to establish a coherent architecture and language bef
 - Frappe's relay is a **different** deployment than the ERP site; conflating `push_relay_server_url` with "our site URL" produces confusing 417 errors, not a product bug in Excom.
 - First-time relay registration (API key/secret in Push Notification Settings) should happen in line with Frappe's server-side flow; the UI should not depend on the browser successfully guessing the relay host.
 
+### 2026-03-29 — WhatsApp template header parity
+
+- A template is one contract with Meta: header variables, body variables, and buttons must stay in sync between Desk, inbox UI, and the Cloud API. Treating the TEXT header as second-class (no stored examples, case-sensitive sync) caused silent under-counting and operator confusion.
+- Broadcasts intentionally remain blocked for templates with header variables until product defines slot UX for that path; detection now matches what the inbox uses.
+- The Desk form should clearly separate header from body — operators must see "Header" text, "Header Variable Samples", and "Header Media Sample" as distinct concepts. Mixing them (e.g. an Attach field visible on TEXT headers) creates confusion about what each field is for.
+- Linked WhatsApp accounts are additive across fetches (same template appears on multiple WABA phone numbers). Persistence must be merge-safe, not wipe-and-reinsert.
+- Template preview in the inbox should show the full message (header + body), not just body. Operators need to see exactly what the recipient gets.
+- Meta's API evolves: v21+ introduced named parameters (`{{sale_date}}` instead of `{{1}}`). Any regex that only matches digits is a silent time bomb — the template "works" in Desk but sends zero parameters. Always match the general `{{...}}` pattern.
+- Failed sends must leave evidence. A `frappe.throw` before creating the message doc means the failure is visible only as a transient toast — no audit trail, no retry path. Create the record first, mark it Failed, then throw.
+

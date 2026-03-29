@@ -12,7 +12,11 @@ from frappe.integrations.utils import make_post_request, make_request
 from frappe.desk.form.utils import get_pdf_link
 
 from excom.excom.utils import get_channel_account, get_wa_credentials
-from excom.excom.whatsapp_template_utils import get_body_variable_samples
+from excom.excom.whatsapp_template_utils import (
+    get_body_variable_samples,
+    get_header_variable_samples,
+    is_text_header,
+)
 
 
 class WhatsAppTemplates(Document):
@@ -20,6 +24,7 @@ class WhatsAppTemplates(Document):
 
     def validate(self):
         self._validate_body_variable_samples_json()
+        self._validate_header_variable_samples_json()
         self.set_whatsapp_account()
         self._ensure_whatsapp_account_in_linked_accounts()
         if not self.language_code or self.has_value_changed("language"):
@@ -28,7 +33,7 @@ class WhatsAppTemplates(Document):
 
         self.validate_button_count()
 
-        if self.header_type in ["IMAGE", "DOCUMENT"] and self.sample:
+        if (self.header_type or "").upper() in ("IMAGE", "DOCUMENT") and self.sample:
             self.get_session_id()
             self.get_media_id()
 
@@ -70,6 +75,28 @@ class WhatsAppTemplates(Document):
             if x is not None and not isinstance(x, (str, int, float)):
                 frappe.throw(
                     _("Body variable sample {0} must be a string or number").format(i + 1)
+                )
+
+    def _validate_header_variable_samples_json(self) -> None:
+        """Ensure ``header_variable_samples`` is a JSON array of scalars when set."""
+        val = self.get("header_variable_samples")
+        if val in (None, "", []):
+            return
+        data = val
+        if isinstance(val, str):
+            if not val.strip():
+                self.header_variable_samples = None
+                return
+            try:
+                data = json.loads(val)
+            except json.JSONDecodeError:
+                frappe.throw(_("Header Variable Samples must be valid JSON"))
+        if not isinstance(data, list):
+            frappe.throw(_("Header Variable Samples must be a JSON array"))
+        for i, x in enumerate(data):
+            if x is not None and not isinstance(x, (str, int, float)):
+                frappe.throw(
+                    _("Header variable sample {0} must be a string or number").format(i + 1)
                 )
 
     def set_whatsapp_account(self):
@@ -274,13 +301,14 @@ class WhatsAppTemplates(Document):
                 )
 
     def get_header(self):
-        """Get header format."""
-        header = {"type": "header", "format": self.header_type}
-        if self.header_type == "TEXT":
+        """Build Meta API header component for template create/update."""
+        fmt = (self.header_type or "").strip().upper()
+        header = {"type": "header", "format": fmt}
+        if is_text_header(self.header_type):
             header["text"] = self.header
-            if self.sample:
-                samples = self.sample.split(", ")
-                header.update({"example": {"header_text": samples}})
+            h_samples = get_header_variable_samples(self)
+            if h_samples:
+                header.update({"example": {"header_text": [h_samples]}})
         else:
             pdf_link = ''
             if not self.sample:
@@ -301,6 +329,36 @@ def _merge_template_linked_account(doc, account_name: str) -> None:
         doc.append("linked_whatsapp_accounts", {"channel_account": account_name})
     if not doc.whatsapp_account:
         doc.whatsapp_account = account_name
+
+
+def _extract_header_samples(example: dict) -> str | None:
+    """Extract header variable samples from Meta's example block.
+
+    Handles both positional (``header_text``) and named
+    (``header_text_named_params``) formats from the API.
+
+    Returns JSON string or None.
+    """
+    if not example:
+        return None
+
+    hdr_ex = example.get("header_text")
+    if hdr_ex and isinstance(hdr_ex, list) and len(hdr_ex) > 0:
+        row = hdr_ex[0]
+        if isinstance(row, list):
+            return json.dumps(row)
+        return json.dumps([row])
+
+    named = example.get("header_text_named_params")
+    if named and isinstance(named, list):
+        samples = [
+            p.get("example", "") if isinstance(p, dict) else str(p)
+            for p in named
+        ]
+        if any(s for s in samples):
+            return json.dumps(samples)
+
+    return None
 
 
 @frappe.whitelist()
@@ -348,20 +406,26 @@ def fetch():
 
                 # update components
                 for component in template["components"]:
+                    ctype = (component.get("type") or "").upper()
 
                     # update header
-                    if component["type"] == "HEADER":
-                        doc.header_type = component["format"]
+                    if ctype == "HEADER":
+                        fmt = (component.get("format") or "").upper()
+                        doc.header_type = fmt
 
-                        # if format is text update sample text
-                        if component["format"] == "TEXT":
-                            doc.header = component["text"]
+                        if fmt == "TEXT":
+                            doc.header = component.get("text") or ""
+                            doc.header_variable_samples = _extract_header_samples(
+                                component.get("example") or {}
+                            )
+                        else:
+                            doc.header_variable_samples = None
                     # Update footer text
-                    elif component["type"] == "FOOTER":
+                    elif ctype == "FOOTER":
                         doc.footer = component["text"]
 
                     # update template text
-                    elif component["type"] == "BODY":
+                    elif ctype == "BODY":
                         doc.template = component["text"]
                         if component.get("example"):
                             if component["example"].get("body_text"):
@@ -370,7 +434,7 @@ def fetch():
                                 doc.sample_values = ""
 
                     # Update buttons
-                    elif component["type"] == "BUTTONS":
+                    elif ctype == "BUTTONS":
                         doc.set("buttons", [])
                         frappe.db.delete("WhatsApp Button", {"parent": doc.name, "parenttype": "WhatsApp Templates"})
                         typeMap = {
@@ -403,6 +467,7 @@ def fetch():
                             doc.append("buttons", btn)
 
                 upsert_doc_without_hooks(doc, "WhatsApp Button", "buttons")
+                _persist_linked_accounts(doc)
 
             return "Successfully fetched templates from meta"
 
@@ -422,6 +487,23 @@ def fetch():
             else:
                 # Handle cases where frappe.flags.integration_request doesn't exist or isn't a proper response object
                 frappe.throw(f"An unexpected server error occurred: {e}")
+
+def _persist_linked_accounts(doc) -> None:
+    """Insert linked_whatsapp_accounts rows that don't already exist in the DB."""
+    for row in doc.get("linked_whatsapp_accounts") or []:
+        acc = getattr(row, "channel_account", None) or (row.get("channel_account") if isinstance(row, dict) else None)
+        if not acc:
+            continue
+        if frappe.db.exists(
+            "WhatsApp Template Linked Account",
+            {"parent": doc.name, "channel_account": acc},
+        ):
+            continue
+        row.parent = doc.name
+        row.parenttype = doc.doctype
+        row.parentfield = "linked_whatsapp_accounts"
+        row.db_insert()
+
 
 def upsert_doc_without_hooks(doc, child_dt, child_field):
     """Insert or update a parent document and its children without hooks."""

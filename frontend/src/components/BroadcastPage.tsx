@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { DateTimePicker } from "./ui/date-time-picker";
 import { toast } from "sonner";
 
 interface BroadcastItem {
@@ -1378,12 +1379,11 @@ function ComposeDialog({
                 <p className="text-xs text-zinc-500">
                   Pick a future date and time in your local timezone, or leave empty to send as soon as you confirm.
                 </p>
-                <input
-                  type="datetime-local"
-                  min={localDatetimeInputMin()}
+                <DateTimePicker
                   value={scheduleAt}
-                  onChange={(e) => setScheduleAt(e.target.value)}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
+                  onChange={setScheduleAt}
+                  min={localDatetimeInputMin()}
+                  placeholder="Send immediately"
                 />
               </div>
 

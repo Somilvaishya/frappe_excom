@@ -1136,3 +1136,103 @@ Mobile PKCE and native apps must use the same public origin users type in the br
 ### Impacted modules
 - `excom/excom/api/notification.py`
 - `frontend/public/frappe-push-notification.js` → production bundle under `excom/public/excom/assets/`
+
+---
+
+## WhatsApp TEXT header variables — full implementation (2026-03-29)
+
+### What changed
+
+#### Phase 1 — Slot counting and fetch normalization
+- **WhatsApp Templates** — new JSON field `header_variable_samples` (array of strings), populated from Meta on **Fetch templates** via `example.header_text`, mirroring body samples.
+- **Meta fetch** — HEADER/BODY/BUTTONS `type` and header `format` are compared case-insensitively so lowercase `text` from the API still sets `header_type`/`header` correctly.
+- **Slot counting** — `header_variable_slot_count()` uses `{{n}}` in `header` first; if none, uses the length of `header_variable_samples`. The inbox list API (`get_whatsapp_templates`) and send path (`_build_template_components`) use the same helper so UI field count matches Meta (fixes “needs 4 variables, you sent 3” when the header slot was dropped).
+- **Broadcast** — rejection when the template has any TEXT header variables now uses `header_variable_slot_count` (includes samples), not only placeholders in `header` text.
+
+#### Phase 2 — Doctype layout, server-side hardening, frontend parity
+- **Doctype JSON layout** — `header_variable_samples` moved from body section to header section (next to `header` field). `sample` (Attach) renamed to “Header Media Sample”, now only visible for IMAGE/DOCUMENT (`depends_on` excludes TEXT). `header_variable_samples` made read-only (populated only via Meta fetch).
+- **`get_header()` fix** — Removed broken TEXT fallback that split `self.sample` (a file path!) by comma as header examples. Now uses only `header_variable_samples` JSON for TEXT header examples.
+- **`fetch()` linked accounts persistence** — `_merge_template_linked_account()` was appending to in-memory doc but `upsert_doc_without_hooks` only persisted `buttons` children. Added `_persist_linked_accounts()` called after upsert to insert any missing linked account rows.
+- **API `header_sample_variables`** — `get_whatsapp_templates` now returns `header_sample_variables` array alongside `sample_variables` (body). Previously the frontend used body samples as header variable hints.
+- **Template preview** — `_build_template_preview` now includes header text with variables filled in (header values first, then body), not just body text.
+- **Case normalization** — All `header_type` comparisons in `send_template_to_thread` and `_build_template_components` use `.upper()` for consistent behavior regardless of how Meta returns the format string.
+- **Frontend** — `WhatsAppTemplatePicker` shows header text in preview with variable substitution, uses `header_sample_variables` for input hints, displays total variable count (header + body) in template list cards, and normalizes all `header_type` checks with `.toUpperCase()`.
+
+### Impacted modules
+- `excom/excom/doctype/whatsapp_templates/whatsapp_templates.json` — field order, sample visibility, header_variable_samples read-only
+- `excom/excom/doctype/whatsapp_templates/whatsapp_templates.py` — get_header(), _persist_linked_accounts(), fetch()
+- `excom/excom/whatsapp_template_utils.py` — is_text_header, get_header_variable_samples, header_variable_slot_count
+- `excom/excom/api/chat.py` — get_whatsapp_templates, _build_template_components, _build_template_preview, send_template_to_thread
+- `excom/excom/doctype/excom_broadcast/excom_broadcast.py` — header variable detection
+- `frontend/src/components/WhatsAppTemplatePicker.tsx` — header preview, sample hints, case normalization
+- `excom/patches/v1_0/add_whatsapp_template_header_variable_samples.py`, `excom/patches.txt`
+
+### Migration
+- `bench migrate` adds the `header_variable_samples` column and applies field layout changes. Re-run **Fetch templates** from Meta so `header_variable_samples` fills for existing TEXT-header templates.
+
+---
+
+## WhatsApp named parameter support and failure capture (2026-03-29)
+
+### What changed
+
+#### Named placeholder detection
+- **Root cause**: `ordered_placeholder_numbers` only matched `{{1}}`, `{{2}}` (digit-only). Meta API v21+ supports named params like `{{sale_start_date}}`. Templates using named params had 0 detected variables — the inbox showed no header inputs, and the send path thought no body params were needed.
+- **`whatsapp_template_utils.py`**: Added `ordered_placeholder_names(text)` matching `{{...}}` (named or positional), `placeholder_count(text)`, and `body_variable_slot_count(template)`. `header_variable_slot_count` now uses general placeholder detection. `ordered_placeholder_numbers` kept for backward compatibility.
+- **`chat.py`**: `get_whatsapp_templates` uses `body_variable_slot_count` instead of `ordered_placeholder_numbers`. `_build_template_components` uses both slot count helpers. Body component is emitted when `b_n > 0` (not when positional list is non-empty).
+
+#### Preview with named params
+- **`_replace_placeholders(text, values)`**: Replaces all `{{...}}` patterns in first-appearance order, works with both `{{1}}` and `{{customer_name}}`.
+- **Frontend**: `replacePlaceholders()` JS equivalent using global regex; header and body previews both use it.
+
+#### Failure capture
+- **Before**: On `ExcomProviderError` or `ExcomRateLimitError`, `frappe.throw()` fired before creating `Excom Message` — `failure_reason` was never stored, user only saw a toast.
+- **After**: `Excom Message` is always created with `delivery_status = "Failed"` and `failure_reason` populated, then `frappe.throw()` propagates the error to the frontend. Users can audit failed sends from the message timeline.
+
+#### Meta fetch — named header examples
+- `_extract_header_samples()` handles both `header_text` (positional) and `header_text_named_params` (named) from Meta’s example block, so `header_variable_samples` is always populated regardless of which parameter style the template uses.
+
+#### Broadcast
+- `_wa_template_variable_count` now uses `body_variable_slot_count` (handles named params) instead of counting body samples.
+
+### Impacted modules
+- `excom/excom/whatsapp_template_utils.py` — `ordered_placeholder_names`, `placeholder_count`, `body_variable_slot_count`, `_get_field`
+- `excom/excom/api/chat.py` — `get_whatsapp_templates`, `_build_template_components`, `_replace_placeholders`, `_build_template_preview`, `send_template_to_thread` (failure capture)
+- `excom/excom/doctype/whatsapp_templates/whatsapp_templates.py` — `_extract_header_samples`, fetch() named params
+- `excom/excom/doctype/excom_broadcast/excom_broadcast.py` — `_wa_template_variable_count`
+- `frontend/src/components/WhatsAppTemplatePicker.tsx` — `replacePlaceholders`, preview
+
+### Migration
+- No schema changes. Code-only. Re-run **Fetch templates** from Meta after deploy to refresh `header_variable_samples` for any templates using named parameters.
+
+---
+
+## Broadcast Schedule DateTimePicker (March 2026)
+
+### What changed
+- Replaced raw `<input type="datetime-local">` in BroadcastPage Step 3 with a custom `DateTimePicker` component.
+- New reusable UI components: `ui/popover.tsx` (Radix wrapper), `ui/date-time-picker.tsx` (calendar + time picker).
+- Added `@radix-ui/react-popover` dependency.
+
+### Why
+- Native `datetime-local` input is ugly on dark themes, inconsistent across browsers, and hard to use on mobile.
+- The new picker provides a visual calendar grid, scrollable hour/minute columns, "Now" and "Clear" quick actions, and a confirm step to prevent accidental selections.
+- Matches the existing zinc dark theme and blue accent color system.
+
+### Architecture
+- `DateTimePicker` is a self-contained component using `date-fns` (already installed) for date math.
+- The `min` prop disables past dates in the calendar grid. Time validation happens on confirm.
+- Output format is `YYYY-MM-DDTHH:MM` (datetime-local spec), which `frappeDatetimeFromLocalInput` already converts to Frappe datetime format (`YYYY-MM-DD HH:MM:SS`).
+- The `Popover` primitive wraps Radix with the project's dark theme styling and can be reused across the app.
+
+### Server-side schedule handling (verified correct)
+- `broadcast.py` `create_broadcast`: validates `scheduled_at > now_datetime()` before creating doc.
+- `excom_broadcast.py` `before_submit`: re-validates future datetime on submit.
+- `broadcast_schedule.py` `process_due_scheduled_broadcasts`: runs every minute via `scheduler_events["all"]`, atomically transitions Scheduled -> Queued via conditional SQL UPDATE, then enqueues `execute_broadcast`.
+- The datetime format pipeline is: browser local datetime -> `frappeDatetimeFromLocalInput` -> `"YYYY-MM-DD HH:MM:00"` -> Frappe `get_datetime()` -> stored as site-timezone datetime.
+
+### Impacted modules
+- `frontend/src/components/BroadcastPage.tsx` — import + usage of DateTimePicker
+- `frontend/src/components/ui/date-time-picker.tsx` — new component
+- `frontend/src/components/ui/popover.tsx` — new Radix wrapper
+- `frontend/package.json` — `@radix-ui/react-popover` added

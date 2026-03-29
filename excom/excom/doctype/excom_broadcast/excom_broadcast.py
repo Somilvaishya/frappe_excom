@@ -8,15 +8,16 @@ from frappe.model.document import Document
 from frappe.utils import get_datetime, now_datetime
 
 from excom.excom.whatsapp_template_utils import (
+    body_variable_slot_count,
     get_body_variable_samples,
-    ordered_placeholder_numbers,
+    header_variable_slot_count,
     template_is_linked_to_account,
 )
 
 
 def _wa_template_variable_count(template_name: str) -> int:
-    """Body placeholder count from JSON or legacy WhatsApp Templates samples."""
-    return len(get_body_variable_samples(template_name))
+    """Body variable count — prefers placeholder count, then sample length."""
+    return body_variable_slot_count(template_name)
 
 
 class ExcomBroadcast(Document):
@@ -39,12 +40,10 @@ class ExcomBroadcast(Document):
             hdr = frappe.db.get_value(
                 "WhatsApp Templates",
                 self.wa_template,
-                ["header_type", "header"],
+                ["header_type", "header", "header_variable_samples"],
                 as_dict=True,
             )
-            if hdr and (hdr.get("header_type") or "") == "TEXT" and ordered_placeholder_numbers(
-                hdr.get("header") or ""
-            ):
+            if hdr and header_variable_slot_count(hdr):
                 frappe.throw(
                     _(
                         "Broadcasts do not support templates with variables in the TEXT header. "

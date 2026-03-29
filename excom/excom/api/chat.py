@@ -1259,7 +1259,12 @@ def get_whatsapp_templates(search: str = "", whatsapp_account: str = "") -> list
     When ``whatsapp_account`` is set, only templates linked to that
     ``Excom Channel Account`` (primary or child table) are returned.
     """
-    from excom.excom.whatsapp_template_utils import get_body_variable_samples, ordered_placeholder_numbers
+    from excom.excom.whatsapp_template_utils import (
+        body_variable_slot_count,
+        get_body_variable_samples,
+        get_header_variable_samples,
+        header_variable_slot_count,
+    )
 
     filters = {"status": "APPROVED"}
     if search:
@@ -1278,6 +1283,7 @@ def get_whatsapp_templates(search: str = "", whatsapp_account: str = "") -> list
             "header_type",
             "sample_values",
             "body_variable_samples",
+            "header_variable_samples",
             "field_names",
             "header",
             "footer",
@@ -1320,15 +1326,11 @@ def get_whatsapp_templates(search: str = "", whatsapp_account: str = "") -> list
     lang_groups: dict = {}
     for t in templates:
         variables = get_body_variable_samples(t)
-        body_ph = ordered_placeholder_numbers(t.get("template") or "")
-        header_ph = (
-            ordered_placeholder_numbers(t.get("header") or "")
-            if (t.get("header_type") or "") == "TEXT"
-            else []
-        )
-        t["variable_count"] = len(body_ph)
-        t["header_variable_count"] = len(header_ph)
+        header_samples = get_header_variable_samples(t)
+        t["variable_count"] = body_variable_slot_count(t)
+        t["header_variable_count"] = header_variable_slot_count(t)
         t["sample_variables"] = variables
+        t["header_sample_variables"] = header_samples
         t["buttons"] = buttons_by_parent.get(t.name, [])
         t["has_dynamic_url"] = any(
             b.get("url_type") == "Dynamic" for b in t["buttons"]
@@ -1416,10 +1418,11 @@ def send_template_to_thread(
             )
         )
 
-    if template_doc.header_type in ("IMAGE", "DOCUMENT") and not header_media_url:
+    ht_upper = (template_doc.header_type or "").upper()
+    if ht_upper in ("IMAGE", "DOCUMENT") and not header_media_url:
         frappe.throw(
             _("This template requires a {0} attachment in the header").format(
-                template_doc.header_type.lower()
+                ht_upper.lower()
             )
         )
 
@@ -1455,7 +1458,14 @@ def send_template_to_thread(
         template_doc, var_list, header_media_url, btn_list,
     )
 
+    preview = _build_template_preview(template_doc, var_list)
+    now = now_datetime()
+
     from excom.excom.services.whatsapp_service import send_template_message as wa_send_template
+
+    provider_message_id = ""
+    delivery_status = "Sent"
+    failure_reason = ""
 
     try:
         result = wa_send_template(
@@ -1465,17 +1475,18 @@ def send_template_to_thread(
             language_code=template_doc.language_code or "en_US",
             components=components,
         )
+        provider_message_id = result.get("provider_message_id", "")
+        delivery_status = result.get("status", "Sent")
     except ExcomRateLimitError as e:
-        frappe.throw(_(e.message), title=_("WhatsApp rate limit"))
+        delivery_status = "Failed"
+        failure_reason = f"Rate limit: {e.message}"
     except ExcomProviderError as e:
+        delivery_status = "Failed"
+        failure_reason = e.message
         frappe.log_error(
             title="send_template_to_thread provider error",
             message=f"{e.message}\nthread={thread_id}\ntemplate={template_name}\naccount={thread.account}",
         )
-        frappe.throw(_(e.message), title=_("WhatsApp"))
-
-    preview = _build_template_preview(template_doc, var_list)
-    now = now_datetime()
 
     msg = frappe.get_doc({
         "doctype": "Excom Message",
@@ -1486,15 +1497,23 @@ def send_template_to_thread(
         "account": thread.account,
         "direction": "Outbound",
         "message_type": "Template",
-        "provider_message_id": result.get("provider_message_id", ""),
+        "provider_message_id": provider_message_id,
         "provider_timestamp": now,
         "content_text": preview,
         "media_file": header_media_url or None,
-        "delivery_status": result.get("status", "Sent"),
+        "delivery_status": delivery_status,
+        "failure_reason": failure_reason or None,
         "created_by_user": frappe.session.user,
         "template": template_name,
     })
     msg.insert(ignore_permissions=True)
+
+    if delivery_status == "Failed":
+        frappe.db.commit()
+        frappe.throw(
+            _(failure_reason or "WhatsApp send failed"),
+            title=_("WhatsApp template"),
+        )
 
     from excom.excom.services.thread_service import _auto_claim_thread
     thread_doc = frappe.db.get_value(
@@ -1556,24 +1575,26 @@ def _build_template_components(
 ) -> list:
     """Build Meta Cloud API ``components`` for template sends.
 
-    *values* order: header variables first (order of ``{{n}}`` in header text), then body
-    variables (order of ``{{n}}`` in body text). Matches inbox / broadcast payloads.
+    *values* order: header variable values first, then body variable values,
+    in order of first appearance in the template text. Works with both
+    positional (``{{1}}``) and named (``{{sale_date}}``) placeholder syntax.
 
     Meta requires:
-    - One ``text.text`` parameter per placeholder, in order of appearance — not raw ``{{1}}``.
+    - One ``text.text`` parameter per placeholder, in positional order.
     - Dynamic URL buttons must each include a ``button`` component with a text parameter.
     - Typical component order: header, body, then buttons.
     """
-    from excom.excom.whatsapp_template_utils import ordered_placeholder_numbers
+    from excom.excom.whatsapp_template_utils import (
+        body_variable_slot_count,
+        header_variable_slot_count,
+        is_text_header,
+    )
 
     values = list(body_variables or [])
     button_urls = list(button_urls or [])
 
-    header_text = (template_doc.header or "") if getattr(template_doc, "header_type", None) == "TEXT" else ""
-    body_text = template_doc.template or ""
-    header_order = ordered_placeholder_numbers(header_text)
-    body_order = ordered_placeholder_numbers(body_text)
-    h_n, b_n = len(header_order), len(body_order)
+    h_n = header_variable_slot_count(template_doc)
+    b_n = body_variable_slot_count(template_doc)
     need = h_n + b_n
 
     if len(values) < need:
@@ -1588,13 +1609,14 @@ def _build_template_components(
     body_vals = values[h_n : h_n + b_n]
 
     components: list = []
+    ht = (getattr(template_doc, "header_type", None) or "").upper()
 
-    if getattr(template_doc, "header_type", None) == "TEXT" and header_order:
+    if is_text_header(ht) and h_n:
         components.append({
             "type": "header",
-            "parameters": [{"type": "text", "text": str(header_vals[i])} for i in range(h_n)],
+            "parameters": [{"type": "text", "text": str(v)} for v in header_vals],
         })
-    elif template_doc.header_type == "IMAGE" and header_media_url:
+    elif ht == "IMAGE" and header_media_url:
         components.append({
             "type": "header",
             "parameters": [{
@@ -1602,7 +1624,7 @@ def _build_template_components(
                 "image": {"link": _to_absolute_url(header_media_url)},
             }],
         })
-    elif template_doc.header_type == "DOCUMENT" and header_media_url:
+    elif ht == "DOCUMENT" and header_media_url:
         filename = header_media_url.rsplit("/", 1)[-1] if "/" in header_media_url else "document"
         components.append({
             "type": "header",
@@ -1615,10 +1637,10 @@ def _build_template_components(
             }],
         })
 
-    if body_order:
+    if b_n:
         components.append({
             "type": "body",
-            "parameters": [{"type": "text", "text": str(body_vals[i])} for i in range(b_n)],
+            "parameters": [{"type": "text", "text": str(v)} for v in body_vals],
         })
 
     url_idx = 0
@@ -1680,9 +1702,38 @@ def _to_absolute_url(file_url: str) -> str:
     return f"{site_url}{file_url}"
 
 
+def _replace_placeholders(text: str, values: list) -> str:
+    """Replace ``{{...}}`` placeholders in *text* with *values* in first-appearance order.
+
+    Works with both positional (``{{1}}``) and named (``{{sale_date}}``) params.
+    """
+    from excom.excom.whatsapp_template_utils import ordered_placeholder_names
+
+    names = ordered_placeholder_names(text)
+    for i, name in enumerate(names):
+        if i < len(values):
+            text = text.replace("{{" + name + "}}", str(values[i]))
+    return text
+
+
 def _build_template_preview(template_doc, body_variables: list) -> str:
-    """Build a human-readable preview of the template with variables filled in."""
-    text = template_doc.template or ""
-    for i, val in enumerate(body_variables, 1):
-        text = text.replace(f"{{{{{i}}}}}", str(val))
-    return text[:500]
+    """Build a human-readable preview of the template with variables filled in.
+
+    *body_variables* follows the inbox convention: header values first, then body values.
+    """
+    from excom.excom.whatsapp_template_utils import header_variable_slot_count, is_text_header
+
+    h_n = header_variable_slot_count(template_doc)
+    header_vals = body_variables[:h_n]
+    body_vals = body_variables[h_n:]
+
+    parts: list[str] = []
+
+    if is_text_header(getattr(template_doc, "header_type", None)):
+        hdr = _replace_placeholders(template_doc.header or "", header_vals)
+        if hdr.strip():
+            parts.append(hdr.strip())
+
+    parts.append(_replace_placeholders(template_doc.template or "", body_vals))
+
+    return "\n".join(parts)[:500]
