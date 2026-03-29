@@ -24,6 +24,14 @@ interface WhatsAppTemplatePickerProps {
   onSent: () => void;
 }
 
+interface TemplateButton {
+  button_type: string;
+  button_label: string;
+  website_url?: string;
+  url_type?: string;
+  example_url?: string;
+}
+
 interface TemplateItem {
   name: string;
   template_name: string;
@@ -36,8 +44,13 @@ interface TemplateItem {
   footer: string;
   sample_values: string;
   field_names: string;
+  /** Body ``{{n}}`` count (from template text). */
   variable_count: number;
+  /** TEXT header ``{{n}}`` count; inbox sends header values first in ``variables`` JSON. */
+  header_variable_count?: number;
   sample_variables: string[];
+  buttons?: TemplateButton[];
+  has_dynamic_url?: boolean;
 }
 
 interface WindowInfo {
@@ -62,6 +75,8 @@ export function WhatsAppTemplatePicker({
   const [loading, setLoading] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
   const [variables, setVariables] = useState<string[]>([]);
+  /** Suffix for each dynamic URL button, same order as template buttons. */
+  const [buttonUrls, setButtonUrls] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [windowInfo, setWindowInfo] = useState<WindowInfo | null>(null);
 
@@ -151,7 +166,13 @@ export function WhatsAppTemplatePicker({
 
   const handleSelectTemplate = (t: TemplateItem) => {
     setSelectedTemplate(t);
-    setVariables(new Array(t.variable_count).fill(""));
+    const h = t.header_variable_count ?? 0;
+    const b = t.variable_count ?? 0;
+    setVariables(new Array(h + b).fill(""));
+    const dynCount = (t.buttons || []).filter(
+      (x) => x.button_type === "Visit Website" && x.url_type === "Dynamic"
+    ).length;
+    setButtonUrls(new Array(dynCount).fill(""));
     setHeaderMediaUrl("");
     setHeaderFileName("");
     setStep("fill");
@@ -179,8 +200,10 @@ export function WhatsAppTemplatePicker({
 
   const getPreview = (): string => {
     if (!selectedTemplate) return "";
+    const h = selectedTemplate.header_variable_count ?? 0;
     let text = selectedTemplate.template || "";
-    variables.forEach((val, i) => {
+    const bodyVars = variables.slice(h);
+    bodyVars.forEach((val, i) => {
       text = text.replace(`{{${i + 1}}}`, val || `{{${i + 1}}}`);
     });
     return text;
@@ -190,7 +213,24 @@ export function WhatsAppTemplatePicker({
     selectedTemplate?.header_type === "IMAGE" ||
     selectedTemplate?.header_type === "DOCUMENT";
 
-  const canSend = !sending && selectedTemplate && (!needsMedia || headerMediaUrl);
+  const hVar = selectedTemplate?.header_variable_count ?? 0;
+  const bVar = selectedTemplate?.variable_count ?? 0;
+  const varSlotsFilled =
+    hVar + bVar === 0 ||
+    variables.slice(0, hVar + bVar).every((v) => String(v ?? "").trim() !== "");
+  const dynBtns =
+    selectedTemplate?.buttons?.filter(
+      (x) => x.button_type === "Visit Website" && x.url_type === "Dynamic"
+    ) ?? [];
+  const dynFilled =
+    dynBtns.length === 0 || buttonUrls.slice(0, dynBtns.length).every((u) => String(u ?? "").trim() !== "");
+
+  const canSend =
+    !sending &&
+    selectedTemplate &&
+    (!needsMedia || headerMediaUrl) &&
+    varSlotsFilled &&
+    dynFilled;
 
   const handleSend = async () => {
     if (!selectedTemplate) return;
@@ -202,11 +242,15 @@ export function WhatsAppTemplatePicker({
     }
     setSending(true);
     try {
+      const dyn = (selectedTemplate.buttons || []).filter(
+        (x) => x.button_type === "Visit Website" && x.url_type === "Dynamic"
+      );
       await sendTemplate({
         thread_id: threadId,
         template_name: selectedTemplate.name,
         variables: JSON.stringify(variables),
         header_media_url: headerMediaUrl,
+        button_urls: JSON.stringify(buttonUrls.slice(0, dyn.length)),
       });
       toast.success("Template sent");
       onSent();
@@ -466,29 +510,60 @@ export function WhatsAppTemplatePicker({
                 </div>
               )}
 
-              {selectedTemplate.variable_count > 0 && (
+              {hVar + bVar > 0 && (
                 <div className="space-y-3">
-                  <p className="text-xs text-zinc-400 font-medium">
-                    Fill in template variables:
-                  </p>
-                  {variables.map((val, idx) => (
+                  <p className="text-xs text-zinc-400 font-medium">Template variables</p>
+                  {hVar > 0 && (
+                    <p className="text-[10px] text-zinc-500">Header (filled first for Meta)</p>
+                  )}
+                  {variables.slice(0, hVar + bVar).map((val, idx) => {
+                    const isHeader = idx < hVar;
+                    const bodyIdx = idx - hVar;
+                    const sampleHint = isHeader
+                      ? selectedTemplate.sample_variables[0] || ""
+                      : selectedTemplate.sample_variables[bodyIdx] || "";
+                    const labelHint = isHeader
+                      ? `var ${idx + 1}`
+                      : labels[bodyIdx] || `{{${bodyIdx + 1}}}`;
+                    return (
+                      <div key={idx}>
+                        <label className="text-xs text-zinc-500 mb-1 block">
+                          {isHeader ? `Header · ${labelHint}` : `Body · ${labelHint}`}
+                        </label>
+                        <Input
+                          placeholder={sampleHint || (isHeader ? "Header value" : `Value for {{${bodyIdx + 1}}}`)}
+                          value={val}
+                          onChange={(e) => {
+                            const next = [...variables];
+                            next[idx] = e.target.value;
+                            setVariables(next);
+                          }}
+                          className="bg-zinc-800 border-zinc-700 text-white"
+                          autoFocus={idx === 0 && !needsMedia}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {dynBtns.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs text-zinc-400 font-medium">Dynamic link buttons</p>
+                  {dynBtns.map((btn, idx) => (
                     <div key={idx}>
                       <label className="text-xs text-zinc-500 mb-1 block">
-                        {labels[idx] || `Variable {{${idx + 1}}}`}
+                        {btn.button_label} — <span className="text-zinc-600">{btn.website_url}</span>
                       </label>
                       <Input
-                        placeholder={
-                          selectedTemplate.sample_variables[idx] ||
-                          `Value for {{${idx + 1}}}`
-                        }
-                        value={val}
+                        placeholder={btn.example_url || "URL suffix"}
+                        value={buttonUrls[idx] || ""}
                         onChange={(e) => {
-                          const next = [...variables];
+                          const next = [...buttonUrls];
                           next[idx] = e.target.value;
-                          setVariables(next);
+                          setButtonUrls(next);
                         }}
                         className="bg-zinc-800 border-zinc-700 text-white"
-                        autoFocus={idx === 0 && !needsMedia}
                       />
                     </div>
                   ))}

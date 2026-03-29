@@ -1259,7 +1259,7 @@ def get_whatsapp_templates(search: str = "", whatsapp_account: str = "") -> list
     When ``whatsapp_account`` is set, only templates linked to that
     ``Excom Channel Account`` (primary or child table) are returned.
     """
-    from excom.excom.whatsapp_template_utils import get_body_variable_samples
+    from excom.excom.whatsapp_template_utils import get_body_variable_samples, ordered_placeholder_numbers
 
     filters = {"status": "APPROVED"}
     if search:
@@ -1320,7 +1320,14 @@ def get_whatsapp_templates(search: str = "", whatsapp_account: str = "") -> list
     lang_groups: dict = {}
     for t in templates:
         variables = get_body_variable_samples(t)
-        t["variable_count"] = len(variables)
+        body_ph = ordered_placeholder_numbers(t.get("template") or "")
+        header_ph = (
+            ordered_placeholder_numbers(t.get("header") or "")
+            if (t.get("header_type") or "") == "TEXT"
+            else []
+        )
+        t["variable_count"] = len(body_ph)
+        t["header_variable_count"] = len(header_ph)
         t["sample_variables"] = variables
         t["buttons"] = buttons_by_parent.get(t.name, [])
         t["has_dynamic_url"] = any(
@@ -1364,6 +1371,7 @@ def send_template_to_thread(
     template_name: str,
     variables: str = "[]",
     header_media_url: str = "",
+    button_urls: str = "[]",
 ) -> dict:
     """
     Send an approved WhatsApp template message on an existing thread.
@@ -1371,8 +1379,10 @@ def send_template_to_thread(
     Args:
         thread_id: Excom Thread name
         template_name: WhatsApp Templates document name
-        variables: JSON array of body variable values e.g. '["John", "INV-001"]'
+        variables: JSON array — header ``{{n}}`` values first (if any), then body values,
+            in order of appearance within each section.
         header_media_url: Frappe file URL for IMAGE/DOCUMENT header attachments
+        button_urls: JSON array of suffix strings for each dynamic URL button, in order
     """
     _check_excom_access()
 
@@ -1434,7 +1444,16 @@ def send_template_to_thread(
     if not isinstance(var_list, list):
         frappe.throw(_("Template variables must be a JSON array"))
 
-    components = _build_template_components(template_doc, var_list, header_media_url)
+    try:
+        btn_list = json.loads(button_urls) if isinstance(button_urls, str) else button_urls
+    except (json.JSONDecodeError, TypeError):
+        btn_list = []
+    if not isinstance(btn_list, list):
+        btn_list = []
+
+    components = _build_template_components(
+        template_doc, var_list, header_media_url, btn_list,
+    )
 
     from excom.excom.services.whatsapp_service import send_template_message as wa_send_template
 
@@ -1535,26 +1554,45 @@ def _build_template_components(
     template_doc, body_variables: list, header_media_url: str = "",
     button_urls: list = None,
 ) -> list:
-    """Build Meta WhatsApp template components from variables, media, and button URLs.
+    """Build Meta Cloud API ``components`` for template sends.
 
-    Args:
-        template_doc: WhatsApp Templates document
-        body_variables: List of body variable values
-        header_media_url: Frappe file URL for IMAGE/DOCUMENT header
-        button_urls: List of dynamic URL suffix values for URL buttons
+    *values* order: header variables first (order of ``{{n}}`` in header text), then body
+    variables (order of ``{{n}}`` in body text). Matches inbox / broadcast payloads.
+
+    Meta requires:
+    - One ``text.text`` parameter per placeholder, in order of appearance — not raw ``{{1}}``.
+    - Dynamic URL buttons must each include a ``button`` component with a text parameter.
+    - Typical component order: header, body, then buttons.
     """
-    components = []
+    from excom.excom.whatsapp_template_utils import ordered_placeholder_numbers
 
-    if body_variables:
-        components.append({
-            "type": "body",
-            "parameters": [{"type": "text", "text": str(v)} for v in body_variables],
-        })
+    values = list(body_variables or [])
+    button_urls = list(button_urls or [])
 
-    if template_doc.header_type == "TEXT" and template_doc.header and "{{" in template_doc.header:
+    header_text = (template_doc.header or "") if getattr(template_doc, "header_type", None) == "TEXT" else ""
+    body_text = template_doc.template or ""
+    header_order = ordered_placeholder_numbers(header_text)
+    body_order = ordered_placeholder_numbers(body_text)
+    h_n, b_n = len(header_order), len(body_order)
+    need = h_n + b_n
+
+    if len(values) < need:
+        frappe.throw(
+            _("This template needs {0} variable value(s) ({1} in the header, {2} in the body). You sent {3}.").format(
+                need, h_n, b_n, len(values),
+            ),
+            title=_("WhatsApp template"),
+        )
+
+    header_vals = values[:h_n]
+    body_vals = values[h_n : h_n + b_n]
+
+    components: list = []
+
+    if getattr(template_doc, "header_type", None) == "TEXT" and header_order:
         components.append({
             "type": "header",
-            "parameters": [{"type": "text", "text": template_doc.header}],
+            "parameters": [{"type": "text", "text": str(header_vals[i])} for i in range(h_n)],
         })
     elif template_doc.header_type == "IMAGE" and header_media_url:
         components.append({
@@ -1577,18 +1615,31 @@ def _build_template_components(
             }],
         })
 
-    if button_urls and template_doc.get("buttons"):
-        url_idx = 0
-        for i, btn in enumerate(template_doc.buttons):
-            if btn.button_type == "Visit Website" and btn.url_type == "Dynamic":
-                if url_idx < len(button_urls) and button_urls[url_idx]:
-                    components.append({
-                        "type": "button",
-                        "sub_type": "url",
-                        "index": str(i),
-                        "parameters": [{"type": "text", "text": str(button_urls[url_idx])}],
-                    })
-                url_idx += 1
+    if body_order:
+        components.append({
+            "type": "body",
+            "parameters": [{"type": "text", "text": str(body_vals[i])} for i in range(b_n)],
+        })
+
+    url_idx = 0
+    for i, btn in enumerate(template_doc.get("buttons") or []):
+        if btn.button_type != "Visit Website" or btn.url_type != "Dynamic":
+            continue
+        if url_idx >= len(button_urls) or str(button_urls[url_idx] or "").strip() == "":
+            frappe.throw(
+                _('Template "{0}" has a dynamic URL button ({1}). Add the URL suffix parameter.').format(
+                    template_doc.template_name or template_doc.name,
+                    getattr(btn, "button_label", None) or _("button"),
+                ),
+                title=_("WhatsApp template"),
+            )
+        components.append({
+            "type": "button",
+            "sub_type": "url",
+            "index": str(i),
+            "parameters": [{"type": "text", "text": str(button_urls[url_idx]).strip()}],
+        })
+        url_idx += 1
 
     return components
 

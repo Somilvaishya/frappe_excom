@@ -8,9 +8,20 @@ used when the JSON field is empty.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import frappe
+
+
+def ordered_placeholder_numbers(text: str) -> list[int]:
+    """Unique ``{{n}}`` placeholder numbers in order of first appearance in *text*."""
+    order: list[int] = []
+    for m in re.finditer(r"\{\{(\d+)\}\}", text or ""):
+        n = int(m.group(1))
+        if n not in order:
+            order.append(n)
+    return order
 
 
 def get_body_variable_samples(template: Any) -> list[str]:

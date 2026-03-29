@@ -9,6 +9,7 @@ from frappe.utils import get_datetime, now_datetime
 
 from excom.excom.whatsapp_template_utils import (
     get_body_variable_samples,
+    ordered_placeholder_numbers,
     template_is_linked_to_account,
 )
 
@@ -34,6 +35,22 @@ class ExcomBroadcast(Document):
             ):
                 frappe.throw(
                     _("This WhatsApp template is not linked to the selected channel account (phone number).")
+                )
+            hdr = frappe.db.get_value(
+                "WhatsApp Templates",
+                self.wa_template,
+                ["header_type", "header"],
+                as_dict=True,
+            )
+            if hdr and (hdr.get("header_type") or "") == "TEXT" and ordered_placeholder_numbers(
+                hdr.get("header") or ""
+            ):
+                frappe.throw(
+                    _(
+                        "Broadcasts do not support templates with variables in the TEXT header. "
+                        "Create a Meta template without header placeholders, or use an IMAGE/DOCUMENT header."
+                    ),
+                    title=_("WhatsApp template"),
                 )
             self._validate_whatsapp_variables()
 
