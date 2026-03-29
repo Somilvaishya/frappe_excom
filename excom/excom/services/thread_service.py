@@ -204,6 +204,7 @@ def send_outbound_message(
     media_file: str = "",
     template: str = "",
     reply_to: str = "",
+    sticker_name: str = "",
 ) -> str:
     """
     Send an outbound message through the channel provider.
@@ -231,7 +232,6 @@ def send_outbound_message(
     delivery_status = "Queued"
 
     if thread.channel == "webchat":
-        # Webchat: no external provider — visitor polls via get_visitor_messages
         import secrets
         provider_message_id = f"wc-agent-{secrets.token_hex(8)}"
         delivery_status = "Delivered"
@@ -246,9 +246,12 @@ def send_outbound_message(
         from excom.excom.services.whatsapp_service import (
             send_text_message,
             send_media_message,
+            send_sticker_message,
         )
 
-        if message_type in ("Image", "Video", "Audio", "Document") and media_file:
+        if message_type == "Sticker" and sticker_name:
+            result = send_sticker_message(account, to_number, sticker_name)
+        elif message_type in ("Image", "Video", "Audio", "Document") and media_file:
             result = send_media_message(account, to_number, message_type, media_file, content_text)
         else:
             result = send_text_message(account, to_number, content_text)
@@ -314,7 +317,12 @@ def send_outbound_message(
     return msg.name
 
 
-def update_delivery_status(provider_message_id: str, status: str, conversation_id: str = ""):
+def update_delivery_status(
+    provider_message_id: str,
+    status: str,
+    conversation_id: str = "",
+    failure_reason: str = "",
+) -> None:
     """Update delivery status on an Excom Message by provider_message_id."""
     msg = frappe.db.get_value(
         "Excom Message",
@@ -333,7 +341,11 @@ def update_delivery_status(provider_message_id: str, status: str, conversation_i
     }
     mapped = status_map.get(status, status)
 
-    frappe.db.set_value("Excom Message", msg.name, "delivery_status", mapped)
+    updates: dict = {"delivery_status": mapped}
+    if mapped == "Failed" and failure_reason:
+        updates["failure_reason"] = failure_reason
+
+    frappe.db.set_value("Excom Message", msg.name, updates, update_modified=True)
 
     frappe.publish_realtime(
         "excom:message_status_updated",

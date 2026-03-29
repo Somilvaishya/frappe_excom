@@ -12,3 +12,4 @@ excom.patches.v1_0.remap_wa_account_links
 excom.patches.v1_0.rename_notification_doctypes
 excom.patches.v1_0.whatsapp_template_samples_and_links
 excom.patches.v1_0.add_whatsapp_template_header_variable_samples
+excom.patches.v1_0.add_sticker_message_type

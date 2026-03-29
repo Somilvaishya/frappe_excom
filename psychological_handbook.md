@@ -139,3 +139,29 @@ The immediate objective is to establish a coherent architecture and language bef
 - Meta's API evolves: v21+ introduced named parameters (`{{sale_date}}` instead of `{{1}}`). Any regex that only matches digits is a silent time bomb — the template "works" in Desk but sends zero parameters. Always match the general `{{...}}` pattern.
 - Failed sends must leave evidence. A `frappe.throw` before creating the message doc means the failure is visible only as a transient toast — no audit trail, no retry path. Create the record first, mark it Failed, then throw.
 
+### 2026-03-29 — Sticker message support
+
+- Stickers are a first-class media type in WhatsApp (not images with special MIME). They have their own payload shape (`"type":"sticker"`) and constraints (webp only, 100/500 KB limits). Treating them as images would silently fail or render incorrectly.
+- Pre-uploading stickers to Meta and storing `media_id` is critical for reliability. Link-based sends work but add latency and are deprecated by Meta. The DocType auto-uploads on save to eliminate manual steps.
+- Sticker packs are a user-experience concept, not a Meta API concept. Grouping by `pack` field with search gives operators quick access without deep nesting or a separate management screen.
+- Inbound stickers reuse the same `_download_media` path as images/video/documents — the webp file is downloaded and stored. No special handling needed because the webhook media ID resolution is format-agnostic.
+- The sticker picker deliberately sends on click (no "send" button) because stickers are quick-fire emotional responses. Adding a confirmation step would make the UX feel sluggish.
+
+### 2026-03-29 — Analytics dashboard
+
+- Excom must be a "whole sole" platform — operators shouldn't need to switch to Meta Business Suite or WhatsApp Manager to see messaging metrics. Every data point Meta exposes should be accessible inside Excom.
+- Two data sources, one dashboard: Meta's analytics APIs give the authoritative view of what Meta billed (conversations, costs, delivery stats), while Excom's internal DB gives the operational view (agent performance, response times, channel distribution). Both are needed — neither alone tells the full story.
+- Internal metrics (messages_by_day, agent_performance, avg_response_time) are computed from `tabExcom Message` via SQL aggregation, not stored counters. This avoids sync drift and gives accurate historical queries.
+- The period selector (7/14/30/90 days) and account switcher respect the operator's mental model: "show me how this account performed last month." No need to understand UNIX timestamps or WABA IDs.
+- Template analytics require a one-time opt-in via Meta's API (`is_enabled_for_insights=true`). This is a Meta requirement, not an Excom choice — the dashboard should gracefully handle the case where it's not enabled yet.
+- Pricing data may not be available for WABAs that bill through a Solution Partner. The dashboard handles this gracefully by showing "No pricing data" rather than erroring.
+
+### 2026-03-29 — Delivery watchdog & message retry
+
+- **Silence is not success.** If Meta never sends a delivery webhook (network issues, blocked numbers, rate limits), the message appears "Sent" forever — giving operators a false sense that their message was delivered. The 30-second watchdog timeout converts optimistic silence into an actionable failure state.
+- **Retry updates, not duplicates.** The retry mechanism re-sends the *same* `Excom Message` record rather than creating a new one. This prevents the conversation thread from being polluted with duplicate messages, preserves the original timestamp/context, and mirrors how WhatsApp's own client handles retries (the message stays in place with a retry icon).
+- **Meta errors are captured, not swallowed.** When Meta rejects a message (blocked number, policy violation, rate limit), the webhook includes error codes and titles. Capturing these in `failure_reason` gives operators visibility into *why* the message failed, not just *that* it failed. This is critical for broadcast troubleshooting where hundreds of messages might fail for the same policy reason.
+- **Broadcast messages are not second-class citizens.** The watchdog and retry apply uniformly to individual and broadcast messages. Broadcasts are more prone to failures (rate limits, number quality degradation, policy blocks on marketing templates), so watchdog coverage is especially important there.
+- **The 10-minute timeout balances patience with visibility.** Meta typically delivers webhooks within seconds, but transient network issues, Meta API queues, or high-volume broadcast windows can introduce minutes of delay. 10 minutes gives Meta enough time to retry delivery internally before Excom marks failure. A live countdown timer ("Checking delivery… 8:42") in the UI keeps operators informed without alarming them — they can see the system is actively monitoring, not silently ignoring. The 24-hour floor prevents the watchdog from scanning the entire message history.
+- **Visual treatment of failed messages is deliberate.** The red-tinted bubble and explicit failure reason make failed messages impossible to miss in the thread. The retry button is inline (not in a menu) because the most common next action for a failed message is to retry it.
+

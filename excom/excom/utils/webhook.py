@@ -154,6 +154,7 @@ def _process_inbound_message(message, sender_profile_name, channel_account, acco
 		"video": "Video",
 		"audio": "Audio",
 		"document": "Document",
+		"sticker": "Sticker",
 		"location": "Location",
 		"reaction": "Reaction",
 		"button": "Button",
@@ -190,7 +191,7 @@ def _process_inbound_message(message, sender_profile_name, channel_account, acco
 			content_json = {"interactive": interactive_data, "flow_response": flow_response}
 			excom_msg_type = "Flow"
 
-	elif message_type in ("image", "audio", "video", "document"):
+	elif message_type in ("image", "audio", "video", "document", "sticker"):
 		content_text = message.get(message_type, {}).get("caption", "")
 		media_file = _download_media(message, message_type, channel_account)
 
@@ -288,10 +289,22 @@ def _update_template_status(data):
 
 
 def _update_message_status(data):
-	"""Update delivery status on Excom Message."""
+	"""Update delivery status on Excom Message, including error info from Meta."""
 	status_entry = data.get("statuses", [{}])[0]
 	provider_id = status_entry.get("id")
 	status = status_entry.get("status")
 
-	if provider_id and status:
-		update_delivery_status(provider_id, status)
+	if not (provider_id and status):
+		return
+
+	failure_reason = ""
+	if status == "failed":
+		errors = status_entry.get("errors", [])
+		if errors:
+			err = errors[0]
+			code = err.get("code", "")
+			title = err.get("title", "")
+			detail = err.get("error_data", {}).get("details", "") or err.get("message", "")
+			failure_reason = f"[{code}] {title}: {detail}".strip(": ")
+
+	update_delivery_status(provider_id, status, failure_reason=failure_reason)

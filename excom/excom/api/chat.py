@@ -232,6 +232,7 @@ def get_messages(thread_id: str, limit: int = 50, before: str = ""):
                m.provider_message_id, m.reply_to,
                m.created_by_user, m.is_internal,
                m.is_pinned, m.pinned_by, m.reactions,
+               m.failure_reason,
                CASE WHEN m.message_type = 'Email' THEN m.content_json ELSE NULL END AS content_json,
                u.full_name AS sender_name,
                rt.content_text AS reply_to_content,
@@ -261,23 +262,31 @@ def get_messages(thread_id: str, limit: int = 50, before: str = ""):
 
 @frappe.whitelist()
 def send_message(thread_id: str, message: str = "", message_type: str = "Text",
-                 media_url: str = "", reply_to: str = ""):
+                 media_url: str = "", reply_to: str = "", sticker_name: str = ""):
     """
     Send a message on an existing thread.
 
     Args:
         thread_id: Excom Thread name
         message: Text content (required for Text, optional caption for media)
-        message_type: Text | Image | Video | Audio | Document
+        message_type: Text | Image | Video | Audio | Document | Sticker
         media_url: Frappe file URL for media messages
         reply_to: Excom Message name being replied to
+        sticker_name: Excom Sticker name (for Sticker type)
     """
+    if message_type == "Sticker" and sticker_name:
+        sticker = frappe.get_doc("Excom Sticker", sticker_name)
+        if not sticker.media_id and not sticker.sticker_file:
+            frappe.throw(_("This sticker has no media. Please re-upload it."))
+        media_url = media_url or sticker.sticker_file or ""
+
     try:
         msg_name = send_outbound_message(
             thread_name=thread_id,
             content_text=message,
             message_type=message_type,
             media_file=media_url,
+            sticker_name=sticker_name,
             reply_to=reply_to,
         )
         frappe.db.commit()
@@ -288,6 +297,41 @@ def send_message(thread_id: str, message: str = "", message_type: str = "Text",
             message=f"thread_id={thread_id}\n{str(e)}",
         )
         raise
+
+
+@frappe.whitelist()
+def get_stickers(pack: str = ""):
+    """
+    Fetch available stickers, optionally filtered by pack.
+
+    Args:
+        pack: Filter by sticker pack name
+
+    Returns:
+        list of sticker dicts with name, sticker_name, pack, sticker_file,
+        media_id, is_animated
+    """
+    filters = {"enabled": 1}
+    if pack:
+        filters["pack"] = pack
+
+    stickers = frappe.get_all(
+        "Excom Sticker",
+        filters=filters,
+        fields=["name", "sticker_name", "pack", "sticker_file", "media_id", "is_animated"],
+        order_by="pack asc, sticker_name asc",
+    )
+    packs = frappe.get_all(
+        "Excom Sticker",
+        filters={"enabled": 1},
+        fields=["pack"],
+        group_by="pack",
+        order_by="pack asc",
+    )
+    return {
+        "stickers": stickers,
+        "packs": [p["pack"] for p in packs],
+    }
 
 
 @frappe.whitelist()
@@ -1777,3 +1821,20 @@ def _build_template_preview(template_doc, body_variables: list, location_data: d
     parts.append(_replace_placeholders(template_doc.template or "", body_vals))
 
     return "\n".join(parts)[:500]
+
+
+@frappe.whitelist()
+def retry_message(message_name: str = "") -> dict:
+    """
+    Retry a failed outbound message.
+
+    Re-sends via the original provider and updates the same Excom Message record
+    instead of creating a duplicate.
+    """
+    _check_excom_access()
+
+    if not message_name:
+        frappe.throw(_("message_name is required"))
+
+    from excom.excom.services.delivery_watchdog import retry_failed_message
+    return retry_failed_message(message_name)

@@ -22,6 +22,9 @@ import {
   Reply,
   ArrowRightLeft,
   FileText,
+  Sticker,
+  AlertCircle,
+  RotateCcw,
 } from "lucide-react";
 import { useFrappePostCall } from "frappe-react-sdk";
 import { Button } from "./ui/button";
@@ -39,6 +42,7 @@ import { TagManager } from "./TagManager";
 import { EmailMessageCard } from "./EmailMessageCard";
 import { EmailCompose } from "./EmailCompose";
 import { WhatsAppTemplatePicker } from "./WhatsAppTemplatePicker";
+import { StickerPicker } from "./StickerPicker";
 import { useEmailBody } from "../hooks/useEmailBody";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -71,15 +75,46 @@ function getChannelIcon(channel?: string) {
 
 function DeliveryIcon({ status }: { status?: string }) {
   switch (status) {
+    case "queued":
+      return <Loader2 className="w-3 h-3 text-zinc-500 animate-spin" />;
     case "sent":
       return <Check className="w-3 h-3 text-zinc-500" />;
     case "delivered":
       return <CheckCheck className="w-3 h-3 text-zinc-500" />;
     case "read":
       return <CheckCheck className="w-3 h-3 text-blue-400" />;
+    case "failed":
+      return <AlertCircle className="w-3 h-3 text-red-400" />;
     default:
       return null;
   }
+}
+
+const DELIVERY_TIMEOUT_MS = 10 * 60 * 1000;
+
+function DeliveryTimer({ sentAt }: { sentAt: Date }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const elapsed = now - sentAt.getTime();
+  const remaining = Math.max(0, DELIVERY_TIMEOUT_MS - elapsed);
+
+  if (remaining <= 0) return null;
+
+  const mins = Math.floor(remaining / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
+  const display = `${mins}:${secs.toString().padStart(2, "0")}`;
+
+  return (
+    <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+      Checking delivery… {display}
+    </span>
+  );
 }
 
 export function ChannelTabsView({
@@ -182,6 +217,26 @@ export function ChannelTabsView({
     "excom.excom.api.chat.transfer_thread"
   );
 
+  const { call: retryMessageCall } = useFrappePostCall(
+    "excom.excom.api.chat.retry_message"
+  );
+
+  const [retryingMsgId, setRetryingMsgId] = useState<string | null>(null);
+
+  const handleRetryMessage = useCallback(async (messageId: string) => {
+    setRetryingMsgId(messageId);
+    try {
+      await retryMessageCall({ message_name: messageId });
+      toast.success("Message resent");
+      refresh();
+    } catch {
+      toast.error("Retry failed");
+      refresh();
+    } finally {
+      setRetryingMsgId(null);
+    }
+  }, [retryMessageCall, refresh]);
+
   const { call: fetchAllTeams } = useFrappePostCall(
     "excom.excom.api.teams.get_all_teams"
   );
@@ -197,6 +252,7 @@ export function ChannelTabsView({
   const [transferMembers, setTransferMembers] = useState<{ user: string; full_name: string; user_image: string }[]>([]);
   const [transferNote, setTransferNote] = useState("");
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
 
   const openTransferModal = useCallback(async () => {
     try {
@@ -773,7 +829,9 @@ export function ChannelTabsView({
 
                           <div
                             className={`rounded-2xl p-3 shadow-lg relative ${
-                              isAI
+                              message.status === "failed"
+                                ? "bg-red-950/40 border border-red-500/40 text-white"
+                                : isAI
                                 ? "bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 text-white"
                                 : isUser
                                 ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white"
@@ -836,6 +894,12 @@ export function ChannelTabsView({
                                 alt="Attached media"
                                 className="rounded-lg max-w-sm"
                               />
+                            ) : message.type === "sticker" && message.mediaUrl ? (
+                              <img
+                                src={message.mediaUrl}
+                                alt="Sticker"
+                                className="w-32 h-32 object-contain"
+                              />
                             ) : (
                               <p className="text-sm leading-relaxed">
                                 {message.content}
@@ -886,6 +950,32 @@ export function ChannelTabsView({
                               </div>
                             )}
                           </div>
+
+                          {message.status === "failed" && isUser && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] text-red-400 truncate max-w-48">
+                                {message.failureReason || "Delivery failed"}
+                              </span>
+                              <button
+                                onClick={() => handleRetryMessage(message.id)}
+                                disabled={retryingMsgId === message.id}
+                                className="flex items-center gap-1 text-[11px] font-medium text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                              >
+                                {retryingMsgId === message.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="w-3 h-3" />
+                                )}
+                                Retry
+                              </button>
+                            </div>
+                          )}
+
+                          {(message.status === "sent" || message.status === "queued") && isUser && (
+                            <div className="mt-1 flex justify-end">
+                              <DeliveryTimer sentAt={message.timestamp} />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1068,15 +1158,37 @@ export function ChannelTabsView({
                   <ImageIcon className="w-5 h-5" />
                 </Button>
                 {selectedChannel === "whatsapp" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-green-400 hover:text-green-300"
-                    onClick={() => setShowTemplatePicker(true)}
-                    title="Send WhatsApp Template"
-                  >
-                    <FileText className="w-5 h-5" />
-                  </Button>
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-green-400 hover:text-green-300"
+                      onClick={() => setShowTemplatePicker(true)}
+                      title="Send WhatsApp Template"
+                    >
+                      <FileText className="w-5 h-5" />
+                    </Button>
+                    <div className="relative">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-yellow-400 hover:text-yellow-300"
+                        onClick={() => setShowStickerPicker((v) => !v)}
+                        title="Send Sticker"
+                      >
+                        <Sticker className="w-5 h-5" />
+                      </Button>
+                      {showStickerPicker && selectedAccountId && (
+                        <div className="absolute bottom-full right-0 mb-2 z-50">
+                          <StickerPicker
+                            threadId={selectedAccountId}
+                            onClose={() => setShowStickerPicker(false)}
+                            onSent={() => refresh()}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             )}

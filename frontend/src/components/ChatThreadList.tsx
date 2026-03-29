@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { MessageCircle, Phone, Instagram, Mail, Radio } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { formatDistanceToNow } from "date-fns";
@@ -41,6 +42,14 @@ export function ChatThreadList({
   selectedConversationId,
   onSelectConversation,
 }: ChatThreadListProps) {
+  const selectedRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (selectedConversationId && selectedRef.current) {
+      selectedRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selectedConversationId]);
+
   return (
     <div className="w-96 bg-zinc-900/50 border-r border-zinc-800 flex flex-col h-full shrink-0 overflow-hidden">
       <div className="shrink-0 p-4 border-b border-zinc-800">
@@ -60,6 +69,7 @@ export function ChatThreadList({
             return (
               <button
                 key={contact.id}
+                ref={isSelected ? selectedRef : undefined}
                 onClick={() => onSelectConversation(contact.id)}
                 className={`w-full p-4 text-left transition-all hover:bg-zinc-800/50 ${
                   isSelected

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, MessageCircle, ChevronDown, Tag, X, Users, Shield, GitMerge, Cog, Plus, Radio, Settings } from "lucide-react";
+import { Search, MessageCircle, ChevronDown, Tag, X, Users, Shield, GitMerge, Cog, Plus, Radio, Settings, BarChart3 } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import {
@@ -37,6 +37,7 @@ interface LeftSidebarProps {
   onNavigateToMergeSuggestions?: () => void;
   onNavigateToSubscriberRules?: () => void;
   onNavigateToBroadcasts?: () => void;
+  onNavigateToAnalytics?: () => void;
   onNavigateToSettings?: () => void;
   selectedTeamFilter?: string;
   onTeamFilterChange?: (team: string) => void;
@@ -69,6 +70,7 @@ export function LeftSidebar({
   onNavigateToMergeSuggestions,
   onNavigateToSubscriberRules,
   onNavigateToBroadcasts,
+  onNavigateToAnalytics,
   onNavigateToSettings,
   selectedTeamFilter = "",
   onTeamFilterChange,
@@ -382,6 +384,16 @@ export function LeftSidebar({
             >
               <Radio className="w-4 h-4 text-emerald-400" />
               Broadcasts
+            </button>
+          )}
+
+          {onNavigateToAnalytics && (
+            <button
+              onClick={onNavigateToAnalytics}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+            >
+              <BarChart3 className="w-4 h-4 text-blue-400" />
+              Analytics
             </button>
           )}
 

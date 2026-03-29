@@ -33,6 +33,7 @@ export function useMessages(threadId: string) {
         ? { name: msg.sender_name, avatar: "" }
         : undefined,
       isPinned: Boolean(msg.is_pinned),
+      failureReason: msg.failure_reason || undefined,
       reactions: msg.reactions && typeof msg.reactions === "object" ? msg.reactions : undefined,
       replyTo: msg.reply_to
         ? {
@@ -56,25 +57,28 @@ export function useMessages(threadId: string) {
 
 function mapDeliveryStatus(
   status: string
-): "sent" | "delivered" | "read" | undefined {
-  const map: Record<string, "sent" | "delivered" | "read"> = {
+): "sent" | "delivered" | "read" | "failed" | "queued" | undefined {
+  const map: Record<string, "sent" | "delivered" | "read" | "failed" | "queued"> = {
     Sent: "sent",
     Delivered: "delivered",
     Read: "read",
+    Failed: "failed",
+    Queued: "queued",
   };
   return map[status] || undefined;
 }
 
 function mapMessageType(
   type: string
-): "text" | "image" | "document" | "audio" | "email" | "template" | undefined {
-  const map: Record<string, "text" | "image" | "document" | "audio" | "email" | "template"> = {
+): "text" | "image" | "document" | "audio" | "email" | "template" | "sticker" | undefined {
+  const map: Record<string, "text" | "image" | "document" | "audio" | "email" | "template" | "sticker"> = {
     Text: "text",
     Image: "image",
     Document: "document",
     Audio: "audio",
     Email: "email",
     Template: "template",
+    Sticker: "sticker",
   };
   return map[type] || "text";
 }

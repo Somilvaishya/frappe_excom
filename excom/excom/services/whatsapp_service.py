@@ -107,6 +107,51 @@ def send_media_message(account, to: str, media_type: str, file_url: str,
     return _call_api(account, payload)
 
 
+def send_sticker_message(account, to: str, sticker_name: str) -> dict:
+    """
+    Send a sticker WhatsApp message.
+
+    Prefers the pre-uploaded media_id; falls back to hosting the file URL
+    as a link (not recommended by Meta but functional).
+
+    Args:
+        account: Excom Channel Account doc
+        to: Recipient phone number (E.164)
+        sticker_name: Excom Sticker doctype name
+
+    Returns:
+        dict with keys: provider_message_id, status
+    """
+    import frappe as _frappe
+
+    sticker = _frappe.get_doc("Excom Sticker", sticker_name)
+    to = _clean_phone(to)
+
+    sticker_obj: dict = {}
+    if sticker.media_id:
+        sticker_obj["id"] = sticker.media_id
+    elif sticker.sticker_file:
+        if sticker.sticker_file.startswith("http"):
+            link = sticker.sticker_file
+        else:
+            from excom.excom.api.chat import _get_site_url
+            link = _get_site_url() + sticker.sticker_file
+        sticker_obj["link"] = link
+    else:
+        raise ExcomProviderError(
+            f"Sticker {sticker_name} has no media_id or file URL",
+            provider="whatsapp",
+        )
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "sticker",
+        "sticker": sticker_obj,
+    }
+    return _call_api(account, payload)
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------

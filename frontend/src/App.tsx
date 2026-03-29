@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { FrappeProvider } from "frappe-react-sdk";
 import { Toaster } from "sonner";
 import { LeftSidebar } from "./components/LeftSidebar";
@@ -12,6 +12,7 @@ import { TeamManagementPage } from "./components/TeamManagementPage";
 import { MergeSuggestionsPage } from "./components/MergeSuggestionsPage";
 import { SubscriberRulesPage } from "./components/SubscriberRulesPage";
 import { BroadcastPage } from "./components/BroadcastPage";
+import { AnalyticsPage } from "./components/AnalyticsPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { NewConversationDialog } from "./components/NewConversationDialog";
 import { useThreads } from "./hooks/useContacts";
@@ -26,6 +27,7 @@ type AppPage =
   | "merge_suggestions"
   | "subscriber_rules"
   | "broadcasts"
+  | "analytics"
   | "settings";
 
 const getSiteName = (): string => {
@@ -67,9 +69,25 @@ function ExcomDashboard() {
   const [selectedBroadcastStatus, setSelectedBroadcastStatus] = useState("");
   const [showNewConversation, setShowNewConversation] = useState(false);
 
+  const pendingSelectionRef = useRef<{
+    contactId: string;
+    accountId: string;
+  } | null>(null);
+
   const { unifiedContacts, refresh: refreshThreads } = useThreads(
     searchQuery, selectedTeamFilter, selectedBroadcast, selectedBroadcastStatus,
   );
+
+  useEffect(() => {
+    if (!pendingSelectionRef.current) return;
+    const { contactId, accountId } = pendingSelectionRef.current;
+    const found = unifiedContacts.find((c) => c.id === contactId);
+    if (found) {
+      pendingSelectionRef.current = null;
+      setSelectedContactId(contactId);
+      setSelectedAccountId(accountId);
+    }
+  }, [unifiedContacts]);
 
   const handleThreadUpdate = useCallback(() => {
     refreshThreads();
@@ -154,10 +172,19 @@ function ExcomDashboard() {
   const handleNewConversationCreated = useCallback(
     (threadId: string, identityName: string) => {
       setShowNewConversation(false);
+      setCurrentPage("inbox");
       setSelectedTeamFilter("");
       setSelectedChannel("all");
-      setSelectedContactId(identityName);
-      setSelectedAccountId(threadId);
+      setSelectedTags([]);
+      setSelectedBroadcast("");
+      setSelectedBroadcastStatus("");
+      setSearchQuery("");
+
+      pendingSelectionRef.current = {
+        contactId: identityName,
+        accountId: threadId,
+      };
+
       refreshThreads();
     },
     [refreshThreads]
@@ -213,6 +240,12 @@ function ExcomDashboard() {
     );
   }
 
+  if (currentPage === "analytics") {
+    return (
+      <AnalyticsPage onNavigateBack={() => setCurrentPage("inbox")} />
+    );
+  }
+
   return (
     <div className="h-full w-full bg-zinc-950 flex overflow-hidden">
       <LeftSidebar
@@ -229,6 +262,7 @@ function ExcomDashboard() {
         onNavigateToMergeSuggestions={() => setCurrentPage("merge_suggestions")}
         onNavigateToSubscriberRules={() => setCurrentPage("subscriber_rules")}
         onNavigateToBroadcasts={() => setCurrentPage("broadcasts")}
+        onNavigateToAnalytics={() => setCurrentPage("analytics")}
         onNavigateToSettings={() => setCurrentPage("settings")}
         selectedTeamFilter={selectedTeamFilter}
         onTeamFilterChange={setSelectedTeamFilter}

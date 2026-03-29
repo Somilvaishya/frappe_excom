@@ -1297,3 +1297,172 @@ Mobile PKCE and native apps must use the same public origin users type in the br
 
 ### Migration
 - Run `bench migrate` after deploy (header_type options changed).
+
+---
+
+## Phase 8: Sticker Message Support
+
+### What changed
+Full sticker support added: new DocType for sticker management, send/receive sticker messages via WhatsApp, frontend sticker picker UI.
+
+### Architecture
+
+#### Excom Sticker DocType (`excom/excom/doctype/excom_sticker/`)
+- Fields: `sticker_name`, `pack` (grouping), `is_animated`, `enabled`, `sticker_file` (Attach, .webp), `media_id` (auto-populated from Meta upload), `whatsapp_account`, `file_size_kb`.
+- Validation: `.webp` format only, static <= 100 KB, animated <= 500 KB.
+- Auto-upload: on `after_insert` and when `sticker_file` changes, the controller uploads the file to Meta's media API (`POST /{phone_id}/media`) and stores the returned `media_id`.
+- `media_id` is the preferred sending mechanism (faster delivery, no re-download by Meta).
+
+#### Outbound sticker flow
+1. Frontend `StickerPicker` calls `send_message` with `message_type="Sticker"` and `sticker_name`.
+2. `chat.send_message` loads the Excom Sticker doc and passes `sticker_name` to `thread_service.send_outbound_message`.
+3. `thread_service` routes to `whatsapp_service.send_sticker_message`.
+4. `send_sticker_message` builds the Meta payload: `{"type":"sticker","sticker":{"id":"<media_id>"}}` (preferred) or `{"sticker":{"link":"<url>"}}` (fallback).
+5. An `Excom Message` with `message_type="Sticker"` and `media_file` is created.
+
+#### Inbound sticker flow
+1. Webhook `type_map` now maps `"sticker"` to `"Sticker"`.
+2. Sticker payloads contain media ID just like images; they hit the existing `_download_media` branch (tuple includes `"sticker"`), downloading the webp file and storing it as a Frappe File.
+3. `Excom Message` is created with `message_type="Sticker"` and `media_file` pointing to the downloaded webp.
+
+#### Frontend
+- `StickerPicker` component: grid of sticker thumbnails grouped by pack, with search. Click sends immediately.
+- Message bubble renders stickers as `<img>` with `w-32 h-32 object-contain` (desktop) or `w-24 h-24` (mobile).
+- Sticker button (yellow `Sticker` icon) in composer toolbar, visible only for WhatsApp channels.
+
+#### API
+- `get_stickers(pack="")`: Returns all enabled stickers with optional pack filter + list of available packs.
+- `send_message` updated: accepts `sticker_name` param for `Sticker` message type.
+
+### Meta API format
+- **Send (by media ID)**: `{"messaging_product":"whatsapp","to":"...","type":"sticker","sticker":{"id":"<MEDIA_ID>"}}`
+- **Send (by URL)**: `{"messaging_product":"whatsapp","to":"...","type":"sticker","sticker":{"link":"<URL>"}}`
+- **Supported formats**: `.webp` only. Static max 100 KB, animated max 500 KB.
+
+### Impacted modules
+- `excom/excom/doctype/excom_sticker/` (new) -- DocType JSON, controller
+- `excom/excom/doctype/excom_message/excom_message.json` -- added "Sticker" to message_type options
+- `excom/excom/services/whatsapp_service.py` -- new `send_sticker_message()`
+- `excom/excom/services/thread_service.py` -- routes Sticker type to sticker service
+- `excom/excom/api/chat.py` -- `send_message` accepts sticker_name, new `get_stickers` endpoint
+- `excom/excom/utils/webhook.py` -- sticker in type_map + media download branch
+- `frontend/src/components/StickerPicker.tsx` (new) -- sticker picker UI
+- `frontend/src/components/ChannelTabsView.tsx` -- sticker button + sticker bubble rendering
+- `frontend/src/components/mobile/MobileChannelView.tsx` -- sticker button + sticker bubble rendering
+- `frontend/src/hooks/useMessages.ts` -- "sticker" type mapping
+
+### Migration
+- Run `bench migrate` after deploy (new Excom Sticker DocType + Sticker added to Excom Message message_type).
+- Patch: `excom.patches.v1_0.add_sticker_message_type`.
+
+---
+
+## Phase 9: WhatsApp & Platform Analytics Dashboard
+
+### What changed
+Comprehensive analytics dashboard integrating Meta's WhatsApp Analytics APIs with internal Excom metrics. Provides messaging volume, conversation analytics, pricing/cost breakdowns, and agent performance — all visualized with recharts.
+
+### Architecture
+
+#### Meta Analytics APIs used
+All APIs target `GET /<WABA_ID>?fields=<metric>.<params>` on Meta's Graph API:
+- **Messaging Analytics** (`analytics`): Messages sent/delivered per phone number, by day/month, with country breakdowns.
+- **Conversation Analytics** (`conversation_analytics`): Conversation counts and costs by category (MARKETING, UTILITY, AUTHENTICATION, SERVICE), type (REGULAR, FREE_TIER, FREE_ENTRY_POINT), and direction.
+- **Pricing Analytics** (`pricing_analytics`): Volume and cost breakdowns by pricing category and type, including tier information.
+- **Template Analytics** (`template_analytics`): Per-template sent/delivered/read/clicked metrics via `/<WABA_ID>/template_analytics`.
+
+#### Service Layer (`excom/excom/services/whatsapp_analytics.py`)
+- `_resolve_waba_credentials()`: Extracts WABA ID, token, base_url, version from Excom Channel Account.
+- `_call_analytics_api()`: Generic GET request builder for analytics endpoints.
+- `get_messaging_analytics()`: Fetches `analytics` field with configurable granularity (DAY/HALF_HOUR/MONTH).
+- `get_conversation_analytics()`: Fetches `conversation_analytics` with dimensions and category filters.
+- `get_template_analytics()`: Fetches template performance via dedicated endpoint.
+- `get_pricing_analytics()`: Fetches `pricing_analytics` with dimension breakdowns.
+- `get_account_overview()`: Aggregates all three metrics into a single dashboard payload.
+
+#### API Layer (`excom/excom/api/analytics.py`)
+Whitelisted endpoints for the frontend:
+- `get_analytics_overview(account_name, days)` — Combined overview from Meta + internal.
+- `get_messaging_analytics(account_name, start, end, granularity)` — Raw messaging data.
+- `get_conversation_analytics(account_name, start, end, granularity, dimensions, categories)` — Conversation data.
+- `get_template_analytics(account_name, template_ids, start, end)` — Template performance.
+- `get_pricing_analytics(account_name, start, end, granularity, dimensions)` — Cost data.
+- `get_internal_metrics(days)` — Internal Excom DB metrics (message volume by day/channel/type, active threads, avg response time, agent performance).
+- `get_wa_accounts()` — Account picker data.
+
+#### Frontend (`frontend/src/components/AnalyticsPage.tsx`)
+Four-tab dashboard built with recharts:
+1. **Overview**: KPI cards (messages sent, conversations, active threads, avg response time) + area/pie/bar charts.
+2. **Messages**: Meta messaging analytics (sent vs delivered) + internal volume (inbound vs outbound).
+3. **Conversations**: Category pie chart, daily stacked bar, breakdown table.
+4. **Costs**: Daily spending trend, cost by category bar chart, pricing breakdown table.
+
+Features: period selector (7/14/30/90 days), account switcher (multi-account), refresh button, responsive grid layout.
+
+#### Dependencies
+- `recharts` added to frontend for chart visualization.
+
+### Impacted modules
+- `excom/excom/services/whatsapp_analytics.py` (new) — Meta API analytics service
+- `excom/excom/api/analytics.py` (new) — Whitelisted API endpoints
+- `frontend/src/components/AnalyticsPage.tsx` (new) — Dashboard UI
+- `frontend/src/components/LeftSidebar.tsx` — Analytics nav button
+- `frontend/src/App.tsx` — Analytics page routing
+- `frontend/package.json` — recharts dependency
+
+### Migration
+- No schema changes. No `bench migrate` required for analytics.
+- Meta's template analytics requires opt-in: `POST /<WABA_ID>?is_enabled_for_insights=true` (one-time).
+
+---
+
+## Phase 10: Delivery Watchdog & Message Retry
+
+### What changed
+Added automatic delivery failure detection and a WhatsApp-style retry mechanism for failed messages.
+
+### Architecture
+
+#### Delivery Watchdog (Background Job)
+- **Service**: `excom/excom/services/delivery_watchdog.py`
+- **Scheduler**: Runs every minute via Frappe's `scheduler_events["all"]`
+- **Logic**: Queries outbound WhatsApp messages in `Queued` or `Sent` status where `provider_timestamp` is older than 10 minutes (up to 24 hours back). Marks them as `Failed` with a descriptive `failure_reason`. Publishes `excom:message_status_updated` realtime event for each.
+- **Broadcast awareness**: Increments `failed_count` on the parent `Excom Broadcast` when a broadcast message times out.
+- **Batch limit**: Processes up to 200 stale messages per run to avoid long-running jobs.
+
+#### Meta Error Webhook Capture
+- **File**: `excom/excom/utils/webhook.py` → `_update_message_status()`
+- **Change**: Now extracts `errors[0]` from Meta's status webhook (error code, title, details) and passes `failure_reason` to `update_delivery_status()`.
+
+#### Delivery Status Update Enhancement
+- **File**: `excom/excom/services/thread_service.py` → `update_delivery_status()`
+- **Change**: Added `failure_reason` parameter. When status is `Failed` and a reason is provided, sets `failure_reason` field on the `Excom Message`.
+
+#### Retry API
+- **Endpoint**: `excom.excom.api.chat.retry_message`
+- **Method**: POST with `message_name` parameter
+- **Logic**: Loads the failed `Excom Message`, determines the message type (Text, Image, Video, Audio, Document, Sticker, Template), re-sends via the same provider function, and updates the existing message record with the new `provider_message_id` and status. No duplicate message is created.
+- **Error handling**: Catches `ExcomProviderError` and `ExcomRateLimitError`, re-marks as Failed with the error as `failure_reason`.
+
+#### Frontend
+- **Types**: `Message.status` extended with `"failed"` and `"queued"`. Added `failureReason` field.
+- **useMessages.ts**: Maps `Failed` → `"failed"`, `Queued` → `"queued"` delivery statuses. Maps `failure_reason` from backend.
+- **DeliveryIcon**: Shows red `AlertCircle` for failed, spinning `Loader2` for queued.
+- **DeliveryTimer**: Live countdown component shown below `Sent`/`Queued` messages. Displays "Checking delivery… M:SS" with a spinning icon. Counts down from 10 minutes based on message timestamp. Disappears when timer reaches 0 (watchdog will mark Failed).
+- **Message bubbles** (desktop + mobile): Failed messages get a distinct red-tinted bubble (`bg-red-950/40 border border-red-500/40`). Below the bubble, the failure reason is shown truncated, with a "Retry" button (spinning loader during retry).
+- **Retry handler**: Calls `retry_message` API, refreshes message list on success or failure.
+
+### Impacted modules
+- `excom/excom/services/delivery_watchdog.py` (new) — Watchdog + retry service
+- `excom/excom/services/thread_service.py` — `update_delivery_status()` failure_reason param
+- `excom/excom/utils/webhook.py` — Meta error detail extraction
+- `excom/excom/api/chat.py` — `retry_message` endpoint, `failure_reason` in get_messages
+- `excom/hooks.py` — Scheduler registration
+- `frontend/src/types/index.ts` — Extended status/type unions, failureReason field
+- `frontend/src/hooks/useMessages.ts` — Failed/Queued status mapping
+- `frontend/src/components/ChannelTabsView.tsx` — DeliveryIcon, retry button, failed bubble styling
+- `frontend/src/components/mobile/MobileChannelView.tsx` — Same for mobile
+
+### Migration
+- No schema changes required. `failure_reason` and `delivery_status` fields already exist on `Excom Message`.
+- The scheduler job auto-registers on next `bench restart`.

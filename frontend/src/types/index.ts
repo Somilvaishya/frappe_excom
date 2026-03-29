@@ -47,6 +47,7 @@ export interface ExcomMessage {
   reply_to_content?: string;
   reply_to_direction?: string;
   reply_to_sender?: string;
+  failure_reason?: string;
 }
 
 export interface Account {
@@ -63,8 +64,8 @@ export interface Message {
   content: string;
   timestamp: Date;
   sender: "user" | "contact" | "ai";
-  status?: "sent" | "delivered" | "read";
-  type?: "text" | "image" | "document" | "audio" | "email" | "template";
+  status?: "sent" | "delivered" | "read" | "failed" | "queued";
+  type?: "text" | "image" | "document" | "audio" | "email" | "template" | "sticker";
   mediaUrl?: string;
   channel?: string;
   isInternal?: boolean;
@@ -89,6 +90,7 @@ export interface Message {
     sender: string;
     direction: string;
   };
+  failureReason?: string;
 }
 
 export interface ContactInfo {

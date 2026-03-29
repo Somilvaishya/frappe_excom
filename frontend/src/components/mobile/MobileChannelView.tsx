@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { ArrowLeft, Phone, Video, Info, Send, Paperclip, Smile, Check, CheckCheck, MessageCircle, Mail, Instagram, Bot, UserCheck, Loader2, Lock, StickyNote, FileText } from "lucide-react";
+import { ArrowLeft, Phone, Video, Info, Send, Paperclip, Smile, Check, CheckCheck, MessageCircle, Mail, Instagram, Bot, UserCheck, Loader2, Lock, StickyNote, FileText, Sticker as StickerIcon, AlertCircle, RotateCcw } from "lucide-react";
 import { useFrappePostCall } from "frappe-react-sdk";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -10,6 +10,7 @@ import { useMessages } from "../../hooks/useMessages";
 import { useRealtimeMessages } from "../../hooks/useRealtimeMessages";
 import { useFileUpload } from "../../hooks/useFileUpload";
 import { CannedResponsePopover } from "../CannedResponsePopover";
+import { StickerPicker } from "../StickerPicker";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -40,6 +41,33 @@ function getChannelIcon(channel?: string) {
   return CHANNEL_ICONS[channel] || null;
 }
 
+const DELIVERY_TIMEOUT_MS = 10 * 60 * 1000;
+
+function DeliveryTimer({ sentAt }: { sentAt: Date }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const elapsed = now - sentAt.getTime();
+  const remaining = Math.max(0, DELIVERY_TIMEOUT_MS - elapsed);
+
+  if (remaining <= 0) return null;
+
+  const mins = Math.floor(remaining / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
+  const display = `${mins}:${secs.toString().padStart(2, "0")}`;
+
+  return (
+    <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+      Checking delivery… {display}
+    </span>
+  );
+}
+
 export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOpenAI }: MobileChannelViewProps) {
   const [messageInput, setMessageInput] = useState("");
   const [selectedChannel, setSelectedChannel] = useState(contact.channels[0]);
@@ -62,6 +90,7 @@ export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOp
   const [isNoteMode, setIsNoteMode] = useState(false);
   const [showCannedPopover, setShowCannedPopover] = useState(false);
   const [cannedSearch, setCannedSearch] = useState("");
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
 
   const { call: sendMessageCall, loading: isSending } = useFrappePostCall(
     "excom.excom.api.chat.send_message"
@@ -72,6 +101,26 @@ export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOp
   const { call: assignThreadCall } = useFrappePostCall(
     "excom.excom.api.chat.assign_thread"
   );
+
+  const { call: retryMessageCall } = useFrappePostCall(
+    "excom.excom.api.chat.retry_message"
+  );
+
+  const [retryingMsgId, setRetryingMsgId] = useState<string | null>(null);
+
+  const handleRetryMessage = useCallback(async (messageId: string) => {
+    setRetryingMsgId(messageId);
+    try {
+      await retryMessageCall({ message_name: messageId });
+      toast.success("Message resent");
+      refresh();
+    } catch {
+      toast.error("Retry failed");
+      refresh();
+    } finally {
+      setRetryingMsgId(null);
+    }
+  }, [retryMessageCall, refresh]);
 
   const handleFileReady = useCallback(
     async (fileUrl: string, messageType: string, _fileName: string) => {
@@ -344,7 +393,9 @@ export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOp
                         )}
                         <div>
                           <div className={`rounded-2xl px-3 py-2 shadow-lg ${
-                            isAI ? "bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 text-white"
+                            message.status === "failed"
+                            ? "bg-red-950/40 border border-red-500/40 text-white"
+                            : isAI ? "bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 text-white"
                             : isUser ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white"
                             : "bg-zinc-800 text-zinc-100"
                           }`}>
@@ -370,6 +421,8 @@ export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOp
                               </div>
                             ) : message.type === "image" && message.mediaUrl ? (
                               <img src={message.mediaUrl} alt="Attached media" className="rounded-lg max-w-[200px]" />
+                            ) : message.type === "sticker" && message.mediaUrl ? (
+                              <img src={message.mediaUrl} alt="Sticker" className="w-24 h-24 object-contain" />
                             ) : (
                               <p className="text-sm leading-relaxed">{message.content}</p>
                             )}
@@ -378,6 +431,8 @@ export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOp
                             <div className="flex items-center gap-1 text-zinc-500">
                               <span>{format(message.timestamp, "h:mm a")}</span>
                               {(isUser || isAI) && (
+                                message.status === "failed" ? <AlertCircle className="w-3 h-3 text-red-400" /> :
+                                message.status === "queued" ? <Loader2 className="w-3 h-3 text-zinc-500 animate-spin" /> :
                                 message.status === "read" ? <CheckCheck className="w-3 h-3 text-blue-400" /> :
                                 message.status === "delivered" ? <CheckCheck className="w-3 h-3 text-zinc-500" /> :
                                 message.status === "sent" ? <Check className="w-3 h-3 text-zinc-500" /> : null
@@ -394,6 +449,30 @@ export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOp
                               </div>
                             )}
                           </div>
+                          {message.status === "failed" && isUser && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] text-red-400 truncate max-w-40">
+                                {message.failureReason || "Delivery failed"}
+                              </span>
+                              <button
+                                onClick={() => handleRetryMessage(message.id)}
+                                disabled={retryingMsgId === message.id}
+                                className="flex items-center gap-1 text-[11px] font-medium text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                              >
+                                {retryingMsgId === message.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="w-3 h-3" />
+                                )}
+                                Retry
+                              </button>
+                            </div>
+                          )}
+                          {(message.status === "sent" || message.status === "queued") && isUser && (
+                            <div className="mt-1 flex justify-end">
+                              <DeliveryTimer sentAt={message.timestamp} />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -510,9 +589,27 @@ export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOp
               {isSending || isSendingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : isNoteMode ? <StickyNote className="w-4 h-4" /> : <Send className="w-4 h-4" />}
             </Button>
           ) : !isNoteMode ? (
-            <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-white h-9 w-9 flex-shrink-0" onClick={openFilePicker} disabled={uploading}>
-              {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
-            </Button>
+            <div className="flex gap-1 flex-shrink-0">
+              <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-white h-9 w-9" onClick={openFilePicker} disabled={uploading}>
+                {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
+              </Button>
+              {selectedChannel === "whatsapp" && (
+                <div className="relative">
+                  <Button variant="ghost" size="icon" className="text-yellow-400 hover:text-yellow-300 h-9 w-9" onClick={() => setShowStickerPicker((v) => !v)} title="Send Sticker">
+                    <StickerIcon className="w-5 h-5" />
+                  </Button>
+                  {showStickerPicker && selectedAccountId && (
+                    <div className="absolute bottom-full right-0 mb-2 z-50">
+                      <StickerPicker
+                        threadId={selectedAccountId}
+                        onClose={() => setShowStickerPicker(false)}
+                        onSent={() => refresh()}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           ) : null}
         </div>
       </div>
