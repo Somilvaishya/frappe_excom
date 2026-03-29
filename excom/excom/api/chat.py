@@ -5,6 +5,7 @@ from frappe import _
 from frappe.utils import flt, now_datetime
 
 from excom.excom.services.thread_service import send_outbound_message
+from excom.excom.utils.errors import ExcomProviderError, ExcomRateLimitError
 
 EXCOM_ROLES = {"System Manager", "Excom Manager", "Excom User"}
 
@@ -1386,6 +1387,14 @@ def send_template_to_thread(
     if thread.channel != "whatsapp":
         frappe.throw(_("Templates are only supported for WhatsApp"))
 
+    if not thread.get("account"):
+        frappe.throw(
+            _("This thread has no WhatsApp channel account. Open a conversation on a linked WhatsApp number, then try again."),
+            title=_("Cannot send template"),
+        )
+
+    account_doctype = thread.get("account_doctype") or "Excom Channel Account"
+
     template_doc = frappe.get_doc("WhatsApp Templates", template_name)
 
     from excom.excom.whatsapp_template_utils import template_is_linked_to_account
@@ -1409,20 +1418,42 @@ def send_template_to_thread(
     if not to_number:
         frappe.throw(_("No phone number on identity"))
 
-    account = frappe.get_doc(thread.account_doctype, thread.account)
+    try:
+        account = frappe.get_doc(account_doctype, thread.account)
+    except frappe.DoesNotExistError:
+        frappe.throw(
+            _("Channel account {0} is missing or was deleted.").format(thread.account),
+            title=_("Cannot send template"),
+        )
 
-    var_list = json.loads(variables) if isinstance(variables, str) else variables
+    try:
+        var_list = json.loads(variables) if isinstance(variables, str) else variables
+    except (json.JSONDecodeError, TypeError):
+        frappe.throw(_("Invalid template variables. Expected a JSON array of strings."))
+
+    if not isinstance(var_list, list):
+        frappe.throw(_("Template variables must be a JSON array"))
+
     components = _build_template_components(template_doc, var_list, header_media_url)
 
     from excom.excom.services.whatsapp_service import send_template_message as wa_send_template
 
-    result = wa_send_template(
-        account=account,
-        to=to_number,
-        template_name=template_doc.actual_name or template_doc.template_name,
-        language_code=template_doc.language_code or "en_US",
-        components=components,
-    )
+    try:
+        result = wa_send_template(
+            account=account,
+            to=to_number,
+            template_name=template_doc.actual_name or template_doc.template_name,
+            language_code=template_doc.language_code or "en_US",
+            components=components,
+        )
+    except ExcomRateLimitError as e:
+        frappe.throw(_(e.message), title=_("WhatsApp rate limit"))
+    except ExcomProviderError as e:
+        frappe.log_error(
+            title="send_template_to_thread provider error",
+            message=f"{e.message}\nthread={thread_id}\ntemplate={template_name}\naccount={thread.account}",
+        )
+        frappe.throw(_(e.message), title=_("WhatsApp"))
 
     preview = _build_template_preview(template_doc, var_list)
     now = now_datetime()

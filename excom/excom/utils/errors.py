@@ -42,7 +42,9 @@ class ExcomValidationError(ExcomError):
 class ExcomProviderError(ExcomError):
     """Upstream provider API errors (WhatsApp, email gateway, etc.)."""
 
-    http_status_code = 502
+    # Use 400 when the exception propagates uncaught so clients get a readable
+    # API error instead of an HTTP 502 masked as “Bad Gateway”.
+    http_status_code = 400
     title = "Excom Provider Error"
 
     def __init__(self, message: str = "", provider: str = "", **context):

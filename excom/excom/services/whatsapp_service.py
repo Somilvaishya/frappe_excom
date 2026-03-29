@@ -154,8 +154,33 @@ def _call_api(account, payload: dict) -> dict:
         "Content-Type": "application/json",
     }
 
-    response = http_requests.post(url, json=payload, headers=headers)
-    data = response.json()
+    try:
+        response = http_requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=(10, 60),
+        )
+    except http_requests.exceptions.Timeout as e:
+        raise ExcomProviderError(
+            f"WhatsApp API request timed out after 60s: {e}",
+            provider="whatsapp",
+        ) from e
+    except http_requests.exceptions.RequestException as e:
+        raise ExcomProviderError(
+            f"WhatsApp API connection error: {e}",
+            provider="whatsapp",
+        ) from e
+
+    try:
+        data = response.json()
+    except ValueError:
+        data = {
+            "error": {
+                "message": (response.text or "")[:500] or f"Non-JSON response (HTTP {response.status_code})",
+                "code": response.status_code,
+            }
+        }
 
     if response.ok and data.get("messages"):
         return {
