@@ -4,7 +4,8 @@ from frappe.model.document import Document
 
 class ExcomThread(Document):
 	def before_insert(self):
-		self.compute_thread_key()
+		if not self.thread_key:
+			self.compute_thread_key()
 		self.denormalize_identity()
 
 	def validate(self):

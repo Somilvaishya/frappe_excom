@@ -19,6 +19,9 @@ def upsert_thread(omni_identity: str, channel: str, account: str) -> str:
     """
     Find or create an Excom Thread for the given identity + channel + account.
     Returns the thread name.
+
+    Handles concurrent inserts gracefully — if a duplicate key error occurs
+    (race between check and insert), returns the existing thread.
     """
     thread_key = f"{channel}:{account}:{omni_identity}"
 
@@ -31,22 +34,27 @@ def upsert_thread(omni_identity: str, channel: str, account: str) -> str:
         ["display_name", "primary_phone"], as_dict=True,
     )
 
-    doc = frappe.get_doc({
-        "doctype": "Excom Thread",
-        "omni_identity": omni_identity,
-        "channel": channel,
-        "account_doctype": "Excom Channel Account",
-        "account": account,
-        "thread_key": thread_key,
-        "status": "Open",
-        "display_name": oi.display_name if oi else "Unknown",
-        "primary_phone": oi.primary_phone if oi else "",
-        "unread_count": 0,
-        "last_message_at": frappe.utils.now_datetime(),
-    })
-    doc.insert(ignore_permissions=True)
-
-    return doc.name
+    try:
+        doc = frappe.get_doc({
+            "doctype": "Excom Thread",
+            "omni_identity": omni_identity,
+            "channel": channel,
+            "account_doctype": "Excom Channel Account",
+            "account": account,
+            "thread_key": thread_key,
+            "status": "Open",
+            "display_name": oi.display_name if oi else "Unknown",
+            "primary_phone": oi.primary_phone if oi else "",
+            "unread_count": 0,
+            "last_message_at": frappe.utils.now_datetime(),
+        })
+        doc.insert(ignore_permissions=True)
+        return doc.name
+    except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
+        existing = frappe.db.get_value("Excom Thread", {"thread_key": thread_key}, "name")
+        if existing:
+            return existing
+        raise
 
 
 def ingest_inbound_message(

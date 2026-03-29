@@ -255,10 +255,11 @@ def _ingest_email_metadata(account_name: str, account, meta: dict):
                 "display_name": oi.display_name if oi else contact_name,
                 "primary_phone": oi.primary_phone if oi else "",
                 "unread_count": 0,
+                "last_message_at": now_datetime(),
             })
             thread_doc.insert(ignore_permissions=True)
             thread_name = thread_doc.name
-        except frappe.DuplicateEntryError:
+        except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
             frappe.clear_last_message()
             thread_name = frappe.db.get_value(
                 "Excom Thread", {"thread_key": thread_key}, "name"
