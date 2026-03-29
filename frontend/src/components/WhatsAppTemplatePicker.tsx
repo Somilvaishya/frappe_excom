@@ -12,6 +12,8 @@ import {
   Paperclip,
   Upload,
   Trash2,
+  Video,
+  MapPin,
 } from "lucide-react";
 import { useFrappePostCall, useFrappeFileUpload } from "frappe-react-sdk";
 import { Button } from "./ui/button";
@@ -64,6 +66,7 @@ interface WindowInfo {
 
 const HEADER_ACCEPT: Record<string, string> = {
   IMAGE: "image/jpeg,image/png,image/webp",
+  VIDEO: "video/mp4,video/3gpp",
   DOCUMENT: "application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
@@ -86,6 +89,9 @@ export function WhatsAppTemplatePicker({
   const [headerMediaUrl, setHeaderMediaUrl] = useState("");
   const [headerFileName, setHeaderFileName] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [headerLocation, setHeaderLocation] = useState({
+    latitude: "", longitude: "", name: "", address: "",
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -178,6 +184,7 @@ export function WhatsAppTemplatePicker({
     setButtonUrls(new Array(dynCount).fill(""));
     setHeaderMediaUrl("");
     setHeaderFileName("");
+    setHeaderLocation({ latitude: "", longitude: "", name: "", address: "" });
     setStep("fill");
   };
 
@@ -232,7 +239,8 @@ export function WhatsAppTemplatePicker({
   };
 
   const htUpper = (selectedTemplate?.header_type || "").toUpperCase();
-  const needsMedia = htUpper === "IMAGE" || htUpper === "DOCUMENT";
+  const needsMedia = htUpper === "IMAGE" || htUpper === "VIDEO" || htUpper === "DOCUMENT";
+  const needsLocation = htUpper === "LOCATION";
 
   const hVar = selectedTemplate?.header_variable_count ?? 0;
   const bVar = selectedTemplate?.variable_count ?? 0;
@@ -246,19 +254,23 @@ export function WhatsAppTemplatePicker({
   const dynFilled =
     dynBtns.length === 0 || buttonUrls.slice(0, dynBtns.length).every((u) => String(u ?? "").trim() !== "");
 
+  const locationFilled =
+    !needsLocation ||
+    (headerLocation.latitude.trim() !== "" && headerLocation.longitude.trim() !== "");
+
   const canSend =
     !sending &&
     selectedTemplate &&
     (!needsMedia || headerMediaUrl) &&
+    locationFilled &&
     varSlotsFilled &&
     dynFilled;
 
   const handleSend = async () => {
     if (!selectedTemplate) return;
     if (needsMedia && !headerMediaUrl) {
-      toast.error(
-        `Please attach a ${htUpper === "IMAGE" ? "photo" : "document"} for this template`
-      );
+      const mediaLabel = htUpper === "IMAGE" ? "photo" : htUpper === "VIDEO" ? "video" : "document";
+      toast.error(`Please attach a ${mediaLabel} for this template`);
       return;
     }
     setSending(true);
@@ -272,6 +284,7 @@ export function WhatsAppTemplatePicker({
         variables: JSON.stringify(variables),
         header_media_url: headerMediaUrl,
         button_urls: JSON.stringify(buttonUrls.slice(0, dyn.length)),
+        header_location: needsLocation ? JSON.stringify(headerLocation) : "",
       });
       toast.success("Template sent");
       onSent();
@@ -426,9 +439,19 @@ export function WhatsAppTemplatePicker({
                           <ImageIcon className="w-3 h-3" /> Photo required
                         </span>
                       )}
+                      {(t.header_type || "").toUpperCase() === "VIDEO" && (
+                        <span className="text-blue-400 flex items-center gap-0.5">
+                          <Video className="w-3 h-3" /> Video required
+                        </span>
+                      )}
                       {(t.header_type || "").toUpperCase() === "DOCUMENT" && (
                         <span className="text-orange-400 flex items-center gap-0.5">
                           <Paperclip className="w-3 h-3" /> PDF/Doc required
+                        </span>
+                      )}
+                      {(t.header_type || "").toUpperCase() === "LOCATION" && (
+                        <span className="text-emerald-400 flex items-center gap-0.5">
+                          <MapPin className="w-3 h-3" /> Location
                         </span>
                       )}
                     </div>
@@ -474,12 +497,16 @@ export function WhatsAppTemplatePicker({
                   <div className="flex items-center gap-2">
                     {htUpper === "IMAGE" ? (
                       <ImageIcon className="w-4 h-4 text-purple-400" />
+                    ) : htUpper === "VIDEO" ? (
+                      <Video className="w-4 h-4 text-blue-400" />
                     ) : (
                       <Paperclip className="w-4 h-4 text-orange-400" />
                     )}
                     <p className="text-xs text-zinc-400 font-medium">
                       {htUpper === "IMAGE"
                         ? "Attach Header Image"
+                        : htUpper === "VIDEO"
+                        ? "Attach Header Video"
                         : "Attach Header Document (PDF)"}
                       <span className="text-red-400 ml-1">*</span>
                     </p>
@@ -493,6 +520,10 @@ export function WhatsAppTemplatePicker({
                           alt="Header"
                           className="w-14 h-14 rounded-lg object-cover border border-zinc-600"
                         />
+                      ) : htUpper === "VIDEO" ? (
+                        <div className="w-14 h-14 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                          <Video className="w-6 h-6 text-blue-400" />
+                        </div>
                       ) : (
                         <div className="w-14 h-14 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
                           <FileText className="w-6 h-6 text-orange-400" />
@@ -530,10 +561,61 @@ export function WhatsAppTemplatePicker({
                           ? "Uploading..."
                           : htUpper === "IMAGE"
                           ? "Click to upload image (JPEG, PNG, WebP)"
+                          : htUpper === "VIDEO"
+                          ? "Click to upload video (MP4, max 16MB)"
                           : "Click to upload document (PDF, DOC, XLS)"}
                       </span>
                     </button>
                   )}
+                </div>
+              )}
+
+              {needsLocation && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-emerald-400" />
+                    <p className="text-xs text-zinc-400 font-medium">
+                      Location Header<span className="text-red-400 ml-1">*</span>
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-zinc-500 mb-0.5 block">Latitude</label>
+                      <Input
+                        placeholder="e.g. 37.4421"
+                        value={headerLocation.latitude}
+                        onChange={(e) => setHeaderLocation((p) => ({ ...p, latitude: e.target.value }))}
+                        className="bg-zinc-800 border-zinc-700 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500 mb-0.5 block">Longitude</label>
+                      <Input
+                        placeholder="e.g. -122.1615"
+                        value={headerLocation.longitude}
+                        onChange={(e) => setHeaderLocation((p) => ({ ...p, longitude: e.target.value }))}
+                        className="bg-zinc-800 border-zinc-700 text-white"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 mb-0.5 block">Location Name</label>
+                    <Input
+                      placeholder="e.g. Philz Coffee"
+                      value={headerLocation.name}
+                      onChange={(e) => setHeaderLocation((p) => ({ ...p, name: e.target.value }))}
+                      className="bg-zinc-800 border-zinc-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 mb-0.5 block">Address</label>
+                    <Input
+                      placeholder="e.g. 101 Forest Ave, Palo Alto, CA"
+                      value={headerLocation.address}
+                      onChange={(e) => setHeaderLocation((p) => ({ ...p, address: e.target.value }))}
+                      className="bg-zinc-800 border-zinc-700 text-white"
+                    />
+                  </div>
                 </div>
               )}
 

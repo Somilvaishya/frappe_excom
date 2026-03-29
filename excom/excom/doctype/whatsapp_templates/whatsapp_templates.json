@@ -153,14 +153,14 @@
    "fieldname": "header_type",
    "fieldtype": "Select",
    "label": "Header Type",
-   "options": "\nTEXT\nDOCUMENT\nIMAGE"
+   "options": "\nTEXT\nIMAGE\nVIDEO\nDOCUMENT\nLOCATION"
   },
   {
-   "depends_on": "eval:doc.header_type && doc.header_type !== 'TEXT'",
+   "depends_on": "eval:doc.header_type && ['IMAGE','VIDEO','DOCUMENT'].includes(doc.header_type)",
    "fieldname": "sample",
    "fieldtype": "Attach",
    "label": "Header Media Sample",
-   "description": "Upload a sample image or document for IMAGE/DOCUMENT header types. Required by Meta for template approval."
+   "description": "Upload a sample image, video, or document for IMAGE/VIDEO/DOCUMENT header types. Required by Meta for template approval."
   },
   {
    "fieldname": "sample_values",

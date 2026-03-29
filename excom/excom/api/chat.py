@@ -1374,6 +1374,7 @@ def send_template_to_thread(
     variables: str = "[]",
     header_media_url: str = "",
     button_urls: str = "[]",
+    header_location: str = "",
 ) -> dict:
     """
     Send an approved WhatsApp template message on an existing thread.
@@ -1381,10 +1382,11 @@ def send_template_to_thread(
     Args:
         thread_id: Excom Thread name
         template_name: WhatsApp Templates document name
-        variables: JSON array — header ``{{n}}`` values first (if any), then body values,
+        variables: JSON array -- header ``{{n}}`` values first (if any), then body values,
             in order of appearance within each section.
-        header_media_url: Frappe file URL for IMAGE/DOCUMENT header attachments
+        header_media_url: Frappe file URL for IMAGE/VIDEO/DOCUMENT header attachments
         button_urls: JSON array of suffix strings for each dynamic URL button, in order
+        header_location: JSON object ``{"latitude","longitude","name","address"}`` for LOCATION headers
     """
     _check_excom_access()
 
@@ -1419,12 +1421,21 @@ def send_template_to_thread(
         )
 
     ht_upper = (template_doc.header_type or "").upper()
-    if ht_upper in ("IMAGE", "DOCUMENT") and not header_media_url:
+    if ht_upper in ("IMAGE", "VIDEO", "DOCUMENT") and not header_media_url:
         frappe.throw(
             _("This template requires a {0} attachment in the header").format(
                 ht_upper.lower()
             )
         )
+
+    location_data: dict | None = None
+    if ht_upper == "LOCATION":
+        try:
+            location_data = json.loads(header_location) if isinstance(header_location, str) and header_location.strip() else None
+        except (json.JSONDecodeError, TypeError):
+            location_data = None
+        if not location_data or not location_data.get("latitude") or not location_data.get("longitude"):
+            frappe.throw(_("This template requires a location (latitude, longitude, name, address) in the header"))
 
     identity = frappe.get_doc("Omni Identity", thread.omni_identity)
     to_number = identity.primary_whatsapp or identity.primary_phone
@@ -1455,10 +1466,10 @@ def send_template_to_thread(
         btn_list = []
 
     components = _build_template_components(
-        template_doc, var_list, header_media_url, btn_list,
+        template_doc, var_list, header_media_url, btn_list, location_data,
     )
 
-    preview = _build_template_preview(template_doc, var_list)
+    preview = _build_template_preview(template_doc, var_list, location_data)
     now = now_datetime()
 
     from excom.excom.services.whatsapp_service import send_template_message as wa_send_template
@@ -1571,7 +1582,7 @@ def check_24h_window(thread_id: str) -> dict:
 
 def _build_template_components(
     template_doc, body_variables: list, header_media_url: str = "",
-    button_urls: list = None,
+    button_urls: list = None, location_data: dict = None,
 ) -> list:
     """Build Meta Cloud API ``components`` for template sends.
 
@@ -1583,6 +1594,7 @@ def _build_template_components(
     - One ``text.text`` parameter per placeholder, in positional order.
     - Dynamic URL buttons must each include a ``button`` component with a text parameter.
     - Typical component order: header, body, then buttons.
+    - VIDEO headers use ``video.link``; LOCATION headers use ``location`` object.
     """
     from excom.excom.whatsapp_template_utils import (
         body_variable_slot_count,
@@ -1624,6 +1636,14 @@ def _build_template_components(
                 "image": {"link": _to_absolute_url(header_media_url)},
             }],
         })
+    elif ht == "VIDEO" and header_media_url:
+        components.append({
+            "type": "header",
+            "parameters": [{
+                "type": "video",
+                "video": {"link": _to_absolute_url(header_media_url)},
+            }],
+        })
     elif ht == "DOCUMENT" and header_media_url:
         filename = header_media_url.rsplit("/", 1)[-1] if "/" in header_media_url else "document"
         components.append({
@@ -1633,6 +1653,19 @@ def _build_template_components(
                 "document": {
                     "link": _to_absolute_url(header_media_url),
                     "filename": filename,
+                },
+            }],
+        })
+    elif ht == "LOCATION" and location_data:
+        components.append({
+            "type": "header",
+            "parameters": [{
+                "type": "location",
+                "location": {
+                    "latitude": str(location_data.get("latitude", "")),
+                    "longitude": str(location_data.get("longitude", "")),
+                    "name": str(location_data.get("name", "")),
+                    "address": str(location_data.get("address", "")),
                 },
             }],
         })
@@ -1716,7 +1749,7 @@ def _replace_placeholders(text: str, values: list) -> str:
     return text
 
 
-def _build_template_preview(template_doc, body_variables: list) -> str:
+def _build_template_preview(template_doc, body_variables: list, location_data: dict = None) -> str:
     """Build a human-readable preview of the template with variables filled in.
 
     *body_variables* follows the inbox convention: header values first, then body values.
@@ -1729,10 +1762,17 @@ def _build_template_preview(template_doc, body_variables: list) -> str:
 
     parts: list[str] = []
 
-    if is_text_header(getattr(template_doc, "header_type", None)):
+    ht = (getattr(template_doc, "header_type", None) or "").upper()
+    if is_text_header(ht):
         hdr = _replace_placeholders(template_doc.header or "", header_vals)
         if hdr.strip():
             parts.append(hdr.strip())
+    elif ht == "LOCATION" and location_data:
+        loc_name = location_data.get("name", "")
+        loc_addr = location_data.get("address", "")
+        loc_preview = " - ".join(p for p in (loc_name, loc_addr) if p)
+        if loc_preview:
+            parts.append(f"[Location: {loc_preview}]")
 
     parts.append(_replace_placeholders(template_doc.template or "", body_vals))
 

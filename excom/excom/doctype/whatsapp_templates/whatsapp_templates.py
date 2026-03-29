@@ -38,7 +38,7 @@ class WhatsAppTemplates(Document):
 
         self.validate_button_count()
 
-        if (self.header_type or "").upper() in ("IMAGE", "DOCUMENT") and self.sample:
+        if (self.header_type or "").upper() in ("IMAGE", "VIDEO", "DOCUMENT") and self.sample:
             self.get_session_id()
             self.get_media_id()
 
@@ -376,8 +376,10 @@ class WhatsAppTemplates(Document):
     def get_header(self):
         """Build Meta API header component for template create/update.
 
-        Meta format: header_text is a flat list ``["val"]``, NOT nested
-        like body_text which is ``[["v1","v2"]]``.
+        Meta format:
+        - TEXT: header_text is a flat list ``["val"]``
+        - IMAGE/VIDEO/DOCUMENT: header_handle with uploaded media ID
+        - LOCATION: no parameters (location supplied at send time)
         """
         fmt = (self.header_type or "").strip().upper()
         header = {"type": "HEADER", "format": fmt}
@@ -386,6 +388,8 @@ class WhatsAppTemplates(Document):
             h_samples = get_header_variable_samples(self)
             if h_samples:
                 header["example"] = {"header_text": h_samples}
+        elif fmt == "LOCATION":
+            pass
         elif hasattr(self, "_media_id") and self._media_id:
             header["example"] = {"header_handle": [self._media_id]}
 

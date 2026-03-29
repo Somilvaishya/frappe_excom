@@ -47,7 +47,7 @@ class ExcomBroadcast(Document):
                 frappe.throw(
                     _(
                         "Broadcasts do not support templates with variables in the TEXT header. "
-                        "Create a Meta template without header placeholders, or use an IMAGE/DOCUMENT header."
+                        "Create a Meta template without header placeholders, or use an IMAGE/VIDEO/DOCUMENT header."
                     ),
                     title=_("WhatsApp template"),
                 )

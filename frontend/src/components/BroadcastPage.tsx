@@ -729,7 +729,7 @@ function ComposeDialog({
 
   const selectedListData = lists.find((l) => l.name === subscriberList);
 
-  const needsMedia = selectedTemplate?.header_type === "IMAGE" || selectedTemplate?.header_type === "DOCUMENT";
+  const needsMedia = selectedTemplate?.header_type === "IMAGE" || selectedTemplate?.header_type === "VIDEO" || selectedTemplate?.header_type === "DOCUMENT";
 
   const canProceedStep1 = name.trim() && subscriberList;
   const variableSlotsComplete =

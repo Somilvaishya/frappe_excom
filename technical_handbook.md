@@ -1268,3 +1268,32 @@ Mobile PKCE and native apps must use the same public origin users type in the br
 ### Migration
 - Run `bench migrate` after deploy (JSON schema change on `linked_whatsapp_accounts`).
 - Run **Fetch templates** to re-link all accounts by business ID automatically.
+
+---
+
+## VIDEO and LOCATION Header Support (March 2026)
+
+### What changed
+- Added VIDEO and LOCATION to the `header_type` Select options on WhatsApp Templates DocType.
+- `sample` Attach field now shows for IMAGE, VIDEO, and DOCUMENT (not TEXT or LOCATION).
+- Backend `get_header()` handles LOCATION as `{"type":"HEADER","format":"LOCATION"}` with no example payload.
+- `validate()` triggers media upload for VIDEO headers alongside IMAGE/DOCUMENT.
+- `_build_template_components()` in `chat.py` builds `video.link` parameters for VIDEO headers and `location` objects for LOCATION headers.
+- New `header_location` parameter on `send_template_to_thread` API: JSON with `latitude`, `longitude`, `name`, `address`.
+- Frontend `WhatsAppTemplatePicker` adds VIDEO upload UI (MP4), LOCATION input form (lat/lng/name/address), template card badges for both types.
+
+### Meta API formats
+- **VIDEO send**: `{"type":"header","parameters":[{"type":"video","video":{"link":"..."}}]}`
+- **LOCATION send**: `{"type":"header","parameters":[{"type":"location","location":{"latitude":"...","longitude":"...","name":"...","address":"..."}}]}`
+- **LOCATION create**: `{"type":"header","format":"location"}` (no parameters at creation time)
+
+### Impacted modules
+- `excom/excom/doctype/whatsapp_templates/whatsapp_templates.json` -- header_type options, sample depends_on
+- `excom/excom/doctype/whatsapp_templates/whatsapp_templates.py` -- validate media upload, get_header LOCATION
+- `excom/excom/api/chat.py` -- send_template_to_thread, _build_template_components, _build_template_preview
+- `excom/excom/doctype/excom_broadcast/excom_broadcast.py` -- error message update
+- `frontend/src/components/WhatsAppTemplatePicker.tsx` -- VIDEO/LOCATION UI
+- `frontend/src/components/BroadcastPage.tsx` -- needsMedia includes VIDEO
+
+### Migration
+- Run `bench migrate` after deploy (header_type options changed).
