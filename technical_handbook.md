@@ -1466,3 +1466,29 @@ Added automatic delivery failure detection and a WhatsApp-style retry mechanism 
 ### Migration
 - No schema changes required. `failure_reason` and `delivery_status` fields already exist on `Excom Message`.
 - The scheduler job auto-registers on next `bench restart`.
+
+---
+
+## Phase 11: Email Attachment Direct Download
+
+### What changed
+Wired email attachment chips in the inbox to download files directly from Gmail API to the user's browser — no server-side storage.
+
+### Architecture
+- **Pointer-based (unchanged)**: Excom stores only Gmail message IDs. Email bodies and attachments live in Gmail and are fetched on-demand.
+- **Download flow**: Frontend `fetch()` → Frappe API → `gmail_service.get_attachment()` → Gmail API → binary bytes → `frappe.local.response` (download) → browser blob → `<a download>` click → user's filesystem.
+- **No files touch the server disk**. Bytes stream through Python memory only.
+
+#### Backend
+- **`excom/excom/api/email.py`** → `get_email_attachment()`: Added `filename` parameter so the browser receives the correct `Content-Disposition` header with the original filename.
+
+#### Frontend
+- **`frontend/src/components/EmailMessageCard.tsx`** → `AttachmentChip` component:
+  - Replaces the static `<div>` chips with clickable `<button>` elements
+  - On click: fetches the binary via `fetch()`, creates a blob URL, triggers download via hidden `<a download>` element
+  - Shows spinner during download, download icon on hover
+  - Fallback: opens in new tab if fetch fails
+
+### Impacted modules
+- `excom/excom/api/email.py` — filename parameter on download endpoint
+- `frontend/src/components/EmailMessageCard.tsx` — AttachmentChip component, Download icon

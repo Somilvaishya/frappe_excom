@@ -42,6 +42,7 @@ def upsert_thread(omni_identity: str, channel: str, account: str) -> str:
         "display_name": oi.display_name if oi else "Unknown",
         "primary_phone": oi.primary_phone if oi else "",
         "unread_count": 0,
+        "last_message_at": frappe.utils.now_datetime(),
     })
     doc.insert(ignore_permissions=True)
 

@@ -427,6 +427,7 @@ def _create_broadcast_message(
 
     try:
         thread_name = upsert_thread(omni_identity_name, channel, account_name)
+        now = now_datetime()
 
         frappe.get_doc({
             "doctype": "Excom Message",
@@ -438,7 +439,7 @@ def _create_broadcast_message(
             "direction": "Outbound",
             "message_type": message_type,
             "provider_message_id": provider_message_id,
-            "provider_timestamp": now_datetime(),
+            "provider_timestamp": now,
             "content_text": content_text[:500] if content_text else "",
             "media_file": media_file or None,
             "delivery_status": delivery_status,
@@ -446,6 +447,20 @@ def _create_broadcast_message(
             "reference_doctype": "Excom Broadcast",
             "reference_name": broadcast.name,
         }).insert(ignore_permissions=True)
+
+        preview = content_text[:100] if content_text else "Broadcast message"
+        frappe.db.sql(
+            """
+            UPDATE `tabExcom Thread`
+            SET last_message_at = %(now)s,
+                last_outbound_at = %(now)s,
+                last_message_preview = %(preview)s,
+                last_message_direction = 'Outbound',
+                modified = %(now)s
+            WHERE name = %(thread)s
+            """,
+            {"now": now, "preview": preview, "thread": thread_name},
+        )
     except Exception:
         frappe.log_error(
             title=f"Broadcast message record failed: {broadcast.name} -> {omni_identity_name}",

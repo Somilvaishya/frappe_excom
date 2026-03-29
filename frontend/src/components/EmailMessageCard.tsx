@@ -7,6 +7,7 @@ import {
   Loader2,
   AlertTriangle,
   Reply,
+  Download,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { format } from "date-fns";
@@ -210,18 +211,11 @@ export function EmailMessageCard({
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {bodyData.attachments.map((att, i) => (
-                          <div
+                          <AttachmentChip
                             key={i}
-                            className="flex items-center gap-2 px-2 py-1.5 bg-zinc-700/50 rounded-lg text-xs"
-                          >
-                            <Paperclip className="w-3 h-3 text-zinc-400" />
-                            <span className="text-zinc-300 truncate max-w-[150px]">
-                              {att.filename}
-                            </span>
-                            <span className="text-zinc-500">
-                              {formatBytes(att.size)}
-                            </span>
-                          </div>
+                            attachment={att}
+                            messageId={messageId}
+                          />
                         ))}
                       </div>
                     </div>
@@ -277,6 +271,73 @@ export function EmailMessageCard({
         </div>
       </div>
     </div>
+  );
+}
+
+function AttachmentChip({
+  attachment,
+  messageId,
+}: {
+  attachment: EmailAttachment;
+  messageId: string;
+}) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const params = new URLSearchParams({
+        message_name: messageId,
+        attachment_id: attachment.attachmentId,
+        filename: attachment.filename,
+      });
+      const url = `/api/method/excom.excom.api.email.get_email_attachment?${params}`;
+
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error("Download failed");
+
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = attachment.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      // Fallback: open in new tab which triggers browser download
+      const params = new URLSearchParams({
+        message_name: messageId,
+        attachment_id: attachment.attachmentId,
+        filename: attachment.filename,
+      });
+      window.open(
+        `/api/method/excom.excom.api.email.get_email_attachment?${params}`,
+        "_blank",
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleDownload}
+      disabled={downloading}
+      className="flex items-center gap-2 px-2 py-1.5 bg-zinc-700/50 rounded-lg text-xs hover:bg-zinc-600/50 transition-colors cursor-pointer group disabled:opacity-60"
+    >
+      {downloading ? (
+        <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+      ) : (
+        <Paperclip className="w-3 h-3 text-zinc-400" />
+      )}
+      <span className="text-zinc-300 truncate max-w-[150px]">
+        {attachment.filename}
+      </span>
+      <span className="text-zinc-500">{formatBytes(attachment.size)}</span>
+      <Download className="w-3 h-3 text-zinc-500 group-hover:text-blue-400 transition-colors" />
+    </button>
   );
 }
 

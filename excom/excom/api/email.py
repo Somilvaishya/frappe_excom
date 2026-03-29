@@ -107,14 +107,21 @@ def get_email_body(message_name: str):
 
 
 @frappe.whitelist()
-def get_email_attachment(message_name: str, attachment_id: str):
+def get_email_attachment(
+    message_name: str,
+    attachment_id: str,
+    filename: str = "",
+) -> None:
     """
-    Download an email attachment from Gmail API.
-    Returns the file as a Frappe file response.
+    Download an email attachment directly from Gmail API.
+
+    Streams the binary content to the user's browser without saving to the
+    Frappe server filesystem. Gmail is the single source of truth.
 
     Args:
         message_name: Excom Message name
         attachment_id: Gmail attachment ID
+        filename: Original filename for the Content-Disposition header
     """
     msg = frappe.get_doc("Excom Message", message_name)
     if msg.message_type != "Email":
@@ -125,7 +132,8 @@ def get_email_attachment(message_name: str, attachment_id: str):
 
     file_bytes = gmail_service.get_attachment(account_name, gmail_msg_id, attachment_id)
 
-    frappe.local.response.filename = f"attachment_{attachment_id[:8]}"
+    safe_name = (filename or f"attachment_{attachment_id[:8]}").replace('"', "")
+    frappe.local.response.filename = safe_name
     frappe.local.response.filecontent = file_bytes
     frappe.local.response.type = "download"
 
