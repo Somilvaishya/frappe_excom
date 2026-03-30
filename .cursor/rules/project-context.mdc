@@ -1,0 +1,53 @@
+---
+description: Excom project context, tech stack, commands, architecture
+globs:
+alwaysApply: true
+---
+
+# Excom — Omnichannel Communication Platform
+
+Frappe app that unifies external communication (WhatsApp, Email, Instagram, future channels) into one real-time inbox integrated with ERPNext.
+
+## Stack
+- **Backend:** Python 3.10+, Frappe Framework, ERPNext
+- **Frontend:** React 18 + TypeScript + Tailwind CSS (standalone SPA at `/excom`)
+- **Frontend SDK:** `frappe-react-sdk` (useFrappeGetCall, useFrappePostCall) — NOT `window.frappe.call()`
+- **Database:** MariaDB via Frappe ORM
+- **Realtime:** Frappe Socket.IO (`frappe.publish_realtime`)
+- **External APIs:** Gmail API (OAuth2), WhatsApp Business API (Cloud API), Instagram Graph API
+
+## Commands
+- `bench start` — dev server
+- `bench build --app excom` — build frontend
+- `bench migrate` — apply DocType schema changes
+- `bench run-tests --app excom` — all tests
+- `bench console` — Python REPL with Frappe context
+
+## Key Architecture
+- **Omni Identity** — single contact record linking phone/email/WhatsApp across channels to ERPNext Customer/Lead/Supplier
+- **Excom Thread** — one conversation per (channel + account + identity), carries assignment, status, tags
+- **Excom Message** — individual messages with delivery tracking, reactions, pins
+- **Channel Adapter Pattern** — each channel (WhatsApp, Email, Instagram) has its own inbound/outbound handler
+- **Pointer-based Email** — stores Gmail message IDs, fetches body on-demand from Gmail API (never stored locally)
+- **Access Control** — `_check_excom_access()` in `api/chat.py` is the single source of truth for role checks (System Manager, Excom Manager, Excom User)
+
+## Key Directories
+```
+excom/excom/
+├── api/           # @frappe.whitelist() REST endpoints
+├── channels/      # Channel adapters (email/, whatsapp/, instagram/)
+├── doctype/       # Frappe DocTypes (Thread, Message, Channel Account, etc.)
+├── services/      # Business logic layer (broadcast, delivery, gmail, etc.)
+├── tasks/         # Scheduled background jobs
+├── utils/         # Shared utilities (webhook, template, errors)
+frontend/src/
+├── components/    # React components (pages, UI elements)
+├── hooks/         # Custom React hooks (API calls, realtime, state)
+├── types/         # TypeScript interfaces
+├── utils/         # Frontend utilities
+```
+
+## Reference Documents
+- `technical_handbook.md` — Architecture decisions and implementation log (update after every change)
+- `psychological_handbook.md` — Design principles, anti-patterns, decision filters
+- `roadmap/README.md` — Current phase and deferred features

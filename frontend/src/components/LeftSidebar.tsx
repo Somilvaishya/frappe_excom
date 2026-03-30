@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
-import { Search, MessageCircle, Tag, X, Users, Shield, GitMerge, Cog, Plus, Radio, Settings, BarChart3, Calendar, ChevronDown, Mail, Phone, Instagram } from "lucide-react";
+import { Search, MessageCircle, Tag, X, Users, Shield, GitMerge, Cog, Plus, Radio, Settings, BarChart3, Calendar, ChevronDown, Mail, Phone, Instagram, Bug } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { useTags } from "../hooks/useTags";
@@ -578,6 +578,16 @@ export function LeftSidebar({
               Settings
             </button>
           )}
+
+          <a
+            href="https://github.com/sagarrgarg/frappe_excom/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            <Bug className="w-4 h-4" />
+            Report Issue
+          </a>
         </div>
 
         <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-lg p-4 border border-blue-500/20">

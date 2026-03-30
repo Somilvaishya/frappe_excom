@@ -9,14 +9,7 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
-from excom.excom.api.chat import _check_excom_access
-
-
-def _check_manager_access() -> None:
-    """Verify the current user has Excom Manager or System Manager role."""
-    roles = frappe.get_roles(frappe.session.user)
-    if "System Manager" not in roles and "Excom Manager" not in roles:
-        frappe.throw(_("You need Excom Manager role to perform this action"), frappe.PermissionError)
+from excom.excom.api.chat import _check_excom_access, _check_manager_access
 
 
 PROGRESS_KEY = "excom_identity_sync_progress"

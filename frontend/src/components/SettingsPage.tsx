@@ -4,7 +4,7 @@ import {
   Mail, MessageSquare, Palette, RefreshCw, Reply, Shield,
   Volume2, VolumeX, Zap, RotateCcw, Users,
 } from "lucide-react";
-import { useFrappeGetCall, useFrappePostCall } from "frappe-react-sdk";
+import { useFrappeGetCall, useFrappePostCall, useFrappeGetDocList, useFrappeCreateDoc } from "frappe-react-sdk";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { useExcomBranding } from "../hooks/useBranding";
@@ -552,43 +552,36 @@ interface CannedResponse {
 }
 
 function CannedSection() {
-  const { data: raw, mutate: refresh } = useFrappeGetCall<{ message: CannedResponse[] }>(
-    "frappe.client.get_list",
+  const { data: items, mutate: refresh } = useFrappeGetDocList<CannedResponse>(
+    "Excom Canned Response",
     {
-      doctype: "Excom Canned Response",
       fields: ["name", "title", "shortcode", "content"],
       limit_page_length: 50,
-      order_by: "title asc",
+      orderBy: { field: "title", order: "asc" },
     }
   );
-  const items: CannedResponse[] = Array.isArray(raw?.message) ? raw!.message : [];
 
-  const { call: insertDoc } = useFrappePostCall("frappe.client.insert");
+  const { createDoc, loading: saving } = useFrappeCreateDoc();
 
   const [newTitle, setNewTitle] = useState("");
   const [newShortcode, setNewShortcode] = useState("");
   const [newContent, setNewContent] = useState("");
-  const [saving, setSaving] = useState(false);
 
   const handleAdd = async () => {
     if (!newTitle.trim() || !newContent.trim()) { toast.error("Title and content are required."); return; }
     const shortcode = (newShortcode.trim() || newTitle.trim()).toLowerCase().replace(/[^a-z0-9_]/g, "_");
-    setSaving(true);
     try {
-      await insertDoc({
-        doc: JSON.stringify({
-          doctype: "Excom Canned Response",
-          title: newTitle.trim(),
-          shortcode,
-          content: newContent.trim(),
-        }),
+      await createDoc("Excom Canned Response", {
+        title: newTitle.trim(),
+        shortcode,
+        content: newContent.trim(),
       });
       setNewTitle(""); setNewShortcode(""); setNewContent("");
       toast.success("Canned response added.");
       await refresh();
     } catch {
       toast.error("Failed to save. Check if the shortcode is already taken.");
-    } finally { setSaving(false); }
+    }
   };
 
   return (
@@ -596,9 +589,9 @@ function CannedSection() {
       <SectionHeader icon={<MessageSquare className="w-4 h-4 text-indigo-400" />} title="Canned Responses" />
       <Card>
         <p className="text-sm text-zinc-400 mb-4">Quick-reply templates triggered by typing <code className="text-zinc-300">/shortcode</code> in chat.</p>
-        {items.length > 0 && (
+        {(items?.length ?? 0) > 0 && (
           <ul className="divide-y divide-zinc-800 mb-4">
-            {items.map((item) => (
+            {items!.map((item) => (
               <li key={item.name} className="py-2.5">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-white">{item.title}</p>

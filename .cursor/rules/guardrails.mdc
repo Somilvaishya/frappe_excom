@@ -1,0 +1,66 @@
+---
+description: Mistake prevention guardrails based on real bugs encountered
+globs:
+alwaysApply: true
+---
+
+# Guardrails — Mistakes We've Hit and How to Prevent Them
+
+These rules exist because each one caused a real bug. Follow them strictly.
+
+## 1. Field Name Verification (CRITICAL)
+
+Before writing ANY query, API call, or frontend field reference — verify the field exists:
+- **Backend:** Check the DocType JSON (`*.json`) for exact field names before using them in `frappe.get_all()`, `frappe.db.get_value()`, or SQL. Common traps: `enabled` vs `status`, `channel_type` vs `channel`, `message` vs `content_text`, `language` vs `language_code`.
+- **Frontend:** Check the backend API function signature for exact parameter names. The API param name may differ from the DocType field name (e.g., API takes `message`, stores as `content_text`).
+- **DocType names are exact:** `"WhatsApp Templates"` (plural) is not the same as `"WhatsApp Template"` (singular). Always verify.
+
+## 2. Access Checks on Every @frappe.whitelist() Endpoint
+
+Every `@frappe.whitelist()` endpoint MUST call an access check as its first line:
+- **Read/Write endpoints:** `_check_excom_access()` — imported from `excom.excom.api.chat`
+- **Manager-only endpoints:** `_check_manager_access()` or `_check_broadcast_access()`
+- **Guest webhooks:** Validate via HMAC signature, not role check
+- **Never rely on "only Excom users know the URL"** — any authenticated Frappe user can call any whitelisted endpoint
+
+## 3. Frontend API Call Pattern
+
+The Excom frontend is a standalone React SPA — `window.frappe.call()` does NOT exist in this context.
+- **Always use** `useFrappeGetCall()` / `useFrappePostCall()` from `frappe-react-sdk`
+- **Never use** `(window as any).frappe?.call()` for API mutations — it silently returns undefined
+- `window.frappe.boot` reads are OK (optional chaining for config values), but never for API calls
+- For `frappe.client.insert`, pass `doc` as `JSON.stringify({...})`
+- For `frappe.client.get_list`, use `limit_page_length` (not `limit`) as the parameter name
+
+## 4. TypeScript Types Must Match Backend
+
+When the backend adds a new message type, DocType field, or API return field:
+- Update `frontend/src/types/index.ts` to include it
+- Update any mapping functions (e.g., `mapMessageType` in `useMessages.ts`)
+- If a mapping function has a fallback (e.g., `|| "text"`), every valid backend value should still have an explicit entry
+
+## 5. Tailwind: No Dynamic Class Construction
+
+Tailwind purges unused classes at build time. Dynamic string interpolation creates classes that don't exist in the CSS bundle.
+- **Never:** `` `bg-${color}-500` `` or `` `text-${variant}-300` ``
+- **Always:** Use a static lookup map: `const classes = { blue: "bg-blue-500", red: "bg-red-500" }`
+
+## 6. Import Verification
+
+- Every `import` must resolve. If you use `frappe.get_doc()`, the file must have `import frappe`.
+- Cross-module imports between `api/*.py` files must not create circular dependencies. Use lazy imports (inside function bodies) when needed.
+- Don't duplicate utility functions — import from the canonical location (e.g., `_check_excom_access` lives in `chat.py`, all other API files import it).
+
+## 7. Frappe ORM Gotchas
+
+- `frappe.db.get_value()` returns `None` if the record doesn't exist — always check before using the result
+- `frappe.get_all()` with a non-existent field name silently returns empty results, not an error
+- After mutations outside a request context (background jobs, enqueued tasks): call `frappe.db.commit()`
+- `frappe.throw()` inside a webhook handler returns HTTP 417, not 403 — use `werkzeug.wrappers.Response` for explicit HTTP status codes
+
+## 8. Logic Bugs to Watch For
+
+- **Timestamp math:** When comparing chronological items, ensure `newer - older > threshold` (not the reverse)
+- **Optional chaining arithmetic:** `undefined + undefined` = `NaN`, not an error. Guard with ternary: `x ? x.toUpperCase() : "Fallback"`
+- **Hour wrapping:** `hour + 1` when `hour === 23` produces `24`, not `0`
+- **Dead code:** If a variable is assigned but the value is never set by any code path (e.g., `sender === "ai"` when sender is always "user" or "contact"), the branch is unreachable

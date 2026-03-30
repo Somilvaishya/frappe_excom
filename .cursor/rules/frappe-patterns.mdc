@@ -1,0 +1,40 @@
+---
+description: Frappe Framework patterns for backend development
+globs: ["**/*.py"]
+alwaysApply: false
+---
+
+# Frappe Development Patterns
+
+## ORM Usage
+- Use `frappe.get_doc()`, `frappe.get_all()`, `frappe.db.get_value()` for standard queries
+- Raw SQL is fine for joins, aggregations, and complex filters — use parameterized queries (`%(param)s`, never f-strings with user input)
+- `frappe.get_all()` silently ignores non-existent fields — always verify field names against DocType JSON
+
+## API Endpoints
+- `@frappe.whitelist()` for all exposed APIs
+- `allow_guest=True` only for webhooks and public widget endpoints
+- First line of every endpoint: access check (`_check_excom_access()` or equivalent)
+- Use `frappe.throw()` for user-facing validation errors
+- Use `frappe.log_error()` for background failures (never `print()`)
+
+## Background Work
+- `frappe.enqueue()` for background jobs — never spawn threads
+- `frappe.db.commit()` after mutations in non-request contexts
+- `frappe.publish_realtime("event", data, user=user)` for pushing updates to frontend
+
+## DocTypes
+- All new DocTypes prefixed with "Excom" to avoid namespace conflicts
+- Never modify ERPNext/Frappe core DocTypes — use Custom Fields or child tables
+- Run `bench migrate` after any DocType JSON change
+- Heavy business logic goes in `services/` layer, not in DocType controllers
+
+## Error Handling
+- Never bare `except:` — catch specific exceptions
+- `frappe.throw(_("message"), frappe.PermissionError)` for permission failures
+- For webhook responses needing specific HTTP codes, use `werkzeug.wrappers.Response` directly
+
+## Secrets
+- Secrets in `site_config.json` via `frappe.conf`
+- OAuth tokens use Frappe's Password field type (encrypted at rest)
+- Never log full message content — log message IDs only

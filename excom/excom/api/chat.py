@@ -46,6 +46,15 @@ def _check_excom_access() -> None:
         frappe.throw(_("You do not have access to Excom"), frappe.PermissionError)
 
 
+MANAGER_ROLES = {"System Manager", "Excom Manager"}
+
+
+def _check_manager_access() -> None:
+    """Block users without Excom Manager or System Manager role."""
+    if not MANAGER_ROLES.intersection(frappe.get_roles(frappe.session.user)):
+        frappe.throw(_("You need Excom Manager role to perform this action"), frappe.PermissionError)
+
+
 @frappe.whitelist()
 @rate_limit(key="user", limit=60, seconds=60)
 def get_threads(

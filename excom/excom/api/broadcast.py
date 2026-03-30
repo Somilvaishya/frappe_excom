@@ -11,12 +11,7 @@ import frappe
 from frappe import _
 from frappe.utils import get_datetime, now_datetime
 
-
-def _check_broadcast_access() -> None:
-    """Raise if current user lacks Excom Manager or System Manager role."""
-    roles = frappe.get_roles()
-    if "System Manager" not in roles and "Excom Manager" not in roles:
-        frappe.throw(_("Insufficient permissions"), frappe.PermissionError)
+from excom.excom.api.chat import _check_manager_access as _check_broadcast_access
 
 
 @frappe.whitelist()
