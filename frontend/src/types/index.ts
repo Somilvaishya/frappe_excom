@@ -35,6 +35,7 @@ export interface ExcomMessage {
   media_file: string;
   delivery_status: string;
   creation: string;
+  provider_timestamp?: string;
   provider_message_id: string;
   reply_to: string;
   created_by_user: string;
@@ -65,7 +66,7 @@ export interface Message {
   timestamp: Date;
   sender: "user" | "contact" | "ai";
   status?: "sent" | "delivered" | "read" | "failed" | "queued";
-  type?: "text" | "image" | "document" | "audio" | "email" | "template" | "sticker";
+  type?: "text" | "image" | "video" | "audio" | "document" | "sticker" | "location" | "template" | "email" | "interactive" | "flow" | "reaction" | "contact" | "button";
   mediaUrl?: string;
   channel?: string;
   isInternal?: boolean;

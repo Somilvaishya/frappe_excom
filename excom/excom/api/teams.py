@@ -3,6 +3,8 @@
 import frappe
 from frappe import _
 
+from excom.excom.api.chat import _check_excom_access
+
 
 def _check_manager_access() -> None:
     """Verify the current user has Excom Manager or System Manager role."""
@@ -14,6 +16,7 @@ def _check_manager_access() -> None:
 @frappe.whitelist()
 def get_my_teams() -> list:
     """Return teams where the current user is a member, with member count."""
+    _check_excom_access()
     from excom.excom.doctype.excom_team.excom_team import get_user_teams
 
     user_roles = set(frappe.get_roles(frappe.session.user))
@@ -38,6 +41,7 @@ def get_my_teams() -> list:
 @frappe.whitelist()
 def get_all_teams() -> list:
     """Return all teams with member count."""
+    _check_excom_access()
     teams = frappe.get_all(
         "Excom Team",
         fields=["name", "team_name", "description"],
@@ -56,6 +60,7 @@ def get_all_teams() -> list:
 @frappe.whitelist()
 def get_team_members(team: str) -> list:
     """Return members of a team with user details."""
+    _check_excom_access()
     return frappe.db.sql(
         """
         SELECT tm.user, tm.role, u.full_name, u.user_image
@@ -87,6 +92,7 @@ def create_team(team_name: str, description: str = "") -> dict:
 @frappe.whitelist()
 def search_users(search: str = "", limit: int = 20) -> list:
     """Search system users by email or full name for the add-member picker."""
+    _check_excom_access()
     limit = min(int(limit), 50)
     params: dict = {"limit": limit}
 

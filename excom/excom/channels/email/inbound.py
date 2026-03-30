@@ -56,6 +56,7 @@ def poll_all_email_accounts():
                 queue="short",
                 is_async=True,
                 deduplicate=True,
+                job_id=f"email_poll:{account.name}",
             )
         except Exception:
             frappe.log_error(
@@ -232,42 +233,16 @@ def _ingest_email_metadata(account_name: str, account, meta: dict):
         display_name=contact_name,
     )
 
-    thread_key = f"email:{account_name}:{gmail_thread_id}"
-    thread_name = frappe.db.get_value(
-        "Excom Thread", {"thread_key": thread_key}, "name"
-    )
-
-    if not thread_name:
-        oi = frappe.db.get_value(
-            "Omni Identity", identity_name,
-            ["display_name", "primary_phone"], as_dict=True,
-        )
-
-        try:
-            thread_doc = frappe.get_doc({
-                "doctype": "Excom Thread",
-                "omni_identity": identity_name,
-                "channel": "email",
-                "account_doctype": "Excom Channel Account",
-                "account": account_name,
-                "thread_key": thread_key,
-                "status": "Open",
-                "display_name": oi.display_name if oi else contact_name,
-                "primary_phone": oi.primary_phone if oi else "",
-                "unread_count": 0,
-                "last_message_at": now_datetime(),
-            })
-            thread_doc.insert(ignore_permissions=True)
-            thread_name = thread_doc.name
-        except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
-            frappe.clear_last_message()
-            thread_name = frappe.db.get_value(
-                "Excom Thread", {"thread_key": thread_key}, "name"
-            )
+    # One thread per person per channel per account (same as WhatsApp).
+    # gmail_thread_id is stored per-message in content_json for reply threading.
+    thread_name = upsert_thread(identity_name, "email", account_name)
 
     internal_date = meta.get("internalDate", "")
     if internal_date:
         try:
+            # Gmail internalDate is UTC milliseconds since epoch.
+            # fromtimestamp() converts to local (server) timezone — matching
+            # how Frappe stores naive datetimes in the system timezone.
             provider_ts = datetime.fromtimestamp(int(internal_date) / 1000)
         except (ValueError, OSError):
             provider_ts = now_datetime()
@@ -308,19 +283,14 @@ def _ingest_email_metadata(account_name: str, account, meta: dict):
     })
     msg.insert(ignore_permissions=True)
 
+    update_ts = provider_ts  # use the actual email date, not the sync time
     now = now_datetime()
-    update_fields = {
-        "last_message_at": now,
-        "last_message_preview": preview,
-        "last_message_direction": direction,
-        "modified": now,
-    }
     if direction == "Inbound":
         frappe.db.sql(
             """
             UPDATE `tabExcom Thread`
-            SET last_message_at = %(now)s,
-                last_inbound_at = %(now)s,
+            SET last_message_at = %(ts)s,
+                last_inbound_at = %(ts)s,
                 unread_count = unread_count + 1,
                 last_message_preview = %(preview)s,
                 last_message_direction = 'Inbound',
@@ -328,20 +298,20 @@ def _ingest_email_metadata(account_name: str, account, meta: dict):
                 modified = %(now)s
             WHERE name = %(thread)s
             """,
-            {"now": now, "preview": preview, "thread": thread_name},
+            {"ts": update_ts, "now": now, "preview": preview, "thread": thread_name},
         )
     else:
         frappe.db.sql(
             """
             UPDATE `tabExcom Thread`
-            SET last_message_at = %(now)s,
-                last_outbound_at = %(now)s,
+            SET last_message_at = %(ts)s,
+                last_outbound_at = %(ts)s,
                 last_message_preview = %(preview)s,
                 last_message_direction = 'Outbound',
                 modified = %(now)s
             WHERE name = %(thread)s
             """,
-            {"now": now, "preview": preview, "thread": thread_name},
+            {"ts": update_ts, "now": now, "preview": preview, "thread": thread_name},
         )
 
     frappe.publish_realtime(

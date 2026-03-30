@@ -1,18 +1,20 @@
+import frappe
+
+
 def get_template_values(template_name, recipient_data=None):
     """
-    Get the template values for a WhatsApp template
-    
+    Get the template values for a WhatsApp template.
+
     Args:
         template_name (str): Name of the WhatsApp template
         recipient_data (dict, optional): Dictionary of recipient-specific data
-        
+
     Returns:
         dict: Dictionary of template values
     """
     import json
-    
-    # Get the template
-    template = frappe.get_doc("WhatsApp Template", template_name)
+
+    template = frappe.get_doc("WhatsApp Templates", template_name)
     
     # Extract variables from template body
     variables = []

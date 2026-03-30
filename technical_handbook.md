@@ -1492,3 +1492,445 @@ Wired email attachment chips in the inbox to download files directly from Gmail 
 ### Impacted modules
 - `excom/excom/api/email.py` — filename parameter on download endpoint
 - `frontend/src/components/EmailMessageCard.tsx` — AttachmentChip component, Download icon
+
+---
+
+## Phase 12: Advanced Filters, Spam/Archive/Delete Actions
+
+### What changed
+1. Server-side channel + account filtering (was client-side channel-only)
+2. Date range filter for conversations
+3. Swipe-to-reveal actions: Spam, Archive, Delete (System Manager only)
+
+### Architecture
+
+#### Backend — `excom/excom/api/chat.py`
+- **`get_threads()`**: Added `channel`, `account`, `date_from`, `date_to` parameters. Filtering now happens server-side in SQL for accuracy. Query condition also excludes `Spam` status alongside `Closed`.
+- **`mark_spam(thread_id)`**: Sets thread status to `Spam`, flags `Omni Identity.is_spam = 1` so future messages from this sender can be auto-filtered.
+- **`archive_thread(thread_id)`**: Sets thread status to `Closed` (hides from inbox).
+- **`delete_thread(thread_id)`**: Deletes all `Excom Message` records for the thread, then deletes the `Excom Thread`. Restricted to System Manager role.
+- **`get_channel_accounts()`**: Returns active channel accounts for the filter dropdown.
+
+#### Schema changes
+- **`Excom Thread`**: Added `Spam` to status options (`Open|Pending|Closed|Spam`).
+- **`Omni Identity`**: Added `is_spam` (Check field) under new "Flags" section.
+- **Patch**: `add_spam_status_and_identity_flag` reloads both doctypes.
+
+#### Frontend
+- **`useContacts.ts`**: `useThreads()` now passes `channel`, `account`, `date_from`, `date_to` to the API.
+- **`App.tsx`**: Added `selectedAccountFilter`, `dateFrom`, `dateTo` state. Removed client-side channel filtering (now server-side).
+- **`LeftSidebar.tsx`**: Channel dropdown now shows per-account sub-options. Added collapsible date range filter with native date inputs and clear button.
+- **`ChatThreadList.tsx`**: Right-click (context menu) reveals action buttons that slide in from the right:
+  - **Spam** (amber): Marks sender as spam, hides thread
+  - **Archive** (blue): Archives thread (status → Closed)
+  - **Delete** (red, System Manager only): Permanently deletes thread and messages
+  - Click the swiped card again to dismiss actions
+
+### Impacted modules
+- `excom/excom/api/chat.py` — new endpoints, enhanced get_threads
+- `excom/excom/doctype/excom_thread/excom_thread.json` — Spam status option
+- `excom/excom/doctype/omni_identity/omni_identity.json` — is_spam field
+- `excom/patches.txt` + new patch file
+- `frontend/src/hooks/useContacts.ts` — new filter params
+- `frontend/src/App.tsx` — state, props
+- `frontend/src/components/LeftSidebar.tsx` — account filter, date range filter
+- `frontend/src/components/ChatThreadList.tsx` — swipe actions
+
+### Migration
+- `bench migrate` required for Excom Thread (Spam status) and Omni Identity (is_spam field).
+
+---
+
+## Phase 13: Email UI Overhaul & Conversation Context Menu
+
+### What changed
+
+#### Email Message Card (`EmailMessageCard.tsx`) — full rewrite
+1. **Attachment cards** replaced plain text chips with rich cards: colored file-type icon (PDF=red, image=green, spreadsheet=green, video=purple, audio=pink, archive=amber), filename, extension badge, file size, and a circular download button with hover state.
+2. **Email action toolbar**: Reply, Reply All, Forward buttons in expanded view. Star toggle and Print/Open-in-new-tab button on the right.
+3. **Sender avatar**: Initials circle next to the sender name in the header for visual consistency with the thread list.
+4. **Better metadata layout**: From/To/Cc/Date with right-aligned labels in a structured grid.
+5. **Attachment section footer**: Shows total count and total size.
+
+#### Conversation Context Menu (`ChatThreadList.tsx`) — full rewrite
+1. **Replaced broken swipe mechanism** with a floating right-click context menu.
+2. Context menu appears at cursor position via `onContextMenu`, with boundary clamping.
+3. Menu shows contact name/info header, then action groups separated by dividers.
+4. Actions: Mark as read (placeholder), Copy contact, Mark as spam, Archive, Delete (System Manager only).
+5. Closes on outside click, Escape key, or scroll.
+6. Loading spinners on destructive actions.
+
+### Impacted modules
+- `frontend/src/components/EmailMessageCard.tsx` — complete rewrite
+- `frontend/src/components/ChatThreadList.tsx` — complete rewrite (swipe → context menu)
+
+### Migration
+- None (frontend-only changes).
+
+---
+
+## Phase 14 — UI Fixes & Feature Additions (2026-03-29)
+
+### What changed
+
+Seven items addressed in this phase:
+
+#### 1. Sticker Dimension Validation
+- Added `_validate_dimensions()` to `ExcomSticker.validate()` using `PIL.Image`.
+- Validates that sticker files are exactly 512×512 pixels at upload time (before Meta API call).
+- Throws a clear user-facing error with actual dimensions if wrong.
+
+#### 2. StickerPicker Z-Index Fix
+- `StickerPicker` was clipped by `overflow-hidden` on parent containers.
+- Fixed by portaling it to `document.body` via `createPortal` with `position: fixed`.
+- Button rect is captured via `useRef` to anchor the popup correctly.
+
+#### 3. Collapsible Conversation List
+- Added `isCollapsed` and `onToggleCollapse` props to `ChatThreadList`.
+- When collapsed: renders a 48px strip with a ChevronRight expand button + unread badge.
+- When expanded: header now shows a ChevronLeft collapse button.
+- State persisted to `localStorage` as `excom_thread_list_collapsed`.
+
+#### 4. Email Signature DocType + API
+- New DocType: `Excom Email Signature` — per-user HTML signature with position option.
+- Fields: `user` (Link, unique), `signature_html` (Text Editor), `is_active` (Check), `position` (Select).
+- Two new API endpoints in `excom/api/email.py`: `get_my_signature()` and `save_my_signature()`.
+- Migration patch: `excom.patches.v1_0.add_email_signature_doctype`.
+
+#### 5. Settings Page Full Rework
+- `SettingsPage.tsx` rewritten as a split-pane layout with left-nav + content panel.
+- Sections: General (OAuth), Email Signatures, Notifications, Branding, Accounts, Keyboard Shortcuts, Canned Responses, Auto-Reply.
+- Notification section includes sound toggle (persisted to `localStorage` as `excom_sound_enabled`).
+
+#### 6. Email Signature in Compose
+- `EmailCompose.tsx` now fetches the user's active signature via `get_my_signature()`.
+- Appends it below the compose body when sending, with an inline preview shown in the UI.
+
+#### 7. Auto-Assignment on Thread Open
+- `get_messages()` in `chat.py` now auto-claims unassigned threads when a user opens them.
+- Calls `_auto_claim_thread(thread, frappe.session.user)` after fetching messages.
+- Returns `auto_claimed_by` in the response.
+- Frontend (`useMessages.ts`) handles the new `{messages, auto_claimed_by}` response shape (backwards-compat with old array shape).
+- `ChannelTabsView.tsx` shows a toast "Thread assigned to you" and refreshes the thread list.
+
+#### 8. Channel/Account Filter Rebuild
+- Removed the broken DropdownMenu-based channel filter from `LeftSidebar.tsx`.
+- Replaced with two-tier chip-based filter:
+  - Tier 1: horizontal pill chips for All / WhatsApp / Email / Instagram / Calls.
+  - Tier 2: smaller account chips shown when a specific channel is selected.
+- Channel keys now use proper capitalization matching the DB: "WhatsApp", "Email", etc.
+
+#### 9. Notification Sound When Focused
+- Removed `!document.hasFocus()` guard from `playNotificationSound()` call in `useNotifications.ts`.
+- Sound is now controlled by `excom_sound_enabled` localStorage key (default: on).
+- Desktop notification (browser pop-up) still only fires when tab is not focused.
+
+### Impacted modules
+- `excom/excom/doctype/excom_sticker/excom_sticker.py` — dimension validation
+- `excom/excom/doctype/excom_email_signature/` — new DocType
+- `excom/excom/api/email.py` — signature API endpoints
+- `excom/excom/api/chat.py` — auto-assign on `get_messages`
+- `excom/patches.txt` + `excom/patches/v1_0/add_email_signature_doctype.py`
+- `frontend/src/components/ChannelTabsView.tsx` — sticker portal, auto-assign toast, onRefreshThreads prop
+- `frontend/src/components/ChatThreadList.tsx` — collapse/expand feature
+- `frontend/src/components/LeftSidebar.tsx` — two-tier chip filter
+- `frontend/src/components/SettingsPage.tsx` — complete rewrite
+- `frontend/src/components/EmailCompose.tsx` — signature integration
+- `frontend/src/hooks/useMessages.ts` — new response shape handling
+- `frontend/src/hooks/useNotifications.ts` — sound without focus guard
+- `frontend/src/App.tsx` — isThreadListCollapsed state, onRefreshThreads prop
+
+### Migration
+- Run `bench migrate` to create the `Excom Email Signature` table.
+
+---
+
+## Gmail OAuth2 Token Fix (2026-03-29)
+
+### Problem
+Email accounts were failing with "No valid OAuth2 token for {account}. Please re-authorize."
+after their Google access tokens expired. Root causes identified:
+
+1. **No refresh_token stored**: The Token Cache had an `access_token` but an empty
+   `refresh_token`. Google only returns a `refresh_token` on first-ever authorization,
+   or when `prompt=consent` is explicitly requested. Without a `refresh_token`, Frappe's
+   `get_active_token()` cannot auto-refresh an expired token.
+
+2. **User context mismatch in OAuth callback**: The authorize button was calling
+   `initiate_web_application_flow(user=email_connected_user)` which created the Token Cache
+   state for one user. But Frappe's callback validates `token_cache.user == frappe.session.user`,
+   causing "Invalid token state!" when the logged-in user differed from `email_connected_user`.
+
+3. **Aggressive email_authorized = 0 flip**: When token refresh failed, `get_access_token`
+   was setting `email_authorized = 0`, which removed the account from polling. The user saw
+   the checkbox flap between 0 and 1 on every save.
+
+4. **`_force_token_refresh` bug**: Used `connected_app.token_endpoint` (wrong field name)
+   instead of `connected_app.token_uri`, so the manual refresh always failed silently.
+
+5. **Authorize button hidden when authorized**: The `depends_on` condition was
+   `!doc.email_authorized` — meaning once authorized, there was no button to re-authorize.
+
+### What changed
+
+#### `excom/excom/doctype/excom_channel_account/excom_channel_account.py`
+- Added `authorize_email_account()` whitelist method which:
+  - Sets `email_connected_user = frappe.session.user` before initiating OAuth, ensuring
+    the Frappe callback's state check always passes.
+  - Adds `prompt=consent` to the Connected App's `query_parameters` if not present,
+    guaranteeing Google always returns a fresh `refresh_token`.
+  - Returns the authorization URL (does not redirect; client redirects via JS).
+
+#### `excom/excom/doctype/excom_channel_account/excom_channel_account.js`
+- `email_authorize_button`: Replaced the raw `initiate_web_application_flow` call with
+  a call to the new `authorize_email_account` backend method.
+- Removed `user: frm.doc.email_connected_user` from the OAuth call (was the cause of
+  the "Invalid token state" error).
+- Removed requirement that `email_connected_user` is filled before authorizing.
+- Added orange dashboard headline when account is not authorized.
+
+#### `excom/excom/doctype/excom_channel_account/excom_channel_account.json`
+- Changed `email_authorize_button` `depends_on` from `!doc.email_authorized` to just
+  `channel == email` — the button now always appears so re-authorization is always possible.
+
+#### `excom/excom/services/gmail_service.py`
+- `get_access_token()`: Removed `frappe.db.set_value("email_authorized", 0)` on failure.
+  The flag is no longer flipped by runtime sync failures — only by the `_sync_email_authorized`
+  controller method which reads token existence.
+- `_force_token_refresh()`: Fixed field name from `connected_app.token_endpoint` to
+  `connected_app.token_uri`. Also changed to use `get_token_cache()` instead of
+  `get_active_token()` to avoid double-refresh attempt; saves `expires_in` from response.
+
+### Impacted modules
+- `excom/excom/doctype/excom_channel_account/excom_channel_account.py`
+- `excom/excom/doctype/excom_channel_account/excom_channel_account.js`
+- `excom/excom/doctype/excom_channel_account/excom_channel_account.json`
+- `excom/excom/services/gmail_service.py`
+
+### Migration
+- Run `bench migrate` — the `email_authorize_button` field `depends_on` change is a DocType
+  metadata change picked up automatically.
+
+### Re-authorization steps (for existing accounts)
+1. Open the `Excom Channel Account` form for the email account.
+2. Click **Authorize Gmail Access** — the button now always appears regardless of current
+   authorization status.
+3. Complete the Google OAuth consent screen (you will see a permissions dialog because
+   `prompt=consent` forces a fresh consent even for previously authorized accounts).
+4. After redirect back to the form, `email_authorized` will be checked and syncing will resume.
+
+### Anti-patterns to avoid
+- Do NOT remove `prompt=consent` from the Connected App query parameters — without it,
+  re-authorization will not issue a `refresh_token`, making tokens non-renewable.
+- Do NOT pass `user=email_connected_user` to `initiate_web_application_flow` — use the
+  session user and let the backend bind `email_connected_user` automatically.
+- Do NOT set `email_authorized = 0` in runtime sync code — only the controller
+  `_sync_email_authorized` should manage this flag.
+
+---
+
+## Email Threading, Timezone & Notification Fixes (2026-03-29)
+
+### Problem 1: Email timestamps displayed in wrong timezone
+Email `provider_timestamp` was created using `datetime.utcfromtimestamp()` which produces
+a UTC-based naive datetime. Frappe stores all naive datetimes as if they're in the system
+timezone (Asia/Kolkata). So a 10:00 UTC email was stored as 10:00 and displayed as 10:00 IST
+instead of 15:30 IST.
+
+Additionally, the frontend parsed Frappe datetime strings with `new Date()` which interprets
+them in the browser's local timezone, causing further discrepancy when server and browser
+timezones differ.
+
+**Fix:**
+- Backend: Changed `datetime.utcfromtimestamp()` → `datetime.fromtimestamp()` in
+  `channels/email/inbound.py` so the email date is correctly converted to server timezone.
+- Frontend: Created `utils/datetime.ts` with `parseFrappeDateTime()` that detects the
+  server timezone from `frappe.boot.time_zone.system` and adjusts Date objects so
+  `formatDistanceToNow` always shows correct relative times.
+- Applied `parseFrappeDateTime` in `useContacts.ts` and `useMessages.ts`.
+
+### Problem 2: Auto-update and notification tone not firing
+Socket.IO realtime events (`excom:message_received`) drive both thread list refresh and
+notification tones. When Socket.IO is unavailable, the 15s polling fallback refreshes data
+but never triggered notification sounds.
+
+**Fix:**
+- `useNotifications.ts`: Added unread count tracking. When `totalUnread` increases between
+  renders (detected via polling), plays the notification sound and shows a desktop notification.
+  This means notifications work even with no socket connection.
+- `useRealtimeThreads.ts`: Reduced polling interval from 15s → 10s. Added a
+  `visibilitychange` listener to refresh immediately when the user switches back to the tab.
+
+### Problem 3: Same person's emails split across multiple threads
+Email inbound used `email:{account}:{gmail_thread_id}` as the thread key, creating a
+separate Excom Thread for every Gmail conversation. Two emails with different subjects from
+the same person appeared as separate entries.
+
+**Fix:**
+- Changed `_ingest_email_metadata` in `channels/email/inbound.py` to call `upsert_thread()`
+  which uses `email:{account}:{omni_identity}` — one thread per person per account,
+  matching the WhatsApp threading model.
+- `gmail_thread_id` is still stored per-message in `content_json` so Gmail reply threading
+  works correctly (outbound.py reads it from the latest message).
+- Updated `channels/email/outbound.py` to extract `gmail_thread_id` from the most recent
+  message's `content_json` instead of parsing it from `thread_key`.
+- Migration patch `merge_email_threads_by_identity` consolidates all existing duplicate
+  email threads per identity into a single thread.
+
+### Impacted modules
+- `excom/excom/channels/email/inbound.py` — threading + timezone
+- `excom/excom/channels/email/outbound.py` — gmail_thread_id extraction
+- `excom/patches/v1_0/merge_email_threads_by_identity.py` — data migration
+- `excom/patches.txt` — patch registration
+- `frontend/src/utils/datetime.ts` — new timezone-aware parser
+- `frontend/src/hooks/useContacts.ts` — parseFrappeDateTime
+- `frontend/src/hooks/useMessages.ts` — parseFrappeDateTime
+- `frontend/src/hooks/useNotifications.ts` — polling-based notification
+- `frontend/src/hooks/useRealtimeThreads.ts` — faster polling + visibility listener
+
+### Migration
+- Run `bench migrate` — applies the thread merge patch automatically.
+
+### Anti-patterns to avoid
+- Do NOT use `datetime.utcfromtimestamp()` for storing dates in Frappe — always use
+  `datetime.fromtimestamp()` or `frappe.utils.now_datetime()` which are server-tz-aware.
+- Do NOT use `new Date(frappeDateString)` directly on the frontend — always use
+  `parseFrappeDateTime()` from `utils/datetime.ts`.
+- Do NOT store `gmail_thread_id` in the `thread_key` — it prevents per-person grouping.
+  Store it only in message `content_json`.
+
+---
+
+## Roadmap Cleanup — 2026-03-30
+
+### What changed
+Deleted completed phase spec files and obsolete audit documents from the repository.
+Phases 0, 1, and 2 are fully implemented and no longer need active spec tracking.
+
+### Files removed
+- `roadmap/phase_0_critical_fixes.md` — Phase 0 COMPLETED (all 9 critical fixes verified)
+- `roadmap/phase_0_validation_report.md` — Phase 0 validation (9/9 pass)
+- `roadmap/phase_1_backend_hardening.md` — Phase 1 COMPLETED (schema, validation, indexes, service layer, event bus)
+- `roadmap/phase_2_frontend_completion.md` — Phase 2 COMPLETED (realtime, enrichment, attachments, mobile nav)
+- `yet_to_improve.md` — Pre-Phase 0 audit; 23/30 items fixed in Phase 0-1, remaining 7 addressed by Phase 2 or tracked in Phase 7 (security)
+- `frontend_gaps_handbook.md` — Frontend gap tracker; nearly all fixed in Phase 2, remaining items (CallScreen, online presence, AI status) tracked in future phases
+
+### Files updated
+- `roadmap/README.md` — Stripped completed phases, updated dependency graph, removed obsolete references
+
+### Why
+Spec files for completed work add noise and risk stale documentation. Active roadmap now covers only Phase 3+ (remaining work). Historical decisions are preserved in this handbook.
+
+### Email polling fix (same session)
+Fixed `poll_all_email_accounts` in `channels/email/inbound.py`: added missing `job_id` parameter
+to `frappe.enqueue()` call. Frappe requires `job_id` when `deduplicate=True`; the missing param
+caused a `ValidationError` on every scheduler tick, silently preventing automatic email sync.
+Also re-enabled the Frappe scheduler (`bench enable-scheduler`) which was disabled for the site.
+
+### Phase 3 verification and cleanup (same session)
+Full end-to-end codebase audit confirmed all Phase 3 subsections are implemented:
+- **3.1 Email** — gmail_service, inbound/outbound adapters, 5 API endpoints, scheduler hook, 3 frontend components
+- **3.2 Web Chat** — Preact widget (`public/widget/`), guest API (`api/webchat.py`), CORS middleware, Visitor Session doctype, channel seed, pre-chat form. MVP-complete; deferred: file upload in widget, sound, Socket.IO (uses 3s polling), routing module, offline handling
+- **3.3 Canned Responses** — `Excom Canned Response` doctype, `get_canned_responses` API, `CannedResponsePopover` with `/` trigger
+- **3.4 Tags** — `Excom Tag` + `Excom Thread Tag` doctypes, 4 tag APIs, `TagManager` component, sidebar filtering via `useTags`
+- **3.5 Internal Notes** — `is_internal` field, `send_internal_note` API, message/note toggle, amber styling
+- **3.6 Message Features** — `reactions`, `is_pinned`/`pinned_by`, `reply_to` fields; emoji picker, reaction bar, pin/unpin API + context menu, reply/quote preview. Desktop fully wired; mobile not at full parity
+
+Deleted `roadmap/phase_3_omnichannel_expansion.md`, updated `roadmap/README.md`.
+
+---
+
+## Phase A: Security Essentials (COMPLETED)
+
+### What changed
+
+**A.1 — Webhook HMAC Validation** (`excom/excom/utils/webhook.py`)
+- `post()` now validates `X-Hub-Signature-256` against `wa_app_secret` stored on Excom Channel Account (Password field, encrypted at rest). Tries all active WhatsApp accounts; rejects with 403 if no secret matches.
+- Graceful degradation: if no accounts have `wa_app_secret` set, HMAC is skipped (prevents breaking existing accounts during rollout).
+- `get()` now returns explicit HTTP 403 for missing or unmatched verify tokens (previously used `frappe.throw` which returned 417).
+- New field: `wa_app_secret` (Password) on Excom Channel Account JSON.
+
+**A.2 — Input Sanitization** (`excom/excom/api/chat.py`)
+- `_sanitize_message()` helper: runs `frappe.utils.sanitize_html()` + enforces per-channel max length (WhatsApp: 4096, Email: 100k, WebChat: 10k).
+- Applied to `send_message()` and `send_internal_note()` before any storage or dispatch.
+
+**A.3 — Rate Limiting** (`excom/excom/api/chat.py`)
+- `send_message`: 30 req/min per user via `@rate_limit(key="user", limit=30, seconds=60)`.
+- `send_internal_note`: 30 req/min per user.
+- `get_messages`: 120 req/min per user.
+- `get_threads`: 60 req/min per user.
+- Uses Frappe's built-in `frappe.rate_limiter.rate_limit` (Redis-backed).
+
+**A.4 — Role-Based Access** (`excom/excom/doctype/excom_thread/excom_thread.py`, `hooks.py`)
+- Added `has_permission()` method on ExcomThread controller: Excom User can only access threads assigned to them or their team. Excom Manager / System Manager have full access.
+- Registered `has_permission` and `permission_query_conditions` hooks in `hooks.py` so Frappe list views, APIs, and direct access all respect the permission model.
+- Existing role structure preserved: Excom Manager = full access, Excom User = restricted to own/team threads.
+
+**A.5 — Token Expiry Monitoring** (`excom/excom/tasks/token_monitor.py`, `hooks.py`)
+- New daily scheduled task `check_token_expiry()`: checks email OAuth tokens (Token Cache) and WhatsApp token presence.
+- Sends Frappe Notification Log alerts to all Excom Manager users when tokens are missing or revoked.
+- Registered in `hooks.py` under `scheduler_events.daily`.
+
+### Impacted modules
+- `excom/excom/utils/webhook.py` — HMAC validation, 403 rejection
+- `excom/excom/api/chat.py` — sanitization, rate limiting
+- `excom/excom/doctype/excom_thread/excom_thread.py` — has_permission, permission_query_conditions
+- `excom/excom/doctype/excom_channel_account/excom_channel_account.json` — wa_app_secret field
+- `excom/hooks.py` — permission hooks, scheduler task
+- `excom/excom/tasks/token_monitor.py` — new file
+
+### Migration implications
+- `bench migrate` adds `wa_app_secret` column to Excom Channel Account. Existing accounts work unchanged — HMAC validation is skipped until a secret is configured.
+
+---
+
+## Codebase Audit — Syntax & Semantic Error Fixes (2026-03-30)
+
+### What changed
+
+Systematic audit of all frontend ↔ backend field mappings, API permission checks, and type definitions. Found and fixed 30+ issues across 10 files.
+
+### Category 1: Wrong Field Names (Silent Failures)
+
+| File | Bug | Fix |
+|------|-----|-----|
+| `api/analytics.py` (lines 310, 320) | `enabled: 1` filter — field does not exist on Excom Channel Account | Changed to `status: "Active"` |
+| `api/broadcast.py` (lines 319, 324) | `channel_type` filter + fields — field does not exist | Changed to `channel` |
+| `services/delivery_watchdog.py` (line 147) | `template_doc.language` — field is `language_code` | Changed to `language_code`, default `"en_US"` |
+| `utils/template_utils.py` (line 15) | `"WhatsApp Template"` (singular) — DocType is `"WhatsApp Templates"` | Fixed to plural; also added missing `import frappe` |
+
+### Category 2: Missing Permission Checks (Security)
+
+Added `_check_excom_access()` to **every** `@frappe.whitelist()` endpoint that was missing it:
+
+- **`api/chat.py`**: `get_messages`, `send_message`, `get_stickers`, `mark_read`, `mark_unread`, `get_linked_entities`, `get_conversation_stats`, `get_ai_suggestions`, `assign_thread`, `transfer_thread`, `claim_thread`, `get_transfer_history`, `get_response_metrics`, `get_canned_responses`, `send_internal_note`, `pin_message`, `unpin_message`, `get_pinned_messages`, `toggle_reaction`, `get_tags`, `add_thread_tag`, `remove_thread_tag`, `get_thread_tags`, `get_related_documents` (24 endpoints)
+- **`api/email.py`**: All 8 endpoints (`get_email_body`, `get_email_attachment`, `search_emails`, `send_email`, `check_gmail_connection`, `manual_sync`, `get_my_signature`, `save_my_signature`)
+- **`api/subscribers.py`**: All 10 endpoints (`get_subscriber_lists`, `get_subscribers`, `add_subscriber`, `add_subscriber_by_contact`, `remove_subscriber`, `unsubscribe_subscriber`, `resubscribe`, `import_from_doctype`, `create_subscriber_list`, `search_identities`)
+- **`api/merge_suggestions.py`**: All 4 endpoints (`get_merge_suggestions`, `approve_merge`, `dismiss_suggestion`, `get_suggestion_count`)
+- **`api/broadcast.py`**: 5 read endpoints (`get_broadcasts`, `get_broadcast_detail`, `get_broadcast_logs`, `preview_broadcast_email`, `get_subscriber_lists_for_broadcast`, `get_channel_accounts_for_broadcast`)
+
+### Category 3: Weak Permission Check
+
+- **`api/analytics.py`**: `_check_excom_access()` only blocked Guest users. Strengthened to require `System Manager`, `Excom Manager`, or `Excom User` role — consistent with `chat.py`.
+
+### Category 4: Frontend Type Gaps
+
+- **`hooks/useMessages.ts`**: `mapMessageType()` was missing `Video`, `Location`, `Interactive`, `Flow`, `Reaction`, `Contact`, `Button`. Video messages were silently rendered as text bubbles. Fixed by adding all 14 backend message types.
+- **`types/index.ts`**: `Message.type` union updated to include all message types.
+
+### Other Cleanup
+
+- **`api/broadcast.py`**: Removed dead `from typing import Optional` import.
+- **`api/broadcast.py`**: Fixed docstring `channel_type` → `channel`.
+
+### Impacted modules
+- `excom/excom/api/chat.py` — 24 endpoints secured
+- `excom/excom/api/email.py` — 8 endpoints secured
+- `excom/excom/api/broadcast.py` — field fix + 5 endpoints secured + dead import removed
+- `excom/excom/api/subscribers.py` — 10 endpoints secured
+- `excom/excom/api/merge_suggestions.py` — 4 endpoints secured
+- `excom/excom/api/analytics.py` — field fix + permission strengthened
+- `excom/excom/services/delivery_watchdog.py` — language field fix
+- `excom/excom/utils/template_utils.py` — DocType name + missing import
+- `frontend/src/hooks/useMessages.ts` — message type mapping
+- `frontend/src/types/index.ts` — type union update

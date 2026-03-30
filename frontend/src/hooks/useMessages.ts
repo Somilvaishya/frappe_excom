@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useFrappeGetCall } from "frappe-react-sdk";
 import type { ExcomMessage, Message } from "../types";
+import { parseFrappeDateTime } from "../utils/datetime";
 
 /**
  * Fetches messages for a given thread from the Frappe backend and
@@ -8,19 +9,25 @@ import type { ExcomMessage, Message } from "../types";
  */
 export function useMessages(threadId: string) {
   const { data, error, isLoading, mutate } = useFrappeGetCall<{
-    message: ExcomMessage[];
+    message: { messages: ExcomMessage[]; auto_claimed_by: string | null };
   }>(
     threadId ? "excom.excom.api.chat.get_messages" : (null as unknown as string),
     threadId ? { thread_id: threadId, limit: 100 } : undefined
   );
 
-  const rawMessages = data?.message ?? [];
+  const payload = data?.message;
+  const rawMessages: ExcomMessage[] = Array.isArray(payload)
+    ? (payload as unknown as ExcomMessage[]) // backwards compat fallback
+    : (payload?.messages ?? []);
+  const autoClaimedBy: string | null = payload && !Array.isArray(payload)
+    ? (payload.auto_claimed_by ?? null)
+    : null;
 
   const messages: Message[] = useMemo(() => {
     return rawMessages.map((msg) => ({
       id: msg.name,
       content: msg.content_text || "",
-      timestamp: new Date(msg.creation),
+      timestamp: parseFrappeDateTime(msg.provider_timestamp || msg.creation),
       sender: msg.direction === "Inbound" ? ("contact" as const) : ("user" as const),
       status: mapDeliveryStatus(msg.delivery_status),
       type: mapMessageType(msg.message_type),
@@ -52,6 +59,7 @@ export function useMessages(threadId: string) {
     error,
     isLoading,
     refresh: mutate,
+    autoClaimedBy,
   };
 }
 
@@ -68,17 +76,27 @@ function mapDeliveryStatus(
   return map[status] || undefined;
 }
 
-function mapMessageType(
-  type: string
-): "text" | "image" | "document" | "audio" | "email" | "template" | "sticker" | undefined {
-  const map: Record<string, "text" | "image" | "document" | "audio" | "email" | "template" | "sticker"> = {
+type MessageTypeKey =
+  | "text" | "image" | "video" | "audio" | "document"
+  | "sticker" | "location" | "template" | "email"
+  | "interactive" | "flow" | "reaction" | "contact" | "button";
+
+function mapMessageType(type: string): MessageTypeKey {
+  const map: Record<string, MessageTypeKey> = {
     Text: "text",
     Image: "image",
-    Document: "document",
+    Video: "video",
     Audio: "audio",
-    Email: "email",
-    Template: "template",
+    Document: "document",
     Sticker: "sticker",
+    Location: "location",
+    Template: "template",
+    Email: "email",
+    Interactive: "interactive",
+    Flow: "flow",
+    Reaction: "reaction",
+    Contact: "contact",
+    Button: "button",
   };
   return map[type] || "text";
 }

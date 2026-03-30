@@ -31,6 +31,11 @@ frappe.ui.form.on("Excom Channel Account", {
 					const wasAuthorized = frm.doc.email_authorized;
 					if (r.message.authorized && !wasAuthorized) {
 						frm.reload_doc();
+					} else if (!r.message.authorized) {
+						frm.dashboard.set_headline_alert(
+							__("Gmail not authorized. Click the <b>Authorize Gmail</b> button below to connect."),
+							"orange"
+						);
 					}
 				}
 			});
@@ -87,26 +92,25 @@ frappe.ui.form.on("Excom Channel Account", {
 	},
 
 	email_authorize_button(frm) {
-		if (!frm.doc.email_connected_app || !frm.doc.email_connected_user) {
-			frappe.msgprint(__("Please set Connected App and Connected User first."));
+		if (!frm.doc.email_connected_app) {
+			frappe.msgprint(__("Please set the Connected App field first."));
 			return;
 		}
 
-		frappe.model.with_doc("Connected App", frm.doc.email_connected_app, () => {
-			const connectedApp = frappe.get_doc("Connected App", frm.doc.email_connected_app);
-			frappe.call({
-				doc: connectedApp,
-				method: "initiate_web_application_flow",
-				args: {
-					success_uri: window.location.pathname,
-					user: frm.doc.email_connected_user,
-				},
-				callback(r) {
-					if (r.message) {
-						window.open(r.message, "_self");
-					}
-				},
-			});
+		// Use the backend helper which:
+		// 1. Sets email_connected_user = frappe.session.user so the OAuth
+		//    callback state check always passes (no "Invalid token state" error).
+		// 2. Adds prompt=consent to the Connected App query parameters so
+		//    Google always returns a fresh refresh_token.
+		frappe.call({
+			doc: frm.doc,
+			method: "authorize_email_account",
+			args: { success_uri: window.location.pathname },
+			callback(r) {
+				if (r.message) {
+					window.open(r.message, "_self");
+				}
+			},
 		});
 	},
 });

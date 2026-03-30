@@ -96,6 +96,17 @@ export function OmniIdentityPanel({
     return acc;
   }, {} as Record<string, typeof allAccounts>);
 
+  const badgeClasses: Record<string, string> = {
+    indigo: "bg-indigo-500/20 text-indigo-300",
+    cyan: "bg-cyan-500/20 text-cyan-300",
+    teal: "bg-teal-500/20 text-teal-300",
+    green: "bg-green-500/20 text-green-300",
+    violet: "bg-violet-500/20 text-violet-300",
+    sky: "bg-sky-500/20 text-sky-300",
+    amber: "bg-amber-500/20 text-amber-300",
+    blue: "bg-blue-500/20 text-blue-300",
+  };
+
   const docSections: { key: keyof typeof documents; label: string; icon: React.ReactElement; color: string; doctype: string }[] = [
     { key: "quotations", label: "Quotations", icon: <FileText className="w-3.5 h-3.5 text-indigo-400" />, color: "indigo", doctype: "Quotation" },
     { key: "sales_orders", label: "Sales Orders", icon: <FileText className="w-3.5 h-3.5 text-cyan-400" />, color: "cyan", doctype: "Sales Order" },
@@ -568,7 +579,7 @@ export function OmniIdentityPanel({
                   <h4 className="text-xs font-medium text-white flex items-center gap-2">
                     {sec.icon}
                     {sec.label}
-                    <Badge className={`ml-auto text-[9px] px-1.5 h-4 bg-${sec.color}-500/20 text-${sec.color}-300 border-0`}>
+                    <Badge className={`ml-auto text-[9px] px-1.5 h-4 border-0 ${badgeClasses[sec.color] || ""}`}>
                       {documents[sec.key].length}
                     </Badge>
                   </h4>

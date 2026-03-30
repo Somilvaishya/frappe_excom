@@ -23,9 +23,28 @@ class ExcomSticker(Document):
     """Controller for Excom Sticker DocType."""
 
     def validate(self) -> None:
-        """Validate webp format and file size limits."""
+        """Validate webp format, dimensions, and file size limits."""
         self._validate_format()
+        self._validate_dimensions()
         self._validate_size()
+
+    def _validate_dimensions(self) -> None:
+        """Require exactly 512x512 pixels (Meta's requirement for all stickers)."""
+        file_path = self._get_file_path()
+        if not file_path or not os.path.exists(file_path):
+            return
+        try:
+            from PIL import Image as PilImage
+            with PilImage.open(file_path) as img:
+                w, h = img.size
+                if w != 512 or h != 512:
+                    frappe.throw(
+                        _("Sticker must be exactly 512x512 pixels. "
+                          "This file is {0}x{1}. Resize it before uploading.").format(w, h),
+                        title=_("Invalid Dimensions"),
+                    )
+        except ImportError:
+            pass  # Pillow not available — skip silently, Meta will reject if wrong
 
     def after_insert(self) -> None:
         """Upload sticker to Meta and store the media_id."""

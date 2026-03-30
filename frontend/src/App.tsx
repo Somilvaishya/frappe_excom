@@ -68,6 +68,20 @@ function ExcomDashboard() {
   const [selectedBroadcast, setSelectedBroadcast] = useState("");
   const [selectedBroadcastStatus, setSelectedBroadcastStatus] = useState("");
   const [showNewConversation, setShowNewConversation] = useState(false);
+  const [selectedAccountFilter, setSelectedAccountFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [isThreadListCollapsed, setIsThreadListCollapsed] = useState<boolean>(
+    () => localStorage.getItem("excom_thread_list_collapsed") === "true"
+  );
+
+  const handleToggleThreadList = useCallback(() => {
+    setIsThreadListCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("excom_thread_list_collapsed", String(next));
+      return next;
+    });
+  }, []);
 
   const pendingSelectionRef = useRef<{
     contactId: string;
@@ -76,6 +90,7 @@ function ExcomDashboard() {
 
   const { unifiedContacts, refresh: refreshThreads } = useThreads(
     searchQuery, selectedTeamFilter, selectedBroadcast, selectedBroadcastStatus,
+    selectedChannel, selectedAccountFilter, dateFrom, dateTo,
   );
 
   useEffect(() => {
@@ -102,18 +117,13 @@ function ExcomDashboard() {
   }, []);
 
   const filteredContacts = useMemo(() => {
+    if (selectedTags.length === 0) return unifiedContacts;
     return unifiedContacts.filter((contact) => {
-      const matchesChannel =
-        selectedChannel === "all" ||
-        contact.channels.includes(selectedChannel);
-      const matchesTags =
-        selectedTags.length === 0 ||
-        selectedTags.every((tagName) =>
-          contact.tags?.some((t) => t.tag === tagName)
-        );
-      return matchesChannel && matchesTags;
+      return selectedTags.every((tagName) =>
+        contact.tags?.some((t) => t.tag === tagName)
+      );
     });
-  }, [unifiedContacts, selectedChannel, selectedTags]);
+  }, [unifiedContacts, selectedTags]);
 
   const channelCounts = useMemo(() => {
     const totalUnread = unifiedContacts.reduce(
@@ -178,6 +188,9 @@ function ExcomDashboard() {
       setSelectedTags([]);
       setSelectedBroadcast("");
       setSelectedBroadcastStatus("");
+      setSelectedAccountFilter("");
+      setDateFrom("");
+      setDateTo("");
       setSearchQuery("");
 
       pendingSelectionRef.current = {
@@ -271,6 +284,12 @@ function ExcomDashboard() {
         selectedBroadcastStatus={selectedBroadcastStatus}
         onBroadcastStatusChange={setSelectedBroadcastStatus}
         onNewConversation={() => setShowNewConversation(true)}
+        selectedAccountFilter={selectedAccountFilter}
+        onAccountFilterChange={setSelectedAccountFilter}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateFromChange={setDateFrom}
+        onDateToChange={setDateTo}
       />
 
       <ChatThreadList
@@ -281,6 +300,16 @@ function ExcomDashboard() {
             : undefined
         }
         onSelectConversation={handleContactSelection}
+        onThreadAction={(threadId, action) => {
+          if (action === "select_after_action" && selectedContactId) {
+            setSelectedContactId(null);
+            setSelectedAccountId(null);
+          }
+          // read_toggled just refreshes without deselecting
+          refreshThreads();
+        }}
+        isCollapsed={isThreadListCollapsed}
+        onToggleCollapse={handleToggleThreadList}
       />
 
       {selectedContact ? (
@@ -290,6 +319,7 @@ function ExcomDashboard() {
             onOpenAIAssistant={() => setIsAIAssistantOpen(true)}
             activeAccountId={selectedAccountId || selectedContact.activeAccountId}
             onAccountSwitch={handleAccountSwitch}
+            onRefreshThreads={refreshThreads}
           />
 
           {!isAIAssistantOpen && unifiedConversation && (

@@ -4,13 +4,17 @@ from frappe.model.document import Document
 
 
 class ExcomChannelAccount(Document):
-	def on_update(self):
+	def on_update(self) -> None:
 		self.ensure_single_default()
 		if self.channel == "email":
 			self._sync_email_authorized()
 
-	def _sync_email_authorized(self):
-		"""Check if a valid OAuth2 token exists and update email_authorized."""
+	def _sync_email_authorized(self) -> None:
+		"""
+		Sync email_authorized flag based on token existence.
+		Uses access_token presence only — does NOT deauthorize on expiry,
+		since an expired token may still be refreshable.
+		"""
 		if not self.email_connected_app or not self.email_connected_user:
 			if self.email_authorized:
 				frappe.db.set_value(self.doctype, self.name, "email_authorized", 0)
@@ -24,7 +28,7 @@ class ExcomChannelAccount(Document):
 			frappe.db.set_value(self.doctype, self.name, "email_authorized", new_val)
 
 	@frappe.whitelist()
-	def check_email_authorization(self):
+	def check_email_authorization(self) -> dict:
 		"""Called from client script to refresh authorization status after OAuth callback."""
 		if self.channel != "email":
 			return {"authorized": False}
@@ -41,6 +45,56 @@ class ExcomChannelAccount(Document):
 			frappe.db.commit()
 
 		return {"authorized": bool(token_exists)}
+
+	@frappe.whitelist()
+	def authorize_email_account(self, success_uri: str = "") -> str:
+		"""
+		Initiate Gmail OAuth flow as the current session user.
+
+		- Sets email_connected_user to frappe.session.user so that the
+		  Frappe callback state check always passes.
+		- Ensures prompt=consent is in the Connected App query parameters so
+		  Google always returns a fresh refresh_token (not just an access_token).
+		- Returns the authorization URL to redirect the browser to.
+
+		Args:
+			success_uri: URL to redirect to after successful authorization.
+
+		Returns:
+			Google OAuth authorization URL.
+		"""
+		frappe.has_permission("Excom Channel Account", "write", throw=True)
+
+		if self.channel != "email":
+			frappe.throw(_("Not an email channel account"))
+
+		if not self.email_connected_app:
+			frappe.throw(_("Please set the Connected App field before authorizing"))
+
+		current_user = frappe.session.user
+
+		# Bind this account to the current user so that the OAuth callback
+		# state check (token_cache.user == frappe.session.user) always matches.
+		frappe.db.set_value(self.doctype, self.name, "email_connected_user", current_user)
+		frappe.db.commit()
+
+		connected_app = frappe.get_doc("Connected App", self.email_connected_app)
+
+		# Ensure prompt=consent so Google always issues a fresh refresh_token.
+		# Without this, re-authorizations may only return an access_token.
+		existing_keys = [p.key for p in connected_app.query_parameters]
+		if "prompt" not in existing_keys:
+			connected_app.append("query_parameters", {"key": "prompt", "value": "consent"})
+			connected_app.save(ignore_permissions=True)
+			frappe.db.commit()
+			connected_app.reload()
+
+		# Initiate flow as current user — no explicit user= arg means frappe.session.user
+		auth_url = connected_app.initiate_web_application_flow(
+			success_uri=success_uri or f"/app/excom-channel-account/{self.name}"
+		)
+
+		return auth_url
 
 	def ensure_single_default(self):
 		"""Only one default incoming and one default outgoing per channel."""

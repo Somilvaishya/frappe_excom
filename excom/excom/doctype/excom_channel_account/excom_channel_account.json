@@ -22,6 +22,7 @@
   "wa_app_id",
   "wa_business_id",
   "wa_webhook_verify_token",
+  "wa_app_secret",
   "wa_allow_auto_read_receipt",
 
   "email_section",
@@ -161,6 +162,13 @@
    "label": "Webhook Verify Token"
   },
   {
+   "depends_on": "eval:doc.channel=='whatsapp'",
+   "fieldname": "wa_app_secret",
+   "fieldtype": "Password",
+   "label": "App Secret",
+   "description": "Meta App Secret for HMAC signature validation on webhooks"
+  },
+  {
    "default": "1",
    "depends_on": "eval:doc.channel=='whatsapp'",
    "fieldname": "wa_allow_auto_read_receipt",
@@ -213,7 +221,7 @@
    "description": "Whether OAuth2 token exists and is valid"
   },
   {
-   "depends_on": "eval:doc.channel=='email' && !doc.email_authorized",
+   "depends_on": "eval:doc.channel=='email'",
    "fieldname": "email_authorize_button",
    "fieldtype": "Button",
    "label": "Authorize Gmail Access"
@@ -328,7 +336,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-09 18:00:00.000000",
+ "modified": "2026-03-30 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Excom",
  "name": "Excom Channel Account",

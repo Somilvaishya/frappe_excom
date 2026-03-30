@@ -8,6 +8,17 @@ import {
   AlertTriangle,
   Reply,
   Download,
+  FileText,
+  FileImage,
+  FileSpreadsheet,
+  FileArchive,
+  File,
+  FileVideo,
+  FileAudio,
+  ExternalLink,
+  ReplyAll,
+  Forward,
+  Star,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { format } from "date-fns";
@@ -44,12 +55,34 @@ interface EmailMessageCardProps {
   bodyLoading?: boolean;
   onExpandEmail: (messageId: string) => void;
   onReplyEmail?: (messageId: string, subject: string, to: string) => void;
+  onRetryFetch?: (messageId: string) => void;
 }
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileIcon(mimeType: string, filename: string) {
+  const ext = filename.split(".").pop()?.toLowerCase() || "";
+
+  if (mimeType.startsWith("image/"))
+    return { icon: FileImage, color: "text-emerald-400", bg: "bg-emerald-500/15" };
+  if (mimeType.startsWith("video/"))
+    return { icon: FileVideo, color: "text-purple-400", bg: "bg-purple-500/15" };
+  if (mimeType.startsWith("audio/"))
+    return { icon: FileAudio, color: "text-pink-400", bg: "bg-pink-500/15" };
+  if (mimeType === "application/pdf" || ext === "pdf")
+    return { icon: FileText, color: "text-red-400", bg: "bg-red-500/15" };
+  if (["doc", "docx", "odt", "rtf", "txt"].includes(ext))
+    return { icon: FileText, color: "text-blue-400", bg: "bg-blue-500/15" };
+  if (["xls", "xlsx", "csv", "ods"].includes(ext) || mimeType.includes("spreadsheet"))
+    return { icon: FileSpreadsheet, color: "text-green-400", bg: "bg-green-500/15" };
+  if (["zip", "rar", "7z", "tar", "gz"].includes(ext) || mimeType.includes("zip") || mimeType.includes("compressed"))
+    return { icon: FileArchive, color: "text-amber-400", bg: "bg-amber-500/15" };
+
+  return { icon: File, color: "text-zinc-400", bg: "bg-zinc-500/15" };
 }
 
 export function EmailMessageCard({
@@ -63,8 +96,10 @@ export function EmailMessageCard({
   bodyLoading,
   onExpandEmail,
   onReplyEmail,
+  onRetryFetch,
 }: EmailMessageCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showHeaders, setShowHeaders] = useState(false);
   const isOutbound = direction === "Outbound";
 
   let emailMeta = {
@@ -74,13 +109,26 @@ export function EmailMessageCard({
     to: "",
     cc: "",
     gmail_message_id: "",
+    label_ids: [] as string[],
+    message_id_header: "",
+    in_reply_to: "",
   };
   try {
     const parsed = JSON.parse(contentJson || "{}");
     emailMeta = { ...emailMeta, ...parsed };
+    if (typeof emailMeta.label_ids === "string") {
+      try { emailMeta.label_ids = JSON.parse(emailMeta.label_ids); } catch { emailMeta.label_ids = []; }
+    }
   } catch {
     // use defaults
   }
+
+  const isStarredByGmail = emailMeta.label_ids?.includes("STARRED");
+  const isImportant = emailMeta.label_ids?.includes("IMPORTANT");
+  const isDraft = emailMeta.label_ids?.includes("DRAFT");
+
+  // Initialise star state from Gmail label on first render
+  const [starred, setStarred] = useState(() => isStarredByGmail);
 
   const handleToggle = () => {
     if (!expanded && !bodyData) {
@@ -89,50 +137,89 @@ export function EmailMessageCard({
     setExpanded(!expanded);
   };
 
+  const replySubject = emailMeta.subject.startsWith("Re:")
+    ? emailMeta.subject
+    : `Re: ${emailMeta.subject}`;
+  const replyTo = isOutbound ? emailMeta.to : emailMeta.from_email;
+
+  const hasAttachments = bodyData && bodyData.attachments.length > 0;
+
   return (
     <div className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[85%] w-full">
+      <div className="max-w-[85%] w-full group/email">
         <div
-          className={`rounded-xl border shadow-lg overflow-hidden ${
+          className={`rounded-xl border overflow-hidden transition-shadow ${
             isOutbound
-              ? "bg-blue-500/5 border-blue-500/20"
-              : "bg-zinc-800/80 border-zinc-700/50"
-          }`}
+              ? "bg-blue-500/5 border-blue-500/20 shadow-blue-500/5"
+              : "bg-zinc-800/80 border-zinc-700/50 shadow-zinc-900/20"
+          } ${expanded ? "shadow-lg" : "shadow-sm hover:shadow-md"}`}
         >
-          {/* Email header - always visible */}
+          {/* Compact header — always visible */}
           <button
             onClick={handleToggle}
-            className="w-full text-left p-3 hover:bg-white/5 transition-colors"
+            className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
           >
-            <div className="flex items-start gap-2">
-              <Mail
-                className={`w-4 h-4 mt-0.5 shrink-0 ${
-                  isOutbound ? "text-blue-400" : "text-zinc-400"
-                }`}
-              />
+            <div className="flex items-start gap-3">
+              {/* Avatar */}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
+                isOutbound
+                  ? "bg-blue-500/20 text-blue-400"
+                  : "bg-zinc-700 text-zinc-300"
+              }`}>
+                {(emailMeta.from_name || emailMeta.from_email || "?")
+                  .split(" ")
+                  .map((w) => w[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase()}
+              </div>
+
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-xs font-medium text-zinc-300 truncate">
+                  <span className="text-sm font-medium text-zinc-200 truncate">
                     {isOutbound
                       ? `To: ${emailMeta.to}`
                       : emailMeta.from_name || emailMeta.from_email}
                   </span>
-                  <span className="text-[10px] text-zinc-500 shrink-0">
+                  <span className="text-[10px] text-zinc-500 shrink-0 tabular-nums">
                     {format(timestamp, "MMM d, h:mm a")}
                   </span>
-                  {expanded ? (
-                    <ChevronUp className="w-3.5 h-3.5 text-zinc-500 shrink-0 ml-auto" />
-                  ) : (
-                    <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0 ml-auto" />
-                  )}
+                  <div className="flex items-center gap-1 ml-auto shrink-0">
+                    {hasAttachments && !expanded && (
+                      <Paperclip className="w-3 h-3 text-zinc-500" />
+                    )}
+                    {expanded ? (
+                      <ChevronUp className="w-3.5 h-3.5 text-zinc-500" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+                    )}
+                  </div>
                 </div>
-                <p className="text-sm font-medium text-white truncate">
+                <p className="text-sm text-white truncate font-medium">
                   {emailMeta.subject}
                 </p>
                 {!expanded && (
-                  <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
+                  <p className="text-xs text-zinc-400 mt-1 line-clamp-1">
                     {snippet}
                   </p>
+                )}
+                {/* Gmail label badges */}
+                {!expanded && (isDraft || isImportant || starred) && (
+                  <div className="flex items-center gap-1 mt-1">
+                    {isDraft && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                        Draft
+                      </span>
+                    )}
+                    {isImportant && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                        Important
+                      </span>
+                    )}
+                    {starred && (
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -142,58 +229,169 @@ export function EmailMessageCard({
           {expanded && (
             <div className="border-t border-zinc-700/50">
               {bodyLoading ? (
-                <div className="flex items-center justify-center py-8">
+                <div className="flex items-center justify-center py-10">
                   <Loader2 className="w-5 h-5 text-blue-400 animate-spin mr-2" />
                   <span className="text-sm text-zinc-400">
                     Fetching from Gmail...
                   </span>
                 </div>
               ) : bodyData?.deleted ? (
-                <div className="flex items-center gap-2 p-4">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <div className="flex items-start gap-3 p-4">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm text-amber-300">
-                      Email no longer available
+                    <p className="text-sm font-medium text-amber-300">
+                      {(bodyData as any).auth_error ? "Gmail authorization required" : "Email no longer available"}
                     </p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      {bodyData.error ||
-                        "This email has been deleted from Gmail."}
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {bodyData.error || "This email has been deleted from Gmail."}
                     </p>
+                    {(bodyData as any).auth_error && (
+                      <a
+                        href="/app/excom-channel-account"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 mt-2 text-xs text-blue-400 hover:text-blue-300 underline"
+                      >
+                        Re-authorize email account →
+                      </a>
+                    )}
+                    <button
+                      onClick={() => {
+                        // Clear cached error so fetch is retried
+                        if (typeof onRetryFetch === "function") onRetryFetch(messageId);
+                      }}
+                      className="block mt-1.5 text-xs text-zinc-500 hover:text-zinc-300 underline"
+                    >
+                      Retry
+                    </button>
                   </div>
                 </div>
               ) : bodyData ? (
                 <div>
-                  {/* Email metadata */}
-                  <div className="px-4 py-2 bg-zinc-800/30 text-xs text-zinc-400 space-y-1">
-                    <div>
-                      <span className="text-zinc-500">From:</span>{" "}
-                      {bodyData.from_name
-                        ? `${bodyData.from_name} <${bodyData.from_email}>`
-                        : bodyData.from_email}
+                  {/* Email metadata — From, To, CC, Date */}
+                  <div className="px-4 py-2.5 bg-zinc-800/40 text-xs space-y-1 border-b border-zinc-700/30">
+                    <div className="flex items-start gap-2">
+                      <span className="text-zinc-500 w-10 shrink-0 text-right">From</span>
+                      <span className="text-zinc-300">
+                        {bodyData.from_name ? (
+                          <>
+                            <span className="font-medium">{bodyData.from_name}</span>
+                            <span className="text-zinc-500 ml-1">&lt;{bodyData.from_email}&gt;</span>
+                          </>
+                        ) : bodyData.from_email}
+                      </span>
                     </div>
-                    <div>
-                      <span className="text-zinc-500">To:</span> {bodyData.to}
+                    <div className="flex items-start gap-2">
+                      <span className="text-zinc-500 w-10 shrink-0 text-right">To</span>
+                      <span className="text-zinc-300">{bodyData.to}</span>
                     </div>
                     {bodyData.cc && (
-                      <div>
-                        <span className="text-zinc-500">Cc:</span>{" "}
-                        {bodyData.cc}
+                      <div className="flex items-start gap-2">
+                        <span className="text-zinc-500 w-10 shrink-0 text-right">Cc</span>
+                        <span className="text-zinc-300">{bodyData.cc}</span>
                       </div>
                     )}
                     {bodyData.date && (
-                      <div>
-                        <span className="text-zinc-500">Date:</span>{" "}
-                        {bodyData.date}
+                      <div className="flex items-start gap-2">
+                        <span className="text-zinc-500 w-10 shrink-0 text-right">Date</span>
+                        <span className="text-zinc-400">{bodyData.date}</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Email body — rendered in a light-themed iframe for style isolation */}
+                  {/* Action toolbar */}
+                  <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-700/30">
+                    {onReplyEmail && (
+                      <>
+                        <button
+                          onClick={() => onReplyEmail(emailMeta.gmail_message_id, replySubject, replyTo)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-zinc-300 hover:bg-zinc-700/60 hover:text-white transition-colors"
+                        >
+                          <Reply className="w-3.5 h-3.5" />
+                          Reply
+                        </button>
+                        <button
+                          onClick={() => {
+                            const allRecipients = [emailMeta.to, emailMeta.from_email, bodyData.cc].filter(Boolean).join(", ");
+                            onReplyEmail(emailMeta.gmail_message_id, replySubject, allRecipients);
+                          }}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-zinc-300 hover:bg-zinc-700/60 hover:text-white transition-colors"
+                        >
+                          <ReplyAll className="w-3.5 h-3.5" />
+                          Reply All
+                        </button>
+                        <button
+                          onClick={() => {
+                            const fwdSubject = emailMeta.subject.startsWith("Fwd:")
+                              ? emailMeta.subject
+                              : `Fwd: ${emailMeta.subject}`;
+                            onReplyEmail(emailMeta.gmail_message_id, fwdSubject, "");
+                          }}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-zinc-300 hover:bg-zinc-700/60 hover:text-white transition-colors"
+                        >
+                          <Forward className="w-3.5 h-3.5" />
+                          Forward
+                        </button>
+                      </>
+                    )}
+                    <div className="flex-1" />
+                    <button
+                      onClick={() => setStarred(!starred)}
+                      className={`p-1.5 rounded-md transition-colors ${
+                        starred
+                          ? "text-amber-400 bg-amber-500/10"
+                          : "text-zinc-500 hover:text-amber-400 hover:bg-zinc-700/40"
+                      }`}
+                      title={starred ? "Unstar" : "Star"}
+                    >
+                      <Star className={`w-3.5 h-3.5 ${starred ? "fill-amber-400" : ""}`} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        const w = window.open("", "_blank");
+                        if (w) {
+                          w.document.write(bodyData.body_html || `<pre>${bodyData.body_text}</pre>`);
+                          w.document.close();
+                          w.print();
+                        }
+                      }}
+                      className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/40 transition-colors"
+                      title="Open in new tab / Print"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setShowHeaders(!showHeaders)}
+                      className={`px-2 py-1 rounded-md text-[10px] transition-colors ${
+                        showHeaders
+                          ? "bg-zinc-700/80 text-zinc-200"
+                          : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/40"
+                      }`}
+                      title="Show original headers"
+                    >
+                      Headers
+                    </button>
+                  </div>
+
+                  {/* Original headers panel */}
+                  {showHeaders && (
+                    <div className="mx-4 mb-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-700/40 text-[10px] font-mono text-zinc-400 space-y-0.5 max-h-40 overflow-y-auto">
+                      {bodyData.from_email && <div><span className="text-zinc-500">From:</span> {bodyData.from_name ? `${bodyData.from_name} <${bodyData.from_email}>` : bodyData.from_email}</div>}
+                      {bodyData.to && <div><span className="text-zinc-500">To:</span> {bodyData.to}</div>}
+                      {bodyData.cc && <div><span className="text-zinc-500">Cc:</span> {bodyData.cc}</div>}
+                      {bodyData.date && <div><span className="text-zinc-500">Date:</span> {bodyData.date}</div>}
+                      {emailMeta.message_id_header && <div><span className="text-zinc-500">Message-ID:</span> {emailMeta.message_id_header}</div>}
+                      {emailMeta.in_reply_to && <div><span className="text-zinc-500">In-Reply-To:</span> {emailMeta.in_reply_to}</div>}
+                      {emailMeta.label_ids?.length > 0 && <div><span className="text-zinc-500">Labels:</span> {emailMeta.label_ids.join(", ")}</div>}
+                    </div>
+                  )}
+
+                  {/* Email body */}
                   <div className="p-4">
                     {bodyData.body_html ? (
                       <EmailBodyFrame html={bodyData.body_html} />
                     ) : (
-                      <pre className="text-sm text-zinc-200 whitespace-pre-wrap font-sans">
+                      <pre className="text-sm text-zinc-200 whitespace-pre-wrap font-sans leading-relaxed">
                         {bodyData.body_text || "(Empty email)"}
                       </pre>
                     )}
@@ -201,17 +399,19 @@ export function EmailMessageCard({
 
                   {/* Attachments */}
                   {bodyData.attachments.length > 0 && (
-                    <div className="px-4 pb-3 border-t border-zinc-700/50 pt-2">
-                      <div className="flex items-center gap-1 text-xs text-zinc-500 mb-2">
-                        <Paperclip className="w-3 h-3" />
-                        <span>
-                          {bodyData.attachments.length} attachment
-                          {bodyData.attachments.length > 1 ? "s" : ""}
+                    <div className="px-4 pb-4 border-t border-zinc-700/30 pt-3">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Paperclip className="w-3.5 h-3.5 text-zinc-400" />
+                        <span className="text-xs font-medium text-zinc-300">
+                          {bodyData.attachments.length} Attachment{bodyData.attachments.length > 1 ? "s" : ""}
+                        </span>
+                        <span className="text-[10px] text-zinc-500">
+                          ({formatBytes(bodyData.attachments.reduce((s, a) => s + a.size, 0))} total)
                         </span>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid gap-2">
                         {bodyData.attachments.map((att, i) => (
-                          <AttachmentChip
+                          <AttachmentCard
                             key={i}
                             attachment={att}
                             messageId={messageId}
@@ -220,32 +420,9 @@ export function EmailMessageCard({
                       </div>
                     </div>
                   )}
-
-                  {/* Reply action */}
-                  {onReplyEmail && (
-                    <div className="px-4 pb-3">
-                      <button
-                        onClick={() =>
-                          onReplyEmail(
-                            emailMeta.gmail_message_id,
-                            emailMeta.subject.startsWith("Re:")
-                              ? emailMeta.subject
-                              : `Re: ${emailMeta.subject}`,
-                            isOutbound
-                              ? emailMeta.to
-                              : emailMeta.from_email,
-                          )
-                        }
-                        className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                      >
-                        <Reply className="w-3 h-3" />
-                        Reply
-                      </button>
-                    </div>
-                  )}
                 </div>
               ) : (
-                <div className="flex items-center justify-center py-8">
+                <div className="flex items-center justify-center py-10">
                   <span className="text-sm text-zinc-500">
                     Click to load email content
                   </span>
@@ -255,9 +432,9 @@ export function EmailMessageCard({
           )}
         </div>
 
-        {/* Footer: sender + timestamp */}
+        {/* Footer */}
         <div
-          className={`flex items-center gap-1 mt-1 text-xs text-zinc-500 ${
+          className={`flex items-center gap-1.5 mt-1 text-xs ${
             isOutbound ? "justify-end" : "justify-start"
           }`}
         >
@@ -274,7 +451,7 @@ export function EmailMessageCard({
   );
 }
 
-function AttachmentChip({
+function AttachmentCard({
   attachment,
   messageId,
 }: {
@@ -282,6 +459,7 @@ function AttachmentChip({
   messageId: string;
 }) {
   const [downloading, setDownloading] = useState(false);
+  const { icon: FileIcon, color, bg } = getFileIcon(attachment.mimeType, attachment.filename);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -306,7 +484,6 @@ function AttachmentChip({
       a.remove();
       URL.revokeObjectURL(blobUrl);
     } catch {
-      // Fallback: open in new tab which triggers browser download
       const params = new URLSearchParams({
         message_name: messageId,
         attachment_id: attachment.attachmentId,
@@ -321,22 +498,34 @@ function AttachmentChip({
     }
   };
 
+  const ext = attachment.filename.split(".").pop()?.toUpperCase() || "FILE";
+
   return (
     <button
       onClick={handleDownload}
       disabled={downloading}
-      className="flex items-center gap-2 px-2 py-1.5 bg-zinc-700/50 rounded-lg text-xs hover:bg-zinc-600/50 transition-colors cursor-pointer group disabled:opacity-60"
+      className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-zinc-700/50 bg-zinc-800/40 hover:bg-zinc-700/50 hover:border-zinc-600/60 transition-all group disabled:opacity-60 text-left w-full"
     >
-      {downloading ? (
-        <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
-      ) : (
-        <Paperclip className="w-3 h-3 text-zinc-400" />
-      )}
-      <span className="text-zinc-300 truncate max-w-[150px]">
-        {attachment.filename}
-      </span>
-      <span className="text-zinc-500">{formatBytes(attachment.size)}</span>
-      <Download className="w-3 h-3 text-zinc-500 group-hover:text-blue-400 transition-colors" />
+      <div className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
+        <FileIcon className={`w-5 h-5 ${color}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-zinc-200 truncate font-medium group-hover:text-white transition-colors">
+          {attachment.filename}
+        </p>
+        <p className="text-[10px] text-zinc-500 mt-0.5">
+          {ext} &middot; {formatBytes(attachment.size)}
+        </p>
+      </div>
+      <div className="shrink-0">
+        {downloading ? (
+          <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-zinc-700/50 group-hover:bg-blue-500/20 flex items-center justify-center transition-colors">
+            <Download className="w-4 h-4 text-zinc-400 group-hover:text-blue-400 transition-colors" />
+          </div>
+        )}
+      </div>
     </button>
   );
 }

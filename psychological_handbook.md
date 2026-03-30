@@ -171,3 +171,18 @@ The immediate objective is to establish a coherent architecture and language bef
 - **Download UX must be invisible.** Clicking an attachment chip should "just work" — file appears in the browser's download bar with the correct filename. No new tabs, no preview screens, no "save to server first" dialogs. The `<a download>` pattern with blob URLs achieves this natively in all modern browsers.
 - **The fallback exists because fetch can fail.** Corporate proxies, large attachments, or CORS edge cases might cause the fetch-blob-download pattern to fail. Opening the Frappe API URL in a new tab (`window.open`) lets the browser handle the download natively as a fallback.
 
+## Phase 12: Advanced Filters & Thread Actions
+
+### Architectural intent
+- **Server-side filtering over client-side.** Channel and account filtering moved to SQL (`get_threads`) rather than post-fetch JavaScript filtering. This matters at scale — with hundreds of threads, client-side filtering wastes bandwidth fetching all threads only to discard most. Server-side filtering also enables future pagination without inconsistent page sizes.
+- **Account-level granularity is non-negotiable.** Users with multiple WhatsApp numbers or email accounts need to filter by specific account, not just channel type. The channel dropdown nests accounts under their parent channel for discoverability without a separate UI element.
+- **Spam as a first-class status.** `Spam` is a thread status parallel to `Closed`, not a tag or flag. This keeps it queryable at the SQL level and automatically hides spam threads from the inbox. The `Omni Identity.is_spam` flag enables future auto-classification of new messages from known spammers.
+- **Delete is destructive, therefore gated.** Only System Managers can delete threads. Archive (status → Closed) is the safe default for everyone else. This prevents accidental data loss while giving admins the power they need.
+- **Right-click context menu over swipe.** The swipe-to-reveal pattern was unreliable on desktop (no touch events, inconsistent with native desktop UX). A floating context menu at the cursor position is the native desktop paradigm — users already expect right-click → actions. The menu appears at the exact click point, closes on outside click or Escape, and groups destructive actions visually (colored text, separator above).
+
+## Phase 13: Email UI Overhaul Philosophy
+
+- **Attachments must look like files, not text.** File-type-aware icons with distinct colors give users instant visual recognition without reading filenames. The download button is a large circular target — easy to hit, obvious affordance.
+- **Email is not chat.** Email messages need Reply All, Forward, and Print — these are non-negotiable for email workflows. The action toolbar appears only when expanded, keeping the collapsed view clean.
+- **The tag system already exists — use it.** Rather than building a separate email labeling system, the existing TagManager component on the thread header serves as labels. Tags are channel-agnostic by design (a tag applied via email also shows on WhatsApp threads for the same contact).
+

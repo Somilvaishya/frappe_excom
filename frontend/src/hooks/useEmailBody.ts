@@ -62,5 +62,19 @@ export function useEmailBody() {
     [bodies, loading, call],
   );
 
-  return { bodies, loading, fetchBody };
+  const retryFetch = useCallback(
+    (messageName: string) => {
+      // Clear cached result so fetchBody will re-fetch
+      setBodies((prev) => {
+        const next = { ...prev };
+        delete next[messageName];
+        return next;
+      });
+      // Trigger fetch immediately after clearing
+      setTimeout(() => fetchBody(messageName), 50);
+    },
+    [fetchBody],
+  );
+
+  return { bodies, loading, fetchBody, retryFetch };
 }

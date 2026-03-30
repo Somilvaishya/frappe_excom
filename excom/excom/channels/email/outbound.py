@@ -61,12 +61,20 @@ def send_email_reply(
             except (json.JSONDecodeError, TypeError):
                 pass
 
+    # Find the gmail_thread_id from the most recent message in this thread
+    # so Gmail places the reply in the correct conversation.
     gmail_thread_id = ""
-    thread_key = thread.thread_key or ""
-    if thread_key.startswith("email:"):
-        parts = thread_key.split(":", 2)
-        if len(parts) == 3:
-            gmail_thread_id = parts[2]
+    latest_content = frappe.db.get_value(
+        "Excom Message",
+        {"thread": thread_name, "channel": "email"},
+        "content_json",
+        order_by="provider_timestamp DESC",
+    )
+    if latest_content:
+        try:
+            gmail_thread_id = json.loads(latest_content).get("gmail_thread_id", "")
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     result = gmail_service.send_email(
         account_name=account_name,

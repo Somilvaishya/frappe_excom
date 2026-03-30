@@ -1,13 +1,8 @@
 import { useState, useEffect } from "react";
-import { Search, MessageCircle, ChevronDown, Tag, X, Users, Shield, GitMerge, Cog, Plus, Radio, Settings, BarChart3 } from "lucide-react";
+import type { ReactNode } from "react";
+import { Search, MessageCircle, Tag, X, Users, Shield, GitMerge, Cog, Plus, Radio, Settings, BarChart3, Calendar, ChevronDown, Mail, Phone, Instagram } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
 import { useTags } from "../hooks/useTags";
 import { useFrappePostCall } from "frappe-react-sdk";
 import { useExcomBranding } from "../hooks/useBranding";
@@ -46,14 +41,33 @@ interface LeftSidebarProps {
   onBroadcastFilterChange?: (broadcast: string) => void;
   selectedBroadcastStatus?: string;
   onBroadcastStatusChange?: (status: string) => void;
+  selectedAccountFilter?: string;
+  onAccountFilterChange?: (account: string) => void;
+  dateFrom?: string;
+  dateTo?: string;
+  onDateFromChange?: (date: string) => void;
+  onDateToChange?: (date: string) => void;
 }
 
-const CHANNEL_LABELS: Record<string, string> = {
-  all: "All Channels",
+interface ChannelAccount {
+  name: string;
+  label: string;
+  channel: string;
+}
+
+const CHANNEL_CHIPS: { key: string; label: string; icon: ReactNode }[] = [
+  { key: "all", label: "All", icon: <MessageCircle className="w-3.5 h-3.5" /> },
+  { key: "whatsapp", label: "WA", icon: <MessageCircle className="w-3.5 h-3.5" /> },
+  { key: "email", label: "Email", icon: <Mail className="w-3.5 h-3.5" /> },
+  { key: "instagram", label: "IG", icon: <Instagram className="w-3.5 h-3.5" /> },
+  { key: "calls", label: "Calls", icon: <Phone className="w-3.5 h-3.5" /> },
+];
+
+const CHANNEL_DISPLAY: Record<string, string> = {
   whatsapp: "WhatsApp",
-  calls: "Calls",
-  instagram: "Instagram",
   email: "Email",
+  instagram: "Instagram",
+  calls: "Calls",
 };
 
 export function LeftSidebar({
@@ -79,6 +93,12 @@ export function LeftSidebar({
   onBroadcastFilterChange,
   selectedBroadcastStatus = "",
   onBroadcastStatusChange,
+  selectedAccountFilter = "",
+  onAccountFilterChange,
+  dateFrom = "",
+  dateTo = "",
+  onDateFromChange,
+  onDateToChange,
 }: LeftSidebarProps) {
   const { tags: allTags } = useTags();
   const [myTeams, setMyTeams] = useState<{ name: string; team_name: string }[]>([]);
@@ -89,6 +109,21 @@ export function LeftSidebar({
   const [recentBroadcasts, setRecentBroadcasts] = useState<BroadcastFilterItem[]>([]);
   const [showBroadcastFilter, setShowBroadcastFilter] = useState(false);
   const { call: fetchRecentBroadcasts } = useFrappePostCall("excom.excom.api.chat.get_recent_broadcasts_for_filter");
+  const [channelAccounts, setChannelAccounts] = useState<ChannelAccount[]>([]);
+  const { call: fetchChannelAccounts } = useFrappePostCall("excom.excom.api.chat.get_channel_accounts");
+  const [showDateFilter, setShowDateFilter] = useState(false);
+
+  const today = () => new Date().toISOString().slice(0, 10);
+  const daysAgo = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  };
+  const firstOfMonth = () => {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().slice(0, 10);
+  };
 
   useEffect(() => {
     fetchMyTeams({}).then((res) => {
@@ -99,6 +134,14 @@ export function LeftSidebar({
     }).catch(() => {});
     fetchRecentBroadcasts({}).then((res) => {
       setRecentBroadcasts((res as any)?.message || []);
+    }).catch(() => {});
+    fetchChannelAccounts({}).then((res) => {
+      const raw: any[] = (res as any)?.message || [];
+      setChannelAccounts(raw.map((a) => ({
+        name: a.name,
+        label: a.account_name || a.email_address || a.wa_phone_id || a.name,
+        channel: a.channel,
+      })));
     }).catch(() => {});
   }, []);
   return (
@@ -134,38 +177,75 @@ export function LeftSidebar({
           />
         </div>
 
-        <div className="flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="flex-1 justify-between bg-zinc-800/50 border-zinc-700 text-white hover:bg-zinc-800 hover:text-white"
-              >
-                <span>{CHANNEL_LABELS[selectedChannel] || "All Channels"}</span>
-                <ChevronDown className="w-4 h-4 ml-2 text-zinc-400" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56">
-              {Object.entries(CHANNEL_LABELS).map(([key, label]) => (
-                <DropdownMenuItem
+        {/* Two-tier channel / account chip filter */}
+        <div className="space-y-2 mb-1">
+          {/* Tier 1: Channel chips */}
+          <div className="flex flex-wrap gap-1">
+            {CHANNEL_CHIPS.map(({ key, label, icon }) => {
+              const isActive = selectedChannel === key && !selectedAccountFilter;
+              return (
+                <button
                   key={key}
-                  onClick={() => onChannelSelect(key)}
-                  className="cursor-pointer"
+                  onClick={() => {
+                    onChannelSelect(key);
+                    onAccountFilterChange?.("");
+                  }}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium transition-all border ${
+                    isActive
+                      ? "bg-blue-500/20 text-blue-300 border-blue-500/50"
+                      : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-200 hover:border-zinc-600"
+                  }`}
                 >
+                  {icon}
                   {label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                </button>
+              );
+            })}
+          </div>
 
+          {/* Tier 2: Account sub-filter (only when a specific channel is selected) */}
+          {selectedChannel !== "all" && channelAccounts.filter((a) => a.channel === selectedChannel).length > 0 && (
+            <div className="flex flex-wrap gap-1 pl-1">
+              <button
+                onClick={() => onAccountFilterChange?.("")}
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-all border ${
+                  !selectedAccountFilter
+                    ? "bg-blue-500/15 text-blue-400 border-blue-500/40"
+                    : "bg-zinc-800/30 text-zinc-500 border-zinc-700/60 hover:text-zinc-300"
+                }`}
+              >
+                All {CHANNEL_DISPLAY[selectedChannel] || selectedChannel}
+              </button>
+              {channelAccounts
+                .filter((a) => a.channel === selectedChannel)
+                .map((acc) => (
+                  <button
+                    key={acc.name}
+                    onClick={() => onAccountFilterChange?.(acc.name)}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-all border truncate max-w-[120px] ${
+                      selectedAccountFilter === acc.name
+                        ? "bg-blue-500/15 text-blue-400 border-blue-500/40"
+                        : "bg-zinc-800/30 text-zinc-500 border-zinc-700/60 hover:text-zinc-300"
+                    }`}
+                    title={acc.label}
+                  >
+                    {acc.label}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
           {onNewConversation && (
             <Button
-              size="icon"
+              size="sm"
               onClick={onNewConversation}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shrink-0"
+              className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
               title="New Conversation"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              New Chat
             </Button>
           )}
         </div>
@@ -226,6 +306,98 @@ export function LeftSidebar({
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {onDateFromChange && onDateToChange && (
+          <div>
+            <button
+              onClick={() => setShowDateFilter(!showDateFilter)}
+              className="flex items-center gap-1.5 mb-2 w-full"
+            >
+              <Calendar className="w-3.5 h-3.5 text-blue-400" />
+              <span className="text-xs font-medium text-zinc-400">Date Filter</span>
+              {(dateFrom || dateTo) && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
+                  active
+                </span>
+              )}
+              {(dateFrom || dateTo) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDateFromChange("");
+                    onDateToChange("");
+                  }}
+                  className="ml-auto mr-0.5"
+                  title="Clear date filter"
+                >
+                  <X className="w-3 h-3 text-zinc-500 hover:text-zinc-300" />
+                </button>
+              )}
+              <ChevronDown className={`w-3 h-3 text-zinc-500 ${!dateFrom && !dateTo ? "ml-auto" : ""} transition-transform ${showDateFilter ? "rotate-180" : ""}`} />
+            </button>
+            {showDateFilter && (
+              <div className="space-y-2">
+                {/* Quick presets */}
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { label: "Today", from: today(), to: today() },
+                    { label: "Yesterday", from: daysAgo(1), to: daysAgo(1) },
+                    { label: "7 days", from: daysAgo(7), to: today() },
+                    { label: "30 days", from: daysAgo(30), to: today() },
+                    { label: "This month", from: firstOfMonth(), to: today() },
+                  ].map((preset) => {
+                    const isActive = dateFrom === preset.from && dateTo === preset.to;
+                    return (
+                      <button
+                        key={preset.label}
+                        onClick={() => {
+                          if (isActive) {
+                            onDateFromChange("");
+                            onDateToChange("");
+                          } else {
+                            onDateFromChange(preset.from);
+                            onDateToChange(preset.to);
+                          }
+                        }}
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all border ${
+                          isActive
+                            ? "bg-blue-500/20 text-blue-400 border-blue-500"
+                            : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Custom range */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-zinc-500 mb-0.5 block">From</label>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      max={dateTo || undefined}
+                      onChange={(e) => onDateFromChange(e.target.value)}
+                      className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 mb-0.5 block">To</label>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      min={dateFrom || undefined}
+                      max={today()}
+                      onChange={(e) => onDateToChange(e.target.value)}
+                      className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

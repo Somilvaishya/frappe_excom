@@ -33,6 +33,9 @@
   "needs_review",
   "potential_duplicate_of",
 
+  "flags_section",
+  "is_spam",
+
   "aliases_section",
   "aliases",
 
@@ -192,6 +195,18 @@
    "options": "Omni Identity",
    "read_only": 1,
    "description": "Suspected duplicate identity flagged at creation time for supervisor review."
+  },
+
+  {
+   "fieldname": "flags_section",
+   "fieldtype": "Section Break",
+   "label": "Flags"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_spam",
+   "fieldtype": "Check",
+   "label": "Is Spam"
   },
 
   {

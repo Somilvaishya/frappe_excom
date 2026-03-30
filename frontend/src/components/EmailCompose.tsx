@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Send, X, Loader2 } from "lucide-react";
-import { useFrappePostCall } from "frappe-react-sdk";
+import { useFrappeGetCall, useFrappePostCall } from "frappe-react-sdk";
 import { toast } from "sonner";
 
 interface EmailComposeProps {
@@ -26,9 +26,13 @@ export function EmailCompose({
   const [bodyHtml, setBodyHtml] = useState("");
   const [showCc, setShowCc] = useState(false);
 
-  const { call, loading } = useFrappePostCall(
-    "excom.excom.api.email.send_email",
-  );
+  const { data: sigRaw } = useFrappeGetCall<{
+    message: { exists: boolean; signature_html: string; position: string };
+  }>("excom.excom.api.email.get_my_signature");
+
+  const signature = sigRaw?.message?.exists ? (sigRaw.message.signature_html || "") : "";
+
+  const { call, loading } = useFrappePostCall("excom.excom.api.email.send_email");
 
   const handleSend = async () => {
     if (!to.trim() || !bodyHtml.trim()) {
@@ -36,19 +40,23 @@ export function EmailCompose({
       return;
     }
 
+    const finalBody = signature
+      ? `${bodyHtml}<br><br><div class="excom-signature">${signature}</div>`
+      : bodyHtml;
+
     try {
       await call({
         thread_id: threadId,
         to: to.trim(),
         subject: subject.trim() || "(No Subject)",
-        body_html: bodyHtml,
+        body_html: finalBody,
         cc: cc.trim(),
         in_reply_to_gmail_id: inReplyToGmailId,
       });
       toast.success("Email sent");
       onSent();
       onClose();
-    } catch (err) {
+    } catch {
       toast.error("Failed to send email");
     }
   };
@@ -123,6 +131,15 @@ export function EmailCompose({
           rows={6}
           className="w-full bg-zinc-800/50 rounded-lg p-3 text-sm text-white outline-none resize-none placeholder-zinc-500 border border-zinc-700/50 focus:border-blue-500/30"
         />
+        {signature && (
+          <div className="mt-2 pt-2 border-t border-zinc-700/50">
+            <p className="text-[10px] text-zinc-600 mb-1 uppercase tracking-wide">Signature preview</p>
+            <div
+              className="text-xs text-zinc-400"
+              dangerouslySetInnerHTML={{ __html: signature }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -134,7 +151,7 @@ export function EmailCompose({
           Discard
         </button>
         <button
-          onClick={handleSend}
+          onClick={() => void handleSend()}
           disabled={loading || !to.trim() || !bodyHtml.trim()}
           className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors"
         >

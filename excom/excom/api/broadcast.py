@@ -6,7 +6,6 @@ plus delivery log access and email preview.
 """
 
 import json
-from typing import Optional
 
 import frappe
 from frappe import _
@@ -43,6 +42,7 @@ def get_broadcasts(
     Returns:
         {"broadcasts": [...], "total": int}
     """
+    _check_broadcast_access()
     conditions = "b.docstatus < 2"
     params: dict = {"limit": int(limit), "offset": int(offset)}
 
@@ -184,6 +184,7 @@ def get_broadcast_detail(broadcast_name: str) -> dict:
     Returns:
         Full broadcast dict plus recent_logs list
     """
+    _check_broadcast_access()
     doc = frappe.get_doc("Excom Broadcast", broadcast_name)
 
     recent_logs = frappe.get_all(
@@ -248,6 +249,7 @@ def get_broadcast_logs(
     Returns:
         {"logs": [...], "total": int}
     """
+    _check_broadcast_access()
     filters: dict = {"broadcast": broadcast_name}
     if status:
         filters["status"] = status
@@ -283,6 +285,7 @@ def preview_broadcast_email(broadcast_name: str) -> dict:
     Returns:
         {"subject": "...", "body": "<html>...", "subscriber": "..."}
     """
+    _check_broadcast_access()
     doc = frappe.get_doc("Excom Broadcast", broadcast_name)
     return doc.preview_email()
 
@@ -295,6 +298,7 @@ def get_subscriber_lists_for_broadcast() -> list:
     Returns:
         List of {name, list_name, active_subscribers}
     """
+    _check_broadcast_access()
     return frappe.get_all(
         "Excom Subscriber List",
         fields=["name", "list_name", "active_subscribers"],
@@ -312,16 +316,17 @@ def get_channel_accounts_for_broadcast(channel: str = "") -> list:
         channel: Optional filter (e.g. 'email', 'whatsapp')
 
     Returns:
-        List of {name, channel_type, display_name}
+        List of {name, channel, account_name}
     """
+    _check_broadcast_access()
     filters: dict = {}
     if channel:
-        filters["channel_type"] = channel
+        filters["channel"] = channel
 
     return frappe.get_all(
         "Excom Channel Account",
         filters=filters,
-        fields=["name", "channel_type", "account_name"],
+        fields=["name", "channel", "account_name"],
         order_by="account_name asc",
         limit=50,
     )

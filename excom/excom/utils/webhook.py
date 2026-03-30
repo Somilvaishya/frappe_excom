@@ -1,5 +1,7 @@
 """Webhook handler for WhatsApp Cloud API."""
 import datetime
+import hashlib
+import hmac
 import json
 
 import frappe
@@ -27,29 +29,93 @@ def get():
 	verify_token = frappe.form_dict.get("hub.verify_token")
 
 	if not verify_token:
-		frappe.throw("Missing verify token")
+		return Response("Missing verify token", status=403)
 
 	match = frappe.db.exists(
 		"Excom Channel Account",
 		{"wa_webhook_verify_token": verify_token},
 	)
 	if not match:
-		frappe.throw("No matching Excom Channel Account")
+		return Response("No matching account", status=403)
 
 	return Response(hub_challenge, status=200)
 
 
-def post():
-	"""
-	Accept Meta webhook immediately (return 200) and enqueue processing.
+def _verify_hmac_signature() -> bool:
+	"""Validate X-Hub-Signature-256 header against stored app secrets.
 
-	Meta requires a response within 20 seconds or it marks the webhook as
-	failed and retries with exponential back-off. We persist the raw payload
-	for audit, then hand off all CPU-bound work to a background job.
+	Returns True if signature is valid or no app secrets are configured
+	(graceful degradation for accounts that haven't set the secret yet).
 	"""
+	signature_header = frappe.request.headers.get("X-Hub-Signature-256", "")
+	if not signature_header:
+		secrets = frappe.get_all(
+			"Excom Channel Account",
+			filters={"channel": "whatsapp", "status": "Active"},
+			pluck="name",
+		)
+		has_any_secret = False
+		for acc_name in secrets:
+			try:
+				secret = frappe.get_doc("Excom Channel Account", acc_name).get_password("wa_app_secret")
+				if secret:
+					has_any_secret = True
+					break
+			except frappe.AuthenticationError:
+				pass
+		if has_any_secret:
+			return False
+		return True
+
+	raw_payload = frappe.request.get_data(as_text=False)
+
+	accounts = frappe.get_all(
+		"Excom Channel Account",
+		filters={"channel": "whatsapp", "status": "Active"},
+		pluck="name",
+	)
+
+	expected_prefix = "sha256="
+	if not signature_header.startswith(expected_prefix):
+		return False
+
+	provided_sig = signature_header[len(expected_prefix):]
+
+	for acc_name in accounts:
+		try:
+			app_secret = frappe.get_doc("Excom Channel Account", acc_name).get_password("wa_app_secret")
+		except frappe.AuthenticationError:
+			continue
+		if not app_secret:
+			continue
+
+		expected_sig = hmac.new(
+			app_secret.encode("utf-8"),
+			raw_payload,
+			hashlib.sha256,
+		).hexdigest()
+
+		if hmac.compare_digest(provided_sig, expected_sig):
+			return True
+
+	return False
+
+
+def post():
+	"""Accept Meta webhook immediately (return 200) and enqueue processing.
+
+	Validates HMAC signature before processing. Meta requires a response
+	within 20 seconds or it marks the webhook as failed and retries.
+	"""
+	if not _verify_hmac_signature():
+		frappe.log_error(
+			title="Excom: webhook HMAC validation failed",
+			message="Invalid or missing X-Hub-Signature-256 header",
+		)
+		return Response("Invalid signature", status=403)
+
 	data = frappe.local.form_dict
 
-	# Persist raw payload synchronously so we never lose it even if the job fails.
 	try:
 		from excom.excom.utils import _notification_log_doctype
 		frappe.get_doc({
@@ -61,12 +127,10 @@ def post():
 	except Exception:
 		frappe.log_error("Excom: webhook audit log insert failed")
 
-	# Enqueue actual message/status processing asynchronously.
 	frappe.enqueue(
 		"excom.excom.utils.webhook._process_webhook_payload",
 		data_str=json.dumps(data),
 		queue="short",
-		# In unit tests frappe.flags.in_test is True, so jobs run inline.
 		now=frappe.flags.in_test,
 	)
 

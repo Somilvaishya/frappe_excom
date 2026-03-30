@@ -144,7 +144,7 @@ def retry_failed_message(message_name: str) -> dict:
                 account,
                 to_number,
                 template_doc.actual_name or template_doc.template_name,
-                template_doc.language or "en",
+                template_doc.language_code or "en_US",
             )
 
         elif msg.message_type in ("Image", "Video", "Audio", "Document") and msg.media_file:

@@ -183,7 +183,7 @@ export function AnalyticsPage({ onNavigateBack }: AnalyticsPageProps) {
 
   const channelPieData = useMemo(() => {
     return (internal?.messages_by_channel || []).map((c: any) => ({
-      name: c.channel?.charAt(0).toUpperCase() + c.channel?.slice(1),
+      name: c.channel ? c.channel.charAt(0).toUpperCase() + c.channel.slice(1) : "Unknown",
       value: c.count,
     }));
   }, [internal]);
@@ -402,7 +402,7 @@ function OverviewTab({
           {channelPieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={channelPieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                <Pie data={channelPieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value" label={({ name, percent }: { name?: string; percent?: number }) => `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`}>
                   {channelPieData.map((_: any, i: number) => (
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
@@ -420,7 +420,7 @@ function OverviewTab({
           {categoryPieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={categoryPieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                <Pie data={categoryPieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value" label={({ name, percent }: { name?: string; percent?: number }) => `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`}>
                   {categoryPieData.map((entry: any, i: number) => (
                     <Cell key={i} fill={entry.fill} />
                   ))}
@@ -524,7 +524,7 @@ function ConversationsTab({ overview, internal, categoryPieData }: any) {
   const convPoints = overview?.conversations?.data_points || [];
 
   const dailyConvData = useMemo(() => {
-    const dayMap: Record<string, Record<string, number>> = {};
+    const dayMap: Record<string, Record<string, string | number>> = {};
     for (const dp of convPoints) {
       const day = formatDate(dp.start);
       if (!dayMap[day]) dayMap[day] = { day };
@@ -660,7 +660,7 @@ function PricingTab({ overview }: any) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
                 <XAxis dataKey="day" tick={{ fill: "#71717a", fontSize: 11 }} />
                 <YAxis tick={{ fill: "#71717a", fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
-                <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, color: "#fff" }} formatter={(v: number) => [`$${v.toFixed(2)}`, "Cost"]} />
+                <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, color: "#fff" }} formatter={(v) => [`$${Number(v).toFixed(2)}`, "Cost"]} />
                 <Area type="monotone" dataKey="cost" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} />
               </AreaChart>
             </ResponsiveContainer>

@@ -10,6 +10,7 @@ import json
 import frappe
 from frappe import _
 
+from excom.excom.api.chat import _check_excom_access
 from excom.excom.services import gmail_service
 from excom.excom.channels.email.outbound import send_email_reply
 
@@ -40,6 +41,7 @@ def get_email_body(message_name: str):
             "deleted": false
         }
     """
+    _check_excom_access()
     msg = frappe.get_doc("Excom Message", message_name)
 
     if msg.message_type != "Email":
@@ -59,9 +61,19 @@ def get_email_body(message_name: str):
     try:
         full = gmail_service.get_message_full(account_name, gmail_msg_id)
     except Exception as e:
+        err_str = str(e)
         frappe.log_error(
             title=f"Gmail body fetch failed: {gmail_msg_id}",
-            message=str(e),
+            message=err_str,
+        )
+        # Distinguish auth errors from missing messages
+        is_auth_error = any(
+            code in err_str for code in ("401", "403", "invalid_grant", "unauthorized", "Unauthorized", "No valid OAuth2")
+        )
+        error_msg = (
+            "Gmail access not authorized. Please re-authorize the email account."
+            if is_auth_error
+            else "Failed to fetch from Gmail. The email may have been deleted or moved."
         )
         return {
             "body_html": "",
@@ -74,7 +86,8 @@ def get_email_body(message_name: str):
             "date": content_json.get("date", ""),
             "attachments": [],
             "deleted": True,
-            "error": "Failed to fetch from Gmail. The email may have been deleted.",
+            "error": error_msg,
+            "auth_error": is_auth_error,
         }
 
     if full.get("deleted"):
@@ -123,6 +136,7 @@ def get_email_attachment(
         attachment_id: Gmail attachment ID
         filename: Original filename for the Content-Disposition header
     """
+    _check_excom_access()
     msg = frappe.get_doc("Excom Message", message_name)
     if msg.message_type != "Email":
         frappe.throw(_("Message {0} is not an email").format(message_name))
@@ -158,6 +172,7 @@ def search_emails(account_name: str, query: str, max_results: int = 20):
     Returns:
         List of email metadata dicts
     """
+    _check_excom_access()
     max_results = min(int(max_results), 50)
     results = gmail_service.search_messages(account_name, query, max_results)
     return results
@@ -188,6 +203,7 @@ def send_email(
     Returns:
         {"success": True, "message_name": "..."}
     """
+    _check_excom_access()
     try:
         msg_name = send_email_reply(
             thread_name=thread_id,
@@ -216,6 +232,7 @@ def check_gmail_connection(account_name: str):
     Returns:
         {"success": True, "email": "user@gmail.com", "historyId": "..."}
     """
+    _check_excom_access()
     try:
         profile = gmail_service.get_profile(account_name)
         return {
@@ -237,6 +254,7 @@ def manual_sync(account_name: str):
     Trigger a manual email sync for a specific account.
     Useful for testing or when the scheduler hasn't run yet.
     """
+    _check_excom_access()
     from excom.excom.channels.email.inbound import poll_single_account
 
     try:
@@ -245,3 +263,59 @@ def manual_sync(account_name: str):
     except Exception as e:
         frappe.log_error(title=f"Manual email sync failed: {account_name}")
         return {"success": False, "error": str(e)}
+
+
+@frappe.whitelist()
+def get_my_signature() -> dict:
+    """
+    Return the current user's active email signature.
+
+    Returns:
+        {signature_html: str, position: str, exists: bool}
+    """
+    _check_excom_access()
+    user = frappe.session.user
+    name = frappe.db.get_value("Excom Email Signature", {"user": user, "is_active": 1}, "name")
+    if not name:
+        return {"exists": False, "signature_html": "", "position": "Below Reply"}
+    doc = frappe.get_doc("Excom Email Signature", name)
+    return {
+        "exists": True,
+        "signature_html": doc.signature_html or "",
+        "position": doc.position or "Below Reply",
+    }
+
+
+@frappe.whitelist()
+def save_my_signature(signature_html: str, position: str = "Below Reply") -> dict:
+    """
+    Upsert the current user's email signature.
+
+    Args:
+        signature_html: HTML string for the signature body
+        position: "Below Reply" or "Below All"
+
+    Returns:
+        {success: bool}
+    """
+    _check_excom_access()
+    user = frappe.session.user
+    existing = frappe.db.get_value("Excom Email Signature", {"user": user}, "name")
+    if existing:
+        doc = frappe.get_doc("Excom Email Signature", existing)
+        doc.signature_html = signature_html
+        doc.position = position
+        doc.is_active = 1
+        doc.save(ignore_permissions=False)
+    else:
+        doc = frappe.get_doc({
+            "doctype": "Excom Email Signature",
+            "user": user,
+            "signature_html": signature_html,
+            "position": position,
+            "is_active": 1,
+        })
+        doc.insert(ignore_permissions=False)
+    frappe.db.commit()
+    return {"success": True}
+

@@ -117,15 +117,14 @@ boot_session = "excom.boot.boot_session"
 
 # Permissions
 # -----------
-# Permissions evaluated in scripted ways
 
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+permission_query_conditions = {
+	"Excom Thread": "excom.excom.doctype.excom_thread.excom_thread.get_permission_query_conditions",
+}
+
+has_permission = {
+	"Excom Thread": "excom.excom.doctype.excom_thread.excom_thread.has_permission",
+}
 
 # DocType Class
 # ---------------
@@ -196,6 +195,7 @@ scheduler_events = {
 		"excom.excom.utils.trigger_whatsapp_notifications_daily_long",
 		"excom.excom.tasks.cleanup.cleanup_stale_identities",
 		"excom.excom.services.identity_hooks.scan_merge_suggestions",
+		"excom.excom.tasks.token_monitor.check_token_expiry",
 	],
 	"daily_maintenance": [
 		"excom.excom.scheduler.daily.sync_invalid_tokens",

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   Send,
   Paperclip,
@@ -52,6 +53,7 @@ interface ChannelTabsViewProps {
   onOpenAIAssistant: () => void;
   activeAccountId?: string;
   onAccountSwitch?: (accountId: string) => void;
+  onRefreshThreads?: () => void;
 }
 
 const CHANNEL_ICONS: Record<string, React.ReactElement> = {
@@ -122,6 +124,7 @@ export function ChannelTabsView({
   onOpenAIAssistant,
   activeAccountId: parentAccountId,
   onAccountSwitch,
+  onRefreshThreads,
 }: ChannelTabsViewProps) {
   const [messageInput, setMessageInput] = useState("");
   const [selectedChannel, setSelectedChannel] = useState(contact.channels[0]);
@@ -143,13 +146,23 @@ export function ChannelTabsView({
     }
   }, [parentAccountId]);
 
-  const { messages: threadMessages, isLoading: messagesLoading, refresh } =
+  const { messages: threadMessages, isLoading: messagesLoading, refresh, autoClaimedBy } =
     useMessages(selectedAccountId || "");
 
   const handleRealtimeMessage = useCallback(() => {
     refresh();
   }, [refresh]);
   useRealtimeMessages(selectedAccountId, handleRealtimeMessage);
+
+  // Toast and refresh when this thread open auto-assigns the thread to the current user
+  const prevAutoClaimedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (autoClaimedBy && autoClaimedBy !== prevAutoClaimedRef.current) {
+      prevAutoClaimedRef.current = autoClaimedBy;
+      toast.success("Thread assigned to you", { duration: 3000 });
+      onRefreshThreads?.();
+    }
+  }, [autoClaimedBy, onRefreshThreads]);
 
   const [isNoteMode, setIsNoteMode] = useState(false);
   const [showCannedPopover, setShowCannedPopover] = useState(false);
@@ -186,7 +199,7 @@ export function ChannelTabsView({
   }, [refresh, refreshPinned]);
 
   const isEmailChannel = selectedChannel === "email";
-  const { bodies: emailBodies, loading: emailBodyLoading, fetchBody: fetchEmailBody } = useEmailBody();
+  const { bodies: emailBodies, loading: emailBodyLoading, fetchBody: fetchEmailBody, retryFetch: retryEmailFetch } = useEmailBody();
   const [emailCompose, setEmailCompose] = useState<{
     show: boolean;
     to: string;
@@ -253,6 +266,8 @@ export function ChannelTabsView({
   const [transferNote, setTransferNote] = useState("");
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const stickerBtnRef = useRef<HTMLButtonElement>(null);
+  const [stickerPickerPos, setStickerPickerPos] = useState({ bottom: 0, right: 0 });
 
   const openTransferModal = useCallback(async () => {
     try {
@@ -741,8 +756,8 @@ export function ChannelTabsView({
               const isNote = message.isInternal;
               const showTimestamp =
                 index === 0 ||
-                threadMessages[index - 1].timestamp.getTime() -
-                  message.timestamp.getTime() >
+                message.timestamp.getTime() -
+                  threadMessages[index - 1].timestamp.getTime() >
                   300000;
 
               return (
@@ -768,6 +783,7 @@ export function ChannelTabsView({
                       bodyLoading={emailBodyLoading[message.id]}
                       onExpandEmail={fetchEmailBody}
                       onReplyEmail={handleReplyEmail}
+                      onRetryFetch={retryEmailFetch}
                     />
                   ) : isNote ? (
                     <div className="flex justify-center my-2">
@@ -1170,24 +1186,42 @@ export function ChannelTabsView({
                     </Button>
                     <div className="relative">
                       <Button
+                        ref={stickerBtnRef}
                         variant="ghost"
                         size="icon"
                         className="text-yellow-400 hover:text-yellow-300"
-                        onClick={() => setShowStickerPicker((v) => !v)}
+                        onClick={() => {
+                          if (!showStickerPicker && stickerBtnRef.current) {
+                            const rect = stickerBtnRef.current.getBoundingClientRect();
+                            setStickerPickerPos({
+                              bottom: window.innerHeight - rect.top + 8,
+                              right: window.innerWidth - rect.right,
+                            });
+                          }
+                          setShowStickerPicker((v) => !v);
+                        }}
                         title="Send Sticker"
                       >
                         <Sticker className="w-5 h-5" />
                       </Button>
-                      {showStickerPicker && selectedAccountId && (
-                        <div className="absolute bottom-full right-0 mb-2 z-50">
-                          <StickerPicker
-                            threadId={selectedAccountId}
-                            onClose={() => setShowStickerPicker(false)}
-                            onSent={() => refresh()}
-                          />
-                        </div>
-                      )}
                     </div>
+                    {showStickerPicker && selectedAccountId && createPortal(
+                      <div
+                        style={{
+                          position: "fixed",
+                          bottom: stickerPickerPos.bottom,
+                          right: stickerPickerPos.right,
+                          zIndex: 100,
+                        }}
+                      >
+                        <StickerPicker
+                          threadId={selectedAccountId}
+                          onClose={() => setShowStickerPicker(false)}
+                          onSent={() => refresh()}
+                        />
+                      </div>,
+                      document.body
+                    )}
                   </>
                 )}
               </div>

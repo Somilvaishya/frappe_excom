@@ -13,3 +13,6 @@ excom.patches.v1_0.rename_notification_doctypes
 excom.patches.v1_0.whatsapp_template_samples_and_links
 excom.patches.v1_0.add_whatsapp_template_header_variable_samples
 excom.patches.v1_0.add_sticker_message_type
+excom.patches.v1_0.add_spam_status_and_identity_flag
+excom.patches.v1_0.add_email_signature_doctype
+excom.patches.v1_0.merge_email_threads_by_identity

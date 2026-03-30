@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useFrappeGetCall } from "frappe-react-sdk";
 import type { ExcomThread, UnifiedContact, Account, Message } from "../types";
+import { parseFrappeDateTime } from "../utils/datetime";
 
 /**
  * Fetches threads from the Frappe backend and transforms them into UnifiedContact
@@ -11,10 +12,18 @@ export function useThreads(
   team: string = "",
   broadcast: string = "",
   broadcastStatus: string = "",
+  channel: string = "",
+  account: string = "",
+  dateFrom: string = "",
+  dateTo: string = "",
 ) {
   const params: Record<string, string | number> = { search, limit: 100, team };
   if (broadcast) params.broadcast = broadcast;
   if (broadcastStatus) params.broadcast_status = broadcastStatus;
+  if (channel && channel !== "all") params.channel = channel;
+  if (account) params.account = account;
+  if (dateFrom) params.date_from = dateFrom;
+  if (dateTo) params.date_to = dateTo;
 
   const { data, error, isLoading, mutate } = useFrappeGetCall<{
     message: ExcomThread[];
@@ -37,8 +46,8 @@ export function useThreads(
       ([identityId, identityThreads]) => {
         const sortedThreads = [...identityThreads].sort(
           (a, b) =>
-            new Date(b.last_message_at).getTime() -
-            new Date(a.last_message_at).getTime()
+            parseFrappeDateTime(b.last_message_at).getTime() -
+            parseFrappeDateTime(a.last_message_at).getTime()
         );
 
         const latestThread = sortedThreads[0];
@@ -74,7 +83,7 @@ export function useThreads(
           },
           status: "offline",
           lastMessage: latestThread.last_message_preview || "",
-          timestamp: new Date(latestThread.last_message_at),
+          timestamp: parseFrappeDateTime(latestThread.last_message_at),
           totalUnreadCount: totalUnread,
           aiStatus: undefined,
           assignedTo: latestThread.assigned_to

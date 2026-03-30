@@ -142,7 +142,15 @@ function playNotificationSound() {
   }
 }
 
-// ── Browser push notifications ───────────────────────────────────
+// ── Sound setting ────────────────────────────────────────────────
+
+function isSoundEnabled(): boolean {
+  try {
+    return localStorage.getItem("excom_sound_enabled") !== "false";
+  } catch {
+    return true;
+  }
+}
 
 function showDesktopNotification(title: string, body: string) {
   if (!("Notification" in window)) return;
@@ -154,9 +162,8 @@ function showDesktopNotification(title: string, body: string) {
       body,
       icon: "/assets/excom/excom/manifest/android-chrome-192x192.png",
       tag: "excom-new-message",
-      renotify: true,
       silent: true,
-    });
+    } as NotificationOptions);
     n.onclick = () => {
       window.focus();
       n.close();
@@ -166,6 +173,8 @@ function showDesktopNotification(title: string, body: string) {
     // Notification not supported in this context
   }
 }
+
+// ── Browser push notifications ───────────────────────────────────
 
 // ── Hook ─────────────────────────────────────────────────────────
 
@@ -180,23 +189,46 @@ interface InboundEvent {
 
 export function useNotifications(totalUnread: number) {
   const prevUnreadRef = useRef(totalUnread);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     getOriginalFavicon();
     drawBadgeFavicon(totalUnread);
+    // Mark initialized after first render so we don't play sound on page load
+    initializedRef.current = true;
   }, []);
 
   useEffect(() => {
     drawBadgeFavicon(totalUnread);
     updateTabTitle(totalUnread);
+
+    // Detect new messages via polling: if unread count increased since
+    // last render, play notification sound. This ensures notifications
+    // fire even when Socket.IO is disconnected.
+    if (
+      initializedRef.current &&
+      totalUnread > prevUnreadRef.current &&
+      isSoundEnabled()
+    ) {
+      playNotificationSound();
+      if (!document.hasFocus()) {
+        showDesktopNotification(
+          "New message",
+          "You have new unread messages",
+        );
+      }
+    }
     prevUnreadRef.current = totalUnread;
   }, [totalUnread]);
 
   const handleInbound = useCallback((data: InboundEvent) => {
     if (data.direction !== "Inbound") return;
 
-    if (!document.hasFocus()) {
+    if (isSoundEnabled()) {
       playNotificationSound();
+    }
+
+    if (!document.hasFocus()) {
       const sender = data.display_name || "New message";
       showDesktopNotification(sender, data.preview || "You have a new message");
     }

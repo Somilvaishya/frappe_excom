@@ -2,12 +2,42 @@ import json
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 from frappe.utils import flt, now_datetime
 
 from excom.excom.services.thread_service import send_outbound_message
 from excom.excom.utils.errors import ExcomProviderError, ExcomRateLimitError
 
 EXCOM_ROLES = {"System Manager", "Excom Manager", "Excom User"}
+
+MAX_MESSAGE_LENGTH = {
+    "whatsapp": 4096,
+    "email": 100_000,
+    "webchat": 10_000,
+}
+DEFAULT_MAX_LENGTH = 10_000
+
+
+def _sanitize_message(text: str, thread_id: str = "") -> str:
+    """Strip dangerous HTML and enforce max length per channel."""
+    if not text:
+        return text
+
+    text = frappe.utils.sanitize_html(text)
+
+    channel = ""
+    if thread_id:
+        channel = frappe.db.get_value("Excom Thread", thread_id, "channel") or ""
+
+    max_len = MAX_MESSAGE_LENGTH.get(channel, DEFAULT_MAX_LENGTH)
+    if len(text) > max_len:
+        frappe.throw(
+            _("Message exceeds maximum length of {0} characters for {1}").format(
+                max_len, channel or "this channel"
+            )
+        )
+
+    return text
 
 
 def _check_excom_access() -> None:
@@ -17,6 +47,7 @@ def _check_excom_access() -> None:
 
 
 @frappe.whitelist()
+@rate_limit(key="user", limit=60, seconds=60)
 def get_threads(
     search: str = "",
     limit: int = 50,
@@ -24,10 +55,22 @@ def get_threads(
     team: str = "",
     broadcast: str = "",
     broadcast_status: str = "",
+    channel: str = "",
+    account: str = "",
+    date_from: str = "",
+    date_to: str = "",
 ):
     """
     Inbox query: returns threads ordered by last_message_at.
     Enriches each thread with contact data from Omni Identity and User.
+
+    Channel/account filtering:
+    - channel="whatsapp": only WhatsApp threads
+    - account="ACC-00001": only threads on this specific Excom Channel Account
+
+    Date range filtering:
+    - date_from="2026-03-01": threads with last_message_at >= this date
+    - date_to="2026-03-29": threads with last_message_at <= end of this date
 
     Team filtering:
     - team="" (default): threads in user's teams + General (unassigned) + directly assigned
@@ -42,12 +85,28 @@ def get_threads(
     limit = int(limit)
     offset = int(offset)
 
-    conditions = "t.status != 'Closed'"
+    conditions = "t.status NOT IN ('Closed', 'Spam')"
     params: dict = {"limit": limit, "offset": offset, "current_user": frappe.session.user}
 
     if search:
         conditions += " AND (t.display_name LIKE %(search)s OR t.primary_phone LIKE %(search)s)"
         params["search"] = f"%{search}%"
+
+    if channel:
+        conditions += " AND t.channel = %(channel_filter)s"
+        params["channel_filter"] = channel
+
+    if account:
+        conditions += " AND t.account = %(account_filter)s"
+        params["account_filter"] = account
+
+    if date_from:
+        conditions += " AND t.last_message_at >= %(date_from)s"
+        params["date_from"] = date_from
+
+    if date_to:
+        conditions += " AND t.last_message_at <= %(date_to)s"
+        params["date_to"] = f"{date_to} 23:59:59"
 
     if broadcast:
         bl_filter = ""
@@ -215,8 +274,10 @@ def _enrich_tags(threads: list):
 
 
 @frappe.whitelist()
+@rate_limit(key="user", limit=120, seconds=60)
 def get_messages(thread_id: str, limit: int = 50, before: str = ""):
     """Load messages for a thread, ordered chronologically."""
+    _check_excom_access()
     limit = int(limit)
     params = {"thread": thread_id, "limit": limit}
 
@@ -229,6 +290,7 @@ def get_messages(thread_id: str, limit: int = 50, before: str = ""):
         f"""
         SELECT m.name, m.direction, m.message_type, m.content_text,
                m.media_file, m.delivery_status, m.creation,
+               m.provider_timestamp,
                m.provider_message_id, m.reply_to,
                m.created_by_user, m.is_internal,
                m.is_pinned, m.pinned_by, m.reactions,
@@ -243,7 +305,7 @@ def get_messages(thread_id: str, limit: int = 50, before: str = ""):
         LEFT JOIN `tabExcom Message` rt ON rt.name = m.reply_to
         LEFT JOIN `tabUser` ru ON ru.name = rt.created_by_user
         WHERE {conditions}
-        ORDER BY m.creation ASC
+        ORDER BY COALESCE(m.provider_timestamp, m.creation) ASC
         LIMIT %(limit)s
         """,
         params,
@@ -257,10 +319,29 @@ def get_messages(thread_id: str, limit: int = 50, before: str = ""):
             except (json.JSONDecodeError, TypeError):
                 msg.reactions = {}
 
-    return messages
+    # Auto-assign the thread to whoever opens it first if it is unassigned
+    auto_claimed_by = None
+    thread_row = frappe.db.get_value(
+        "Excom Thread", thread_id, ["assigned_to", "status"], as_dict=True
+    )
+    if thread_row and not thread_row.assigned_to and thread_row.status not in ("Closed", "Spam"):
+        from excom.excom.services.thread_service import _auto_claim_thread
+        thread_doc = frappe.get_doc("Excom Thread", thread_id)
+        claimed = _auto_claim_thread(thread_doc, frappe.session.user)
+        if claimed:
+            auto_claimed_by = frappe.session.user
+            frappe.db.commit()
+            frappe.publish_realtime(
+                "excom:thread_updated",
+                {"thread_id": thread_id, "assigned_to": frappe.session.user},
+                user=frappe.session.user,
+            )
+
+    return {"messages": messages, "auto_claimed_by": auto_claimed_by}
 
 
 @frappe.whitelist()
+@rate_limit(key="user", limit=30, seconds=60)
 def send_message(thread_id: str, message: str = "", message_type: str = "Text",
                  media_url: str = "", reply_to: str = "", sticker_name: str = ""):
     """
@@ -274,6 +355,9 @@ def send_message(thread_id: str, message: str = "", message_type: str = "Text",
         reply_to: Excom Message name being replied to
         sticker_name: Excom Sticker name (for Sticker type)
     """
+    _check_excom_access()
+    message = _sanitize_message(message, thread_id)
+
     if message_type == "Sticker" and sticker_name:
         sticker = frappe.get_doc("Excom Sticker", sticker_name)
         if not sticker.media_id and not sticker.sticker_file:
@@ -311,6 +395,7 @@ def get_stickers(pack: str = ""):
         list of sticker dicts with name, sticker_name, pack, sticker_file,
         media_id, is_animated
     """
+    _check_excom_access()
     filters = {"enabled": 1}
     if pack:
         filters["pack"] = pack
@@ -337,7 +422,18 @@ def get_stickers(pack: str = ""):
 @frappe.whitelist()
 def mark_read(thread_id: str):
     """Reset unread count for a thread."""
+    _check_excom_access()
     frappe.db.set_value("Excom Thread", thread_id, "unread_count", 0)
+    return {"success": True}
+
+
+@frappe.whitelist()
+def mark_unread(thread_id: str):
+    """Mark a thread as unread by setting unread_count to 1 if currently zero."""
+    _check_excom_access()
+    current = frappe.db.get_value("Excom Thread", thread_id, "unread_count") or 0
+    if current == 0:
+        frappe.db.set_value("Excom Thread", thread_id, "unread_count", 1)
     return {"success": True}
 
 
@@ -347,6 +443,7 @@ def get_linked_entities(omni_identity: str):
     Fetch all linked ERP entities from the Omni Identity's linked_entities child table.
     Returns list of {linked_doctype, linked_name, role, title} for display in the sidebar.
     """
+    _check_excom_access()
     if not omni_identity or not frappe.db.exists("Omni Identity", omni_identity):
         return []
 
@@ -398,6 +495,7 @@ def get_conversation_stats(omni_identity: str):
       and the next outbound reply (calculated per-thread, then averaged)
     - channels: list of distinct channels used
     """
+    _check_excom_access()
     empty = {
         "total_messages": 0,
         "inbound_count": 0,
@@ -478,6 +576,7 @@ def get_ai_suggestions(thread_id: str, force_refresh: bool = False):
     Phase 2 stub: computes basic insights from message history.
     Full LLM integration deferred to Phase 5.
     """
+    _check_excom_access()
     if not thread_id or not frappe.db.exists("Excom Thread", thread_id):
         return _empty_ai_response()
 
@@ -594,6 +693,7 @@ def assign_thread(thread_id: str, user: str = ""):
     Assign a thread to the current user or a specified user.
     Used by the "Take Over" button.
     """
+    _check_excom_access()
     if not user:
         user = frappe.session.user
 
@@ -614,6 +714,7 @@ def transfer_thread(thread_id: str, target_team: str, target_user: str = "", not
     user within the target team.  Otherwise, assigned_to is cleared so
     any member of the target team can pick it up.
     """
+    _check_excom_access()
     thread = frappe.db.get_value(
         "Excom Thread", thread_id, ["assigned_team", "display_name"], as_dict=True
     )
@@ -662,6 +763,7 @@ def claim_thread(thread_id: str, team: str = "") -> dict:
     Sets assigned_team to the provided team (or user's first team)
     and assigned_to to the current user.
     """
+    _check_excom_access()
     if not team:
         from excom.excom.doctype.excom_team.excom_team import get_user_teams
         user_teams = get_user_teams()
@@ -692,6 +794,7 @@ def claim_thread(thread_id: str, team: str = "") -> dict:
 @frappe.whitelist()
 def get_transfer_history(thread_id: str) -> list:
     """Return the transfer log for a thread."""
+    _check_excom_access()
     return frappe.db.sql(
         """
         SELECT tl.from_team, tl.to_team, tl.transferred_by, tl.note,
@@ -717,6 +820,7 @@ def get_response_metrics(omni_identity: str):
     Calculates average response time for an Omni Identity.
     Time between last inbound and next outbound per thread.
     """
+    _check_excom_access()
     if not omni_identity:
         return {"avg_response_time_seconds": None}
 
@@ -762,6 +866,7 @@ def get_canned_responses(search: str = "", channel: str = ""):
     Returns canned responses filtered by search text and channel.
     Includes global responses and current user's personal ones.
     """
+    _check_excom_access()
     filters = [
         ["is_global", "=", 1],
     ]
@@ -810,6 +915,7 @@ def get_canned_responses(search: str = "", channel: str = ""):
 
 
 @frappe.whitelist()
+@rate_limit(key="user", limit=30, seconds=60)
 def send_internal_note(thread_id: str, content: str):
     """
     Creates an internal note on a thread visible only to agents.
@@ -819,8 +925,11 @@ def send_internal_note(thread_id: str, content: str):
         thread_id: Excom Thread name
         content: Note text
     """
+    _check_excom_access()
     if not content or not content.strip():
         frappe.throw(_("Note content cannot be empty"))
+
+    content = _sanitize_message(content, thread_id)
 
     thread = frappe.get_doc("Excom Thread", thread_id)
 
@@ -861,6 +970,7 @@ def send_internal_note(thread_id: str, content: str):
 @frappe.whitelist()
 def pin_message(message_name: str):
     """Pin a message. Sets is_pinned=1 and pinned_by to current user."""
+    _check_excom_access()
     if not frappe.db.exists("Excom Message", message_name):
         frappe.throw(_("Message not found"))
     frappe.db.set_value("Excom Message", message_name, {
@@ -877,6 +987,7 @@ def pin_message(message_name: str):
 @frappe.whitelist()
 def unpin_message(message_name: str):
     """Unpin a message."""
+    _check_excom_access()
     if not frappe.db.exists("Excom Message", message_name):
         frappe.throw(_("Message not found"))
     frappe.db.set_value("Excom Message", message_name, {
@@ -893,6 +1004,7 @@ def unpin_message(message_name: str):
 @frappe.whitelist()
 def get_pinned_messages(thread_id: str):
     """Return all pinned messages for a thread."""
+    _check_excom_access()
     return frappe.db.sql(
         """
         SELECT m.name, m.content_text, m.direction, m.creation,
@@ -914,6 +1026,7 @@ def toggle_reaction(message_name: str, emoji: str):
     Toggle the current user's reaction on a message.
     Reactions stored as JSON: {"emoji": ["user1", "user2"]}.
     """
+    _check_excom_access()
     if not frappe.db.exists("Excom Message", message_name):
         frappe.throw(_("Message not found"))
 
@@ -947,6 +1060,7 @@ def toggle_reaction(message_name: str, emoji: str):
 @frappe.whitelist()
 def get_tags():
     """Return all available Excom Tag records."""
+    _check_excom_access()
     return frappe.get_all(
         "Excom Tag",
         fields=["name", "tag_name", "color", "description"],
@@ -958,6 +1072,7 @@ def get_tags():
 @frappe.whitelist()
 def add_thread_tag(thread_id: str, tag_name: str):
     """Add a tag to a thread. Creates the Excom Tag if it doesn't exist."""
+    _check_excom_access()
     if not frappe.db.exists("Excom Thread", thread_id):
         frappe.throw(_("Thread not found"))
 
@@ -986,6 +1101,7 @@ def add_thread_tag(thread_id: str, tag_name: str):
 @frappe.whitelist()
 def remove_thread_tag(thread_id: str, tag_name: str):
     """Remove a tag from a thread."""
+    _check_excom_access()
     if not frappe.db.exists("Excom Thread", thread_id):
         frappe.throw(_("Thread not found"))
 
@@ -998,6 +1114,7 @@ def remove_thread_tag(thread_id: str, tag_name: str):
 @frappe.whitelist()
 def get_thread_tags(thread_id: str):
     """Return tags for a specific thread."""
+    _check_excom_access()
     return frappe.db.sql(
         """
         SELECT tt.tag, t.color, t.tag_name
@@ -1019,6 +1136,7 @@ def get_related_documents(omni_identity: str):
     Customer-side: Quotation, Sales Order, Delivery Note, Sales Invoice.
     Supplier-side: Request for Quotation, Purchase Order, Purchase Receipt, Purchase Invoice.
     """
+    _check_excom_access()
     result = {
         "quotations": [],
         "sales_orders": [],
@@ -1838,3 +1956,72 @@ def retry_message(message_name: str = "") -> dict:
 
     from excom.excom.services.delivery_watchdog import retry_failed_message
     return retry_failed_message(message_name)
+
+
+@frappe.whitelist()
+def mark_spam(thread_id: str = "", omni_identity: str = "") -> dict:
+    """
+    Mark a thread (and its sender identity) as spam.
+
+    Sets thread status to Spam and flags the Omni Identity so future
+    messages from this sender are auto-filtered.
+    """
+    _check_excom_access()
+
+    if not thread_id:
+        frappe.throw(_("thread_id is required"))
+
+    thread = frappe.get_doc("Excom Thread", thread_id)
+
+    frappe.db.set_value("Excom Thread", thread_id, {
+        "status": "Spam",
+        "modified": frappe.utils.now_datetime(),
+    })
+
+    identity = omni_identity or thread.omni_identity
+    if identity:
+        frappe.db.set_value("Omni Identity", identity, "is_spam", 1)
+
+    frappe.db.commit()
+    return {"success": True, "status": "Spam"}
+
+
+@frappe.whitelist()
+def archive_thread(thread_id: str = "") -> dict:
+    """Archive a thread — hides it from active inbox without deleting."""
+    _check_excom_access()
+
+    if not thread_id:
+        frappe.throw(_("thread_id is required"))
+
+    frappe.db.set_value("Excom Thread", thread_id, {
+        "status": "Closed",
+        "modified": frappe.utils.now_datetime(),
+    })
+
+    frappe.db.commit()
+    return {"success": True, "status": "Closed"}
+
+
+@frappe.whitelist()
+def delete_thread(thread_id: str = "") -> dict:
+    """
+    Delete a thread and all its messages. Restricted to System Manager.
+    """
+    _check_excom_access()
+
+    user_roles = set(frappe.get_roles(frappe.session.user))
+    if "System Manager" not in user_roles:
+        frappe.throw(
+            _("Only System Managers can delete threads"),
+            frappe.PermissionError,
+        )
+
+    if not thread_id:
+        frappe.throw(_("thread_id is required"))
+
+    frappe.db.delete("Excom Message", {"thread": thread_id})
+    frappe.delete_doc("Excom Thread", thread_id, force=True)
+
+    frappe.db.commit()
+    return {"success": True}

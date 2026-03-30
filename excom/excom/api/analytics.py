@@ -11,11 +11,7 @@ import json
 import frappe
 from frappe import _
 
-
-def _check_excom_access() -> None:
-    """Ensure user has Excom access."""
-    if frappe.session.user == "Guest":
-        frappe.throw(_("Authentication required"), frappe.AuthenticationError)
+from excom.excom.api.chat import _check_excom_access
 
 
 @frappe.whitelist()
@@ -307,7 +303,7 @@ def get_wa_accounts() -> list[dict]:
     _check_excom_access()
     return frappe.get_all(
         "Excom Channel Account",
-        filters={"channel": "whatsapp", "enabled": 1},
+        filters={"channel": "whatsapp", "status": "Active"},
         fields=["name", "account_name", "wa_business_id", "wa_phone_id"],
         order_by="account_name asc",
     )
@@ -317,7 +313,7 @@ def _get_default_wa_account() -> str:
     """Return the first active WhatsApp account name, or empty string."""
     accounts = frappe.get_all(
         "Excom Channel Account",
-        filters={"channel": "whatsapp", "enabled": 1},
+        filters={"channel": "whatsapp", "status": "Active"},
         fields=["name"],
         limit=1,
     )

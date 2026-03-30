@@ -45,11 +45,60 @@ def get_access_token(account_name: str) -> str:
     token_cache = connected_app.get_active_token(account.email_connected_user)
 
     if not token_cache:
-        frappe.db.set_value("Excom Channel Account", account_name, "email_authorized", 0)
-        frappe.throw(_("No valid OAuth2 token for {0}. Please re-authorize.").format(account_name))
+        # Do NOT auto-deauthorize — the token may just need a fresh OAuth flow.
+        # The user must click the Authorize button to get a new refresh_token.
+        frappe.throw(
+            _("No valid OAuth2 token for {0}. Please click the Authorize button to re-authorize.").format(
+                account_name
+            )
+        )
 
-    frappe.db.set_value("Excom Channel Account", account_name, "email_authorized", 1)
     return token_cache.get_password("access_token")
+
+
+
+def _force_token_refresh(account_name: str) -> None:
+    """
+    Force a refresh of the OAuth2 access token for the given account.
+    Uses the refresh_token stored in the Token Cache to obtain a new access token.
+    Updates the Token Cache record in place.
+    """
+    account = frappe.get_doc("Excom Channel Account", account_name)
+    if not account.email_connected_app or not account.email_connected_user:
+        frappe.throw(_("Email account {0} is missing Connected App or Connected User").format(account_name))
+
+    connected_app = frappe.get_doc("Connected App", account.email_connected_app)
+    token_cache = connected_app.get_token_cache(account.email_connected_user)
+    if not token_cache:
+        frappe.throw(_("No token cache found for {0}").format(account_name))
+
+    refresh_token = token_cache.get_password("refresh_token")
+    if not refresh_token:
+        frappe.throw(_("No refresh token available for {0}. Please re-authorize.").format(account_name))
+
+    token_url = connected_app.token_uri  # Correct Frappe Connected App field name
+    resp = requests.post(
+        token_url,
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": connected_app.client_id,
+            "client_secret": connected_app.get_password("client_secret"),
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    new_access_token = data.get("access_token")
+    if not new_access_token:
+        frappe.throw(_("Token refresh failed: no access_token in response"))
+
+    # Update the stored access_token and expires_in
+    token_cache.access_token = new_access_token
+    if "expires_in" in data:
+        token_cache.expires_in = data["expires_in"]
+    token_cache.save(ignore_permissions=True)
+    frappe.db.commit()
 
 
 def _headers(account_name: str) -> dict:
@@ -146,14 +195,26 @@ def get_message_full(account_name: str, message_id: str) -> dict:
     Called ON-DEMAND when an agent opens a specific email. Result is returned
     to the frontend but NEVER persisted to the Frappe database.
     If the message has been deleted from Gmail, returns a deleted marker.
+    On 401, attempts a token refresh and retries once.
     """
-    try:
-        resp = requests.get(
+    def _fetch(hdrs: dict) -> requests.Response:
+        return requests.get(
             f"{GMAIL_API_BASE}/messages/{message_id}",
-            headers=_headers(account_name),
+            headers=hdrs,
             params={"format": "full"},
             timeout=30,
         )
+
+    try:
+        resp = _fetch(_headers(account_name))
+
+        # Expired token — try to force a refresh via Connected App
+        if resp.status_code == 401:
+            try:
+                _force_token_refresh(account_name)
+                resp = _fetch(_headers(account_name))
+            except Exception:
+                pass  # If refresh also fails, fall through to raise_for_status
 
         if resp.status_code == 404:
             return {

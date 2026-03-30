@@ -9,6 +9,8 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
+from excom.excom.api.chat import _check_excom_access
+
 
 def _check_manager_access() -> None:
     """Verify the current user has Excom Manager or System Manager role."""
@@ -64,6 +66,7 @@ def get_sync_status() -> dict:
         {"done": bool, "current": int, "total": int, "phase": str, "percent": int}
         or {"done": True, "stats": {...}} when finished.
     """
+    _check_excom_access()
     progress = frappe.cache.get_value(PROGRESS_KEY)
     if not progress:
         return {"done": True, "message": "No sync in progress."}

@@ -11,6 +11,8 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
+from excom.excom.api.chat import _check_excom_access
+
 
 @frappe.whitelist()
 def get_subscriber_lists(search: str = "", limit: int = 50, offset: int = 0) -> list:
@@ -25,6 +27,7 @@ def get_subscriber_lists(search: str = "", limit: int = 50, offset: int = 0) -> 
     Returns:
         List of subscriber list dicts with counts
     """
+    _check_excom_access()
     filters = {}
     if search:
         filters["list_name"] = ["like", f"%{search}%"]
@@ -53,6 +56,7 @@ def get_subscribers(
     Returns:
         {"subscribers": [...], "total": int, "active": int, "unsubscribed": int}
     """
+    _check_excom_access()
     conditions = "s.subscriber_list = %(list)s"
     params = {"list": subscriber_list, "limit": int(limit), "offset": int(offset)}
 
@@ -98,6 +102,7 @@ def add_subscriber(subscriber_list: str, omni_identity: str) -> dict:
 
     Auto-creates the Excom Subscriber record.
     """
+    _check_excom_access()
     if frappe.db.exists(
         "Excom Subscriber",
         {"subscriber_list": subscriber_list, "omni_identity": omni_identity},
@@ -130,6 +135,7 @@ def add_subscriber_by_contact(subscriber_list: str, phone: str = "", email: str 
     Returns:
         {"success": True, "omni_identity": "...", "created_identity": bool}
     """
+    _check_excom_access()
     if not phone and not email:
         frappe.throw(_("Phone or email is required"))
 
@@ -159,6 +165,7 @@ def add_subscriber_by_contact(subscriber_list: str, phone: str = "", email: str 
 @frappe.whitelist()
 def remove_subscriber(subscriber_name: str) -> dict:
     """Remove a subscriber from a list (hard delete)."""
+    _check_excom_access()
     frappe.delete_doc("Excom Subscriber", subscriber_name, ignore_permissions=True)
     frappe.db.commit()
     return {"success": True}
@@ -167,6 +174,7 @@ def remove_subscriber(subscriber_name: str) -> dict:
 @frappe.whitelist()
 def unsubscribe_subscriber(subscriber_name: str) -> dict:
     """Soft-unsubscribe: set status to Unsubscribed."""
+    _check_excom_access()
     frappe.db.set_value(
         "Excom Subscriber",
         subscriber_name,
@@ -179,6 +187,7 @@ def unsubscribe_subscriber(subscriber_name: str) -> dict:
 @frappe.whitelist()
 def resubscribe(subscriber_name: str) -> dict:
     """Re-subscribe a previously unsubscribed member."""
+    _check_excom_access()
     frappe.db.set_value(
         "Excom Subscriber",
         subscriber_name,
@@ -209,6 +218,7 @@ def import_from_doctype(
     Returns:
         {"added": int, "skipped": int}
     """
+    _check_excom_access()
     parsed_filters = json.loads(filters) if isinstance(filters, str) else filters
     doc = frappe.get_doc("Excom Subscriber List", subscriber_list)
     result = doc.add_subscribers_from_doctype(
@@ -222,6 +232,7 @@ def import_from_doctype(
 @frappe.whitelist()
 def create_subscriber_list(list_name: str, description: str = "") -> dict:
     """Create a new subscriber list."""
+    _check_excom_access()
     doc = frappe.get_doc({
         "doctype": "Excom Subscriber List",
         "list_name": list_name,
@@ -239,6 +250,7 @@ def search_identities(search: str = "", limit: int = 20) -> list:
 
     Returns list of dicts with name, display_name, primary_email, primary_phone.
     """
+    _check_excom_access()
     limit = min(int(limit), 50)
     params: dict = {"limit": limit}
     where = "status = 'Active'"

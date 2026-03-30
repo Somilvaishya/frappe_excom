@@ -1,93 +1,79 @@
 # Excom Implementation Roadmap
 
-Master index for all implementation phases. Derived from competitive analysis of Rocket.Chat (90+ feature modules), cross-referenced against Excom existing handbooks, gap documents, and ERPNext integration opportunities.
+Phases 0-3 built the working product — WhatsApp, Email, Instagram channels, real-time inbox, Omni Identity, and basic frontend. The remaining work is deliberately minimal: ship security, add AI, then grow based on real usage.
 
 ---
 
 ## Phase Overview
 
-| Phase | Name | Effort | Priority | Status |
-|---|---|---|---|---|
-| 0 | Critical Fixes and Stabilization | 1-2 days | IMMEDIATE | COMPLETED |
-| 1 | Schema, Validation, Backend Hardening | 5-8 days | HIGH | COMPLETED |
-| 2 | Frontend Completion and Real-Time UX | 7-10 days | HIGH | COMPLETED |
-| 3 | Omnichannel Expansion | 15-20 days | MEDIUM-HIGH | Partial (3.3, 3.5 done) |
-| 3.5 | Pipeline, Teams, CRM Sync | 10-14 days | MEDIUM-HIGH | Not Started |
-| 4 | Routing, Queues, SLA, Workflow | 12-15 days | MEDIUM | Not Started |
-| 5 | AI Integration | 12-18 days | MEDIUM | Not Started |
-| 6 | Deep ERPNext Integration | 10-14 days | MEDIUM | Not Started |
-| 7 | Security, Permissions, Access Control | 8-12 days | HIGH | Not Started |
-| 8 | Analytics, Reporting, Governance | 8-12 days | MEDIUM | Not Started |
+| Phase | Name | Effort | Status |
+|---|---|---|---|
+| ~~0~~ | ~~Critical Fixes and Stabilization~~ | ~~1-2 days~~ | DONE |
+| ~~1~~ | ~~Schema, Validation, Backend Hardening~~ | ~~5-8 days~~ | DONE |
+| ~~2~~ | ~~Frontend Completion and Real-Time UX~~ | ~~7-10 days~~ | DONE |
+| ~~3~~ | ~~Omnichannel Expansion~~ | ~~15-20 days~~ | DONE (MVP) |
+| **A** | **Security Essentials** | **3-5 days** | DONE |
+| **B** | **AI Intelligence Layer** | **5-8 days** | Not Started |
 
-Total estimated effort: 88-131 days
+Remaining effort: ~8-13 days
 
 ---
 
-## Dependency Graph
+## Phase A: Security Essentials (3-5 days)
 
-Phase 0 (Critical Fixes) [DONE]
-  -> Phase 1 (Backend Hardening) [DONE]
-    -> Phase 2 (Frontend) [DONE] -> Phase 5 (AI)
-    -> Phase 3 (Omnichannel) -> Phase 4 (Routing/SLA)
-    -> Phase 3.5 (Pipeline/Teams/CRM) -> Phase 4 (builds on 3.5 teams + assignment)
-    -> Phase 3.5 (Pipeline/Teams/CRM) -> Phase 6 (builds on 3.5 CRM sync)
-    -> Phase 7 (Security) runs parallel with Phases 3-6
-    -> Phase 6 (ERPNext) -> Phase 8 (Analytics)
+Ship-blocking security — the minimum you can't go live without.
+
+- HMAC webhook signature validation (WhatsApp)
+- Input sanitization on all APIs
+- Basic rate limiting on send/query endpoints
+- Role-based access: Agent (own threads) vs Admin (everything)
+- Token expiry monitoring alerts
+
+**No enterprise bloat.** No DLP, no audit log DocType, no supervisor roles, no session tracking. Add when needed.
+
+---
+
+## Phase B: AI Intelligence Layer (5-8 days)
+
+Replace hardcoded AI stubs with real intelligence. Three features, one LLM client.
+
+- **LLM Client:** Single function calling OpenAI-compatible API (works with OpenAI + Ollama)
+- **Suggested Replies:** 3 contextual reply suggestions per conversation (replaces hardcoded stubs)
+- **Conversation Summary:** Auto-generated on thread close, on-demand refresh
+- **Contact Profiling:** Behavioral summary from conversation history + ERP context
+
+**No over-abstraction.** No provider factory, no sentiment analysis, no auto-translation, no AI routing. Add when agents ask for it.
+
+---
+
+## Philosophy: Add Based on Need
+
+These features exist in the old detailed specs but are **intentionally deferred**. Build them only when real usage demands it:
+
+| Feature | Build When... |
+|---|---|
+| Teams + Assignment Engine | You have 3+ agents and need workload distribution |
+| Pipeline / Kanban | Sales team needs visual funnel tracking |
+| CRM Sync | You're actively using Frappe CRM alongside Excom |
+| Routing Rules + SLA | You have multiple departments with different response targets |
+| Deep ERPNext Integration | Agents frequently context-switch to ERPNext for invoice/ticket info |
+| Analytics Dashboard | Management needs operational metrics |
+| Sentiment Analysis | You want AI to flag frustrated customers |
+| Auto-Translation | You serve customers in multiple languages |
+| CSAT Surveys | You need customer satisfaction measurement |
+| Audit Logging | Compliance requires immutable event trails |
 
 ---
 
 ## Files
 
-- phase_0_critical_fixes.md - 3 critical bugs + webhook fixes
-- phase_1_backend_hardening.md - Schema, validation, indexes, service layer, event bus
-- phase_2_frontend_completion.md - Realtime, enrichment, attachments, AI stubs, mobile nav
-- phase_3_omnichannel_expansion.md - Email, web chat, canned responses, tags, internal notes
-- phase_3.5_pipeline_teams_crm.md - Pipeline stages, team management, assignment engine, CRM sync
-- phase_4_routing_queues_sla.md - Departments, routing, queues, SLA, priorities, transfers
-- phase_5_ai_integration.md - Profiling, suggestions, summaries, sentiment, translation
-- phase_6_erpnext_integration.md - Lead auto-create, lifecycle, tickets, invoices, products
-- phase_7_security_permissions.md - HMAC, rate limits, audit logs, RBAC, DLP, moderation
-- phase_8_analytics_governance.md - Dashboards, agent metrics, CSAT, reports, alerts
-
----
-
-## New DocTypes Across All Phases
-
-| DocType | Phase | Purpose |
-|---|---|---|
-| Excom Canned Response | 3 | Pre-defined response templates |
-| Excom Tag | 3 | Conversation categorization labels |
-| Excom Thread Tag | 3 | Child table linking tags to threads |
-| Excom Team | 3.5 | Team grouping for agents |
-| Excom Team Member | 3.5 | Child table: user-team membership |
-| Excom Assignment Log | 3.5 | Audit trail for thread assignments |
-| Excom Department | 4 | Organizational units for routing |
-| Excom Department Member | 4 | Agent-department assignments |
-| Excom Routing Rule | 4 | Routing conditions and actions |
-| Excom SLA Policy | 4 | Service level agreement definitions |
-| Excom Priority | 4 | Weighted priority levels |
-| Excom Business Hours | 4 | Work schedule definitions |
-| Excom Work Hour | 4 | Day-by-day schedule child table |
-| Excom Audit Log | 7 | Immutable event trail |
-| Excom DLP Rule | 7 | Data loss prevention patterns |
-| Excom CSAT Response | 8 | Customer satisfaction responses |
-
----
-
-## Key Competitive Advantages Over Rocket.Chat
-
-1. ERPNext Integration (Phase 6): Inline access to Leads, Opportunities, Invoices, Tickets, and full customer lifecycle within conversations.
-2. AI with Business Context (Phase 5): AI suggestions powered by ERPNext data (deal stage, invoice status, ticket history).
-3. Revenue Attribution (Phase 8): Track which conversations directly influenced sales.
-4. Frappe-Native Permissions (Phase 7): Leverages ERPNext existing role and permission model.
-5. Reuse-First Architecture: Extends existing ERPNext entities instead of duplicating them.
+- `phase_A_security_essentials.md` — Webhook HMAC, sanitization, rate limits, RBAC, token monitoring
+- `phase_B_ai_layer.md` — LLM client, suggested replies, conversation summary, contact profiling
 
 ---
 
 ## Reference Documents
 
-- technical_handbook.md - Architecture decisions and implementation log
-- psychological_handbook.md - Design principles and anti-patterns
-- whatsapp_handbook.md - WhatsApp API and integration guide
-- yet_to_improve.md - 30-item audit of existing issues
-- frontend_gaps_handbook.md - Frontend hardcoded values and gaps
+- `technical_handbook.md` — Architecture decisions and implementation log
+- `psychological_handbook.md` — Design principles and anti-patterns
+- `whatsapp_handbook.md` — WhatsApp API and integration guide

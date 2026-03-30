@@ -14,9 +14,9 @@ function registerServiceWorker() {
   );
 
   if ("serviceWorker" in navigator) {
-    // @ts-ignore
-    window.frappePushNotification
-      .appendConfigToServiceWorkerURL("/assets/excom/excom/sw.js")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window.frappePushNotification as any)
+      ?.appendConfigToServiceWorkerURL("/assets/excom/excom/sw.js")
       .then((url: string) => {
         navigator.serviceWorker
           .register(url, { type: "classic" })
