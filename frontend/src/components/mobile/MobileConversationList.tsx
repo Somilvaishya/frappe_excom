@@ -4,7 +4,7 @@ import { Badge } from "../ui/badge";
 import type { UnifiedContact } from "../../types";
 import { useExcomBranding } from "../../hooks/useBranding";
 import { Button } from "../ui/button";
-import { format } from "date-fns";
+import { formatServerTime } from "../../utils/datetime";
 
 interface MobileConversationListProps {
   conversations: UnifiedContact[];
@@ -126,7 +126,7 @@ export function MobileConversationList({
                       {contact.contactName}
                     </h3>
                     <span className="text-xs text-zinc-500 ml-2 flex-shrink-0">
-                      {format(contact.timestamp, "h:mm a")}
+                      {formatServerTime(contact.timestamp)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mb-1">

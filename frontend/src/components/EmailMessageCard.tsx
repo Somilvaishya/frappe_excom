@@ -21,7 +21,7 @@ import {
   Star,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
-import { format } from "date-fns";
+import { formatServerShortDateTime } from "../utils/datetime";
 
 interface EmailAttachment {
   filename: string;
@@ -182,7 +182,7 @@ export function EmailMessageCard({
                       : emailMeta.from_name || emailMeta.from_email}
                   </span>
                   <span className="text-[10px] text-zinc-500 shrink-0 tabular-nums">
-                    {format(timestamp, "MMM d, h:mm a")}
+                    {formatServerShortDateTime(timestamp)}
                   </span>
                   <div className="flex items-center gap-1 ml-auto shrink-0">
                     {hasAttachments && !expanded && (

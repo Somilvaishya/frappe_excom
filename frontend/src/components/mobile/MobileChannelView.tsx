@@ -11,8 +11,8 @@ import { useRealtimeMessages } from "../../hooks/useRealtimeMessages";
 import { useFileUpload } from "../../hooks/useFileUpload";
 import { CannedResponsePopover } from "../CannedResponsePopover";
 import { StickerPicker } from "../StickerPicker";
-import { format } from "date-fns";
 import { toast } from "sonner";
+import { formatServerTime, formatServerShortDateTime } from "../../utils/datetime";
 
 interface MobileChannelViewProps {
   contact: UnifiedContact;
@@ -369,7 +369,7 @@ export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOp
               return (
                 <div key={message.id}>
                   {showTimestamp && (
-                    <div className="text-center text-xs text-zinc-500 my-3">{format(message.timestamp, "MMM d, h:mm a")}</div>
+                    <div className="text-center text-xs text-zinc-500 my-3">{formatServerShortDateTime(message.timestamp)}</div>
                   )}
                   {isNote ? (
                     <div className="flex justify-center my-1">
@@ -381,7 +381,7 @@ export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOp
                             {message.sentBy && <span className="text-[9px] text-amber-400/70 ml-auto">{message.sentBy.name}</span>}
                           </div>
                           <p className="text-sm text-amber-100/90 leading-relaxed">{message.content}</p>
-                          <span className="text-[9px] text-amber-400/50">{format(message.timestamp, "h:mm a")}</span>
+                          <span className="text-[9px] text-amber-400/50">{formatServerTime(message.timestamp)}</span>
                         </div>
                       </div>
                     </div>
@@ -429,7 +429,7 @@ export function MobileChannelView({ contact, onBack, onCall, onOpenContact, onOp
                           </div>
                           <div className={`flex items-center gap-1.5 mt-1 text-[10px] ${isUser || isAI ? "justify-end flex-row-reverse" : "justify-start"}`}>
                             <div className="flex items-center gap-1 text-zinc-500">
-                              <span>{format(message.timestamp, "h:mm a")}</span>
+                              <span>{formatServerTime(message.timestamp)}</span>
                               {(isUser || isAI) && (
                                 message.status === "failed" ? <AlertCircle className="w-3 h-3 text-red-400" /> :
                                 message.status === "queued" ? <Loader2 className="w-3 h-3 text-zinc-500 animate-spin" /> :

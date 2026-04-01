@@ -61,6 +61,7 @@ def get_context(context):
         context["app_name"] = "Excom"
 
     context["sitename"] = boot.get("sitename")
+    context["system_timezone"] = frappe.utils.get_system_timezone()
 
     favicon = frappe.get_website_settings("favicon")
     context["icon_96"] = favicon or "/assets/excom/excom/manifest/favicon-96x96.png"

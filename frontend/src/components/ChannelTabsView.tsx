@@ -45,8 +45,14 @@ import { EmailCompose } from "./EmailCompose";
 import { WhatsAppTemplatePicker } from "./WhatsAppTemplatePicker";
 import { StickerPicker } from "./StickerPicker";
 import { useEmailBody } from "../hooks/useEmailBody";
-import { format } from "date-fns";
 import { toast } from "sonner";
+import {
+  formatServerTime,
+  formatServerDateTimeFull,
+  formatServerLastSeen,
+  formatServerShortDateTime,
+  parseFrappeDateTime,
+} from "../utils/datetime";
 
 interface ChannelTabsViewProps {
   contact: UnifiedContact;
@@ -453,7 +459,7 @@ export function ChannelTabsView({
                   <p className="text-xs text-zinc-400 truncate">
                     {contact.status === "online"
                       ? "Active now"
-                      : `Last seen ${format(contact.timestamp, "h:mm a")}`}
+                      : formatServerLastSeen(contact.timestamp)}
                   </p>
                   {contact.assignedTo && (
                     <>
@@ -715,7 +721,7 @@ export function ChannelTabsView({
                     <Pin className="w-3 h-3 text-amber-400" />
                     <span className="text-[10px] text-amber-400/70">{pm.sender_name || "Unknown"}</span>
                     <span className="text-[10px] text-zinc-500 ml-auto">
-                      {format(new Date(pm.creation), "MMM d, h:mm a")}
+                      {formatServerShortDateTime(parseFrappeDateTime(pm.creation))}
                     </span>
                   </div>
                   <p className="text-xs text-zinc-300 line-clamp-2">{pm.content_text}</p>
@@ -764,10 +770,7 @@ export function ChannelTabsView({
                 <div key={message.id}>
                   {showTimestamp && (
                     <div className="text-center text-xs text-zinc-500 my-4">
-                      {format(
-                        message.timestamp,
-                        "EEEE, MMMM d, yyyy \u2022 h:mm a"
-                      )}
+                      {formatServerDateTimeFull(message.timestamp)}
                     </div>
                   )}
 
@@ -804,7 +807,7 @@ export function ChannelTabsView({
                             {message.content}
                           </p>
                           <div className="flex items-center gap-1 mt-2 text-[10px] text-amber-400/50">
-                            <span>{format(message.timestamp, "h:mm a")}</span>
+                            <span>{formatServerTime(message.timestamp)}</span>
                           </div>
                         </div>
                       </div>
@@ -939,7 +942,7 @@ export function ChannelTabsView({
                             }`}
                           >
                             <div className="flex items-center gap-1 text-zinc-500">
-                              <span>{format(message.timestamp, "h:mm a")}</span>
+                              <span>{formatServerTime(message.timestamp)}</span>
                               {(isUser || isAI) && (
                                 <DeliveryIcon status={message.status} />
                               )}
