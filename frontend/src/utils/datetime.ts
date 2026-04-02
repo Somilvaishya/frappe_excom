@@ -18,7 +18,7 @@ export function getServerTimezone(): string {
   if (_serverTz) return _serverTz;
 
   // Prefer the explicit global set in excom.html / main.tsx
-  _serverTz = (window as any).__excom_server_tz || null;
+  _serverTz = (window as any).excomServerTimezone || null;
 
   if (!_serverTz) {
     const boot = (window as any).frappe?.boot;

@@ -45,7 +45,8 @@ if (import.meta.env.DEV) {
       // @ts-expect-error
       window.frappe.boot = v;
       // @ts-expect-error
-      window.__excom_server_tz = v?.time_zone?.system || v?.sysdefaults?.time_zone || "";
+      window.excomServerTimezone =
+        v?.time_zone?.system || v?.sysdefaults?.time_zone || "";
       registerServiceWorker();
       ReactDOM.createRoot(
         document.getElementById("root") as HTMLElement

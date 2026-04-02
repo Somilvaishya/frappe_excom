@@ -24,7 +24,7 @@
   <meta name="screen-orientation" content="portrait">
 
   <!-- {{ preload_links }} -->
-  <script type="module" crossorigin src="/assets/excom/excom/assets/index-DjNloH6C.js"></script>
+  <script type="module" crossorigin src="/assets/excom/excom/assets/index-BaW-jF9x.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/excom/excom/assets/index-B9-3PALb.css">
 <link rel="manifest" href="/assets/excom/excom/manifest.webmanifest"></head>
 <body>
@@ -33,7 +33,7 @@
     window.csrf_token = '{{ csrf_token }}';
     if (!window.frappe) window.frappe = {};
     window.app_name = "{{ app_name }}";
-    window.__excom_server_tz = "{{ system_timezone }}";
+    window.excomServerTimezone = "{{ system_timezone }}";
     frappe.boot = JSON.parse({{ boot }});
   </script>
 </body>
