@@ -29,9 +29,16 @@ frappe.ui.form.on("Excom Channel Account", {
 			frm.call("check_email_authorization").then((r) => {
 				if (r && r.message) {
 					const wasAuthorized = frm.doc.email_authorized;
+					if (r.message.error) {
+						frappe.msgprint({
+							title: __("Authorization Problem"),
+							message: r.message.error,
+							indicator: "red",
+						});
+					}
 					if (r.message.authorized && !wasAuthorized) {
 						frm.reload_doc();
-					} else if (!r.message.authorized) {
+					} else if (!r.message.authorized && !r.message.error) {
 						frm.dashboard.set_headline_alert(
 							__("Gmail not authorized. Click the <b>Authorize Gmail</b> button below to connect."),
 							"orange"

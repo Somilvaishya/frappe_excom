@@ -9,42 +9,66 @@ class ExcomChannelAccount(Document):
 		if self.channel == "email":
 			self._sync_email_authorized()
 
+	def _has_own_refresh_token(self) -> bool:
+		"""True if this account holds its own (per-mailbox) refresh token."""
+		return bool(self.get_password("email_refresh_token", raise_exception=False))
+
+	def _set_authorized_flag(self, authorized: bool) -> None:
+		new_val = 1 if authorized else 0
+		if self.email_authorized != new_val:
+			frappe.db.set_value(
+				self.doctype, self.name, "email_authorized", new_val, update_modified=False
+			)
+			frappe.db.commit()
+			self.email_authorized = new_val
+
 	def _sync_email_authorized(self) -> None:
 		"""
-		Sync email_authorized flag based on token existence.
-		Uses access_token presence only — does NOT deauthorize on expiry,
-		since an expired token may still be refreshable.
+		Sync email_authorized from this account's OWN stored refresh token.
+		Does not consult Frappe's shared Connected App Token Cache, which cannot
+		distinguish multiple Gmail mailboxes under one operator.
 		"""
-		if not self.email_connected_app or not self.email_connected_user:
-			if self.email_authorized:
-				frappe.db.set_value(self.doctype, self.name, "email_authorized", 0)
-			return
-
-		from frappe.integrations.doctype.connected_app.connected_app import has_token
-		token_exists = has_token(self.email_connected_app, self.email_connected_user)
-
-		new_val = 1 if token_exists else 0
-		if self.email_authorized != new_val:
-			frappe.db.set_value(self.doctype, self.name, "email_authorized", new_val)
+		self._set_authorized_flag(self._has_own_refresh_token())
 
 	@frappe.whitelist()
 	def check_email_authorization(self) -> dict:
-		"""Called from client script to refresh authorization status after OAuth callback."""
+		"""
+		Called from the client script on form load. If we are returning from an
+		OAuth flow (no own token yet, but the shared cache has a fresh one), this
+		captures the tokens into the account's own encrypted fields.
+		"""
 		if self.channel != "email":
 			return {"authorized": False}
+
+		# Already has its own credentials -- just report status, no network call.
+		if self._has_own_refresh_token():
+			self._set_authorized_flag(True)
+			return {"authorized": True, "email": self.email_address}
 
 		if not self.email_connected_app or not self.email_connected_user:
 			return {"authorized": False}
 
-		from frappe.integrations.doctype.connected_app.connected_app import has_token
-		token_exists = has_token(self.email_connected_app, self.email_connected_user)
+		return self.finalize_email_authorization()
 
-		new_val = 1 if token_exists else 0
-		if self.email_authorized != new_val:
-			frappe.db.set_value(self.doctype, self.name, "email_authorized", new_val)
-			frappe.db.commit()
+	@frappe.whitelist()
+	def finalize_email_authorization(self) -> dict:
+		"""
+		Copy the just-issued OAuth tokens from Frappe's shared Token Cache into
+		this account's own encrypted fields, after verifying the mailbox identity.
+		Idempotent and safe to call at any time.
+		"""
+		if self.channel != "email":
+			return {"authorized": False}
 
-		return {"authorized": bool(token_exists)}
+		from excom.excom.services import gmail_service
+
+		result = gmail_service.capture_tokens_from_connected_app(self.name)
+		self._set_authorized_flag(bool(result.get("authorized")))
+		return {
+			"authorized": bool(result.get("authorized")),
+			"email": result.get("email"),
+			"error": result.get("error"),
+		}
 
 	@frappe.whitelist()
 	def authorize_email_account(self, success_uri: str = "") -> str:

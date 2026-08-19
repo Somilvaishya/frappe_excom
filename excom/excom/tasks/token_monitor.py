@@ -17,36 +17,20 @@ def check_token_expiry() -> None:
 
 
 def _check_email_token_expiry() -> None:
-    """Check Gmail OAuth tokens for upcoming expiry."""
+    """Check Gmail OAuth tokens (stored per-account) for revocation risk."""
     email_accounts = frappe.get_all(
         "Excom Channel Account",
         filters={"channel": "email", "status": "Active", "email_authorized": 1},
-        fields=["name", "account_name", "email_connected_app", "email_connected_user"],
+        fields=["name", "account_name"],
     )
 
     for acc in email_accounts:
-        if not acc.email_connected_app or not acc.email_connected_user:
-            continue
+        account = frappe.get_doc("Excom Channel Account", acc.name)
+        refresh_token = account.get_password("email_refresh_token", raise_exception=False)
 
-        token_doc = frappe.db.get_value(
-            "Token Cache",
-            {
-                "connected_app": acc.email_connected_app,
-                "user": acc.email_connected_user,
-            },
-            ["name", "access_token", "refresh_token"],
-            as_dict=True,
-        )
-
-        if not token_doc:
-            _send_expiry_alert(
-                acc.account_name,
-                "email",
-                "No OAuth token found — authorization may have been revoked.",
-            )
-            continue
-
-        if not token_doc.refresh_token:
+        # The refresh token is the durable credential. Without it, the account
+        # loses access as soon as the current access token expires.
+        if not refresh_token:
             _send_expiry_alert(
                 acc.account_name,
                 "email",

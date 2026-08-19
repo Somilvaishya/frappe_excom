@@ -32,6 +32,10 @@
   "column_break_email",
   "email_authorized",
   "email_authorize_button",
+  "email_access_token",
+  "email_refresh_token",
+  "email_token_expiry",
+  "email_token_type",
   "email_sync_section",
   "email_last_history_id",
   "email_sync_from_date",
@@ -225,6 +229,44 @@
    "fieldname": "email_authorize_button",
    "fieldtype": "Button",
    "label": "Authorize Gmail Access"
+  },
+  {
+   "fieldname": "email_access_token",
+   "fieldtype": "Password",
+   "label": "Gmail Access Token",
+   "length": 4000,
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Per-account OAuth2 access token. Stored encrypted; managed by the OAuth flow."
+  },
+  {
+   "fieldname": "email_refresh_token",
+   "fieldtype": "Password",
+   "label": "Gmail Refresh Token",
+   "length": 4000,
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Per-account OAuth2 refresh token. Stored encrypted; the durable credential for this mailbox."
+  },
+  {
+   "fieldname": "email_token_expiry",
+   "fieldtype": "Datetime",
+   "label": "Gmail Token Expiry",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Absolute expiry of the current access token."
+  },
+  {
+   "default": "Bearer",
+   "fieldname": "email_token_type",
+   "fieldtype": "Data",
+   "label": "Gmail Token Type",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1
   },
   {
    "depends_on": "eval:doc.channel=='email'",

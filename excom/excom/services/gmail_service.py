@@ -16,69 +16,117 @@ import requests
 
 import frappe
 from frappe import _
+from frappe.utils import add_to_date, get_datetime, now_datetime
+from frappe.utils.password import set_encrypted_password
 
 GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
+
+# Refresh a little before the real expiry so an in-flight request never races
+# the token going stale.
+TOKEN_EXPIRY_SKEW_SECONDS = 120
+DEFAULT_TOKEN_LIFETIME_SECONDS = 3600
+
+DOCTYPE = "Excom Channel Account"
 
 
 def get_access_token(account_name: str) -> str:
     """
-    Retrieves a valid OAuth2 access token for the given Excom Channel Account.
-    Uses Frappe Connected App token cache with automatic refresh.
+    Return a valid OAuth2 access token for the given Excom Channel Account.
 
-    Args:
-        account_name: Excom Channel Account name
+    Tokens are stored per-account (encrypted) on the Excom Channel Account
+    itself -- NOT in Frappe's shared Connected App Token Cache, which is keyed
+    only by (connected_app, user) and therefore collapses multiple Gmail
+    mailboxes authorized by the same operator onto one record. Reading from the
+    account's own fields keeps every mailbox isolated.
 
-    Returns:
-        Access token string
+    Refreshes transparently when the stored access token is missing or expired.
     """
-    account = frappe.get_doc("Excom Channel Account", account_name)
+    account = frappe.get_doc(DOCTYPE, account_name)
 
     if account.channel != "email":
         frappe.throw(_("Account {0} is not an email account").format(account_name))
 
-    if not account.email_connected_app or not account.email_connected_user:
-        frappe.throw(
-            _("Email account {0} is missing Connected App or Connected User").format(account_name)
-        )
+    access_token = account.get_password("email_access_token", raise_exception=False)
+    expiry = account.email_token_expiry
 
-    connected_app = frappe.get_doc("Connected App", account.email_connected_app)
-    token_cache = connected_app.get_active_token(account.email_connected_user)
+    if access_token and expiry and not _is_expired(expiry):
+        return access_token
 
-    if not token_cache:
-        # Do NOT auto-deauthorize — the token may just need a fresh OAuth flow.
-        # The user must click the Authorize button to get a new refresh_token.
+    # Missing or (nearly) expired -> refresh using the account's own refresh token.
+    return _refresh_account_token(account)
+
+
+def _is_expired(expiry) -> bool:
+    """True if we are within the skew window of (or past) the token expiry."""
+    threshold = add_to_date(now_datetime(), seconds=TOKEN_EXPIRY_SKEW_SECONDS)
+    return get_datetime(expiry) <= threshold
+
+
+def _store_account_tokens(
+    account_name: str,
+    access_token: str,
+    refresh_token: str | None,
+    expires_in,
+    token_type: str = "Bearer",
+) -> None:
+    """Persist tokens on the account. refresh_token is only written when present
+    (Google omits it on refresh; it is only re-issued on a prompt=consent flow)."""
+    set_encrypted_password(DOCTYPE, account_name, access_token or "", "email_access_token")
+    if refresh_token:
+        set_encrypted_password(DOCTYPE, account_name, refresh_token, "email_refresh_token")
+
+    try:
+        seconds = int(expires_in)
+    except (TypeError, ValueError):
+        seconds = DEFAULT_TOKEN_LIFETIME_SECONDS
+
+    frappe.db.set_value(
+        DOCTYPE,
+        account_name,
+        {
+            "email_token_expiry": add_to_date(now_datetime(), seconds=seconds),
+            "email_token_type": token_type or "Bearer",
+            "email_authorized": 1,
+        },
+        update_modified=False,
+    )
+    frappe.db.commit()
+
+
+def _deauthorize(account_name: str, reason: str) -> None:
+    """Wipe stored tokens and mark the account unauthorized (refresh token dead)."""
+    set_encrypted_password(DOCTYPE, account_name, "", "email_access_token")
+    set_encrypted_password(DOCTYPE, account_name, "", "email_refresh_token")
+    frappe.db.set_value(
+        DOCTYPE,
+        account_name,
+        {"email_token_expiry": None, "email_authorized": 0},
+        update_modified=False,
+    )
+    frappe.db.commit()
+    frappe.log_error(title=f"Excom email deauthorized: {account_name}", message=reason)
+
+
+def _refresh_account_token(account) -> str:
+    """
+    Exchange the account's stored refresh token for a fresh access token and
+    persist it. Raises (and deauthorizes) if the refresh token is revoked.
+    """
+    account_name = account.name
+    if not account.email_connected_app:
+        frappe.throw(_("Email account {0} is missing its Connected App").format(account_name))
+
+    refresh_token = account.get_password("email_refresh_token", raise_exception=False)
+    if not refresh_token:
         frappe.throw(
-            _("No valid OAuth2 token for {0}. Please click the Authorize button to re-authorize.").format(
+            _("No refresh token for {0}. Please click Authorize Gmail to re-authorize.").format(
                 account_name
             )
         )
 
-    return token_cache.get_password("access_token")
-
-
-
-def _force_token_refresh(account_name: str) -> None:
-    """
-    Force a refresh of the OAuth2 access token for the given account.
-    Uses the refresh_token stored in the Token Cache to obtain a new access token.
-    Updates the Token Cache record in place.
-    """
-    account = frappe.get_doc("Excom Channel Account", account_name)
-    if not account.email_connected_app or not account.email_connected_user:
-        frappe.throw(_("Email account {0} is missing Connected App or Connected User").format(account_name))
-
     connected_app = frappe.get_doc("Connected App", account.email_connected_app)
-    token_cache = connected_app.get_token_cache(account.email_connected_user)
-    if not token_cache:
-        frappe.throw(_("No token cache found for {0}").format(account_name))
-
-    refresh_token = token_cache.get_password("refresh_token")
-    if not refresh_token:
-        frappe.throw(_("No refresh token available for {0}. Please re-authorize.").format(account_name))
-
-    token_url = connected_app.token_uri  # Correct Frappe Connected App field name
     resp = requests.post(
-        token_url,
+        connected_app.token_uri,
         data={
             "grant_type": "refresh_token",
             "refresh_token": refresh_token,
@@ -87,18 +135,114 @@ def _force_token_refresh(account_name: str) -> None:
         },
         timeout=15,
     )
-    resp.raise_for_status()
+
+    if resp.status_code != 200:
+        error = ""
+        try:
+            error = (resp.json() or {}).get("error", "")
+        except ValueError:
+            error = resp.text[:200]
+        # invalid_grant => refresh token revoked/expired: the mailbox must re-consent.
+        if error == "invalid_grant":
+            _deauthorize(account_name, f"Refresh failed (invalid_grant): {resp.text[:300]}")
+            frappe.throw(
+                _("Gmail access for {0} was revoked. Please click Authorize Gmail to re-authorize.").format(
+                    account_name
+                )
+            )
+        resp.raise_for_status()
+
     data = resp.json()
     new_access_token = data.get("access_token")
     if not new_access_token:
-        frappe.throw(_("Token refresh failed: no access_token in response"))
+        frappe.throw(_("Token refresh failed for {0}: no access_token in response").format(account_name))
 
-    # Update the stored access_token and expires_in
-    token_cache.access_token = new_access_token
-    if "expires_in" in data:
-        token_cache.expires_in = data["expires_in"]
-    token_cache.save(ignore_permissions=True)
-    frappe.db.commit()
+    # Google may rotate the refresh token; persist it if so.
+    _store_account_tokens(
+        account_name,
+        new_access_token,
+        data.get("refresh_token"),
+        data.get("expires_in", DEFAULT_TOKEN_LIFETIME_SECONDS),
+        data.get("token_type", "Bearer"),
+    )
+    return new_access_token
+
+
+def _force_token_refresh(account_name: str) -> None:
+    """Backward-compatible wrapper used by the 401 retry path."""
+    _refresh_account_token(frappe.get_doc(DOCTYPE, account_name))
+
+
+def _profile_with_token(access_token: str) -> dict:
+    """Fetch the Gmail profile using a raw bearer token (no account lookup).
+    Used to verify which mailbox a freshly issued token actually belongs to."""
+    resp = requests.get(
+        f"{GMAIL_API_BASE}/profile",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def capture_tokens_from_connected_app(account_name: str) -> dict:
+    """
+    Copy the tokens Frappe just wrote to the shared Connected App Token Cache
+    (during the OAuth callback) into this account's own encrypted fields.
+
+    Verifies the token's real mailbox via the Gmail profile and refuses to store
+    it against a mismatched account -- so a wrong-mailbox token can never be
+    persisted to the wrong account, even if two authorizations interleave.
+
+    Returns {"authorized": bool, "email": str|None, "error": str|None}.
+    """
+    account = frappe.get_doc(DOCTYPE, account_name)
+    if account.channel != "email":
+        return {"authorized": False, "email": None, "error": "Not an email account"}
+
+    if not account.email_connected_app or not account.email_connected_user:
+        return {"authorized": False, "email": None, "error": "Missing Connected App or Connected User"}
+
+    connected_app = frappe.get_doc("Connected App", account.email_connected_app)
+    token_cache = connected_app.get_token_cache(account.email_connected_user)
+
+    access_token = token_cache.get_password("access_token") if token_cache else None
+    if not access_token:
+        # Nothing fresh in the shared cache -- report current state only.
+        already = bool(account.get_password("email_refresh_token", raise_exception=False))
+        return {"authorized": already, "email": account.email_address, "error": None}
+
+    refresh_token = token_cache.get_password("refresh_token") if token_cache else None
+
+    # Verify which mailbox this token belongs to before persisting anything.
+    try:
+        profile = _profile_with_token(access_token)
+    except Exception as e:
+        return {"authorized": False, "email": None, "error": f"Could not verify Gmail profile: {e}"}
+
+    mailbox = (profile or {}).get("emailAddress") or ""
+    if account.email_address and mailbox and account.email_address.strip().lower() != mailbox.strip().lower():
+        return {
+            "authorized": False,
+            "email": mailbox,
+            "error": _("Authorized the wrong mailbox: expected {0}, got {1}. Please re-authorize with the correct Google account.").format(
+                account.email_address, mailbox
+            ),
+        }
+
+    _store_account_tokens(
+        account_name,
+        access_token,
+        refresh_token,
+        getattr(token_cache, "expires_in", None) or DEFAULT_TOKEN_LIFETIME_SECONDS,
+        "Bearer",
+    )
+
+    if not account.email_address and mailbox:
+        frappe.db.set_value(DOCTYPE, account_name, "email_address", mailbox, update_modified=False)
+        frappe.db.commit()
+
+    return {"authorized": True, "email": mailbox or account.email_address, "error": None}
 
 
 def _headers(account_name: str) -> dict:
