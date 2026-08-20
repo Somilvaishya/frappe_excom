@@ -63,7 +63,7 @@ export function MobileApp({
   const isMainView = ["list", "calls_tab", "contacts_tab"].includes(currentView);
 
   return (
-    <div className="h-full w-full bg-zinc-950 flex flex-col overflow-hidden">
+    <div className="h-full w-full bg-white flex flex-col overflow-hidden">
       {currentView === "list" && (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           <MobileConversationList
@@ -78,16 +78,16 @@ export function MobileApp({
 
       {currentView === "calls_tab" && (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="shrink-0 p-4 border-b border-zinc-800">
-            <h2 className="text-lg font-semibold text-white">Calls</h2>
+          <div className="shrink-0 p-3 border-b border-zinc-200">
+            <h2 className="text-lg font-semibold text-zinc-900">Calls</h2>
           </div>
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center px-8">
-              <div className="w-16 h-16 rounded-full bg-zinc-800/50 flex items-center justify-center mx-auto mb-4">
-                <Phone className="w-8 h-8 text-zinc-500" />
+              <div className="w-16 h-16 rounded-full bg-zinc-100/50 flex items-center justify-center mx-auto mb-3">
+                <Phone className="w-8 h-8 text-zinc-600" />
               </div>
-              <h3 className="text-lg font-medium text-white mb-2">Coming Soon</h3>
-              <p className="text-sm text-zinc-400">
+              <h3 className="text-lg font-medium text-zinc-900 mb-2">Coming Soon</h3>
+              <p className="text-sm text-zinc-600">
                 Voice and video calls will be available in a future update.
               </p>
             </div>
@@ -137,23 +137,23 @@ export function MobileApp({
 
       {/* Bottom Tab Bar */}
       {isMainView && (
-        <div className="shrink-0 bg-zinc-900 border-t border-zinc-800 safe-area-bottom">
+        <div className="shrink-0 bg-zinc-50 border-t border-zinc-200 safe-area-bottom">
           <div className="flex items-center justify-around h-16">
             <button
               onClick={() => handleTabSwitch("chats")}
-              className={`flex flex-col items-center gap-1 px-4 py-2 ${activeTab === "chats" ? "text-blue-400" : "text-zinc-500"}`}
+              className={`flex flex-col items-center gap-1 px-3 py-2 ${activeTab === "chats" ? "text-blue-700" : "text-zinc-600"}`}
             >
               <MessageCircle className="w-6 h-6" /><span className="text-xs">Chats</span>
             </button>
             <button
               onClick={() => handleTabSwitch("calls")}
-              className={`flex flex-col items-center gap-1 px-4 py-2 ${activeTab === "calls" ? "text-blue-400" : "text-zinc-500"}`}
+              className={`flex flex-col items-center gap-1 px-3 py-2 ${activeTab === "calls" ? "text-blue-700" : "text-zinc-600"}`}
             >
               <Phone className="w-6 h-6" /><span className="text-xs">Calls</span>
             </button>
             <button
               onClick={() => handleTabSwitch("contacts")}
-              className={`flex flex-col items-center gap-1 px-4 py-2 ${activeTab === "contacts" ? "text-blue-400" : "text-zinc-500"}`}
+              className={`flex flex-col items-center gap-1 px-3 py-2 ${activeTab === "contacts" ? "text-blue-700" : "text-zinc-600"}`}
             >
               <User className="w-6 h-6" /><span className="text-xs">Contacts</span>
             </button>

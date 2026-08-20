@@ -83,6 +83,18 @@ function ExcomDashboard() {
     });
   }, []);
 
+  const [isIdentityCollapsed, setIsIdentityCollapsed] = useState<boolean>(
+    () => localStorage.getItem("excom_identity_panel_collapsed") === "true"
+  );
+
+  const handleToggleIdentity = useCallback(() => {
+    setIsIdentityCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("excom_identity_panel_collapsed", String(next));
+      return next;
+    });
+  }, []);
+
   const pendingSelectionRef = useRef<{
     contactId: string;
     accountId: string;
@@ -260,7 +272,7 @@ function ExcomDashboard() {
   }
 
   return (
-    <div className="h-full w-full bg-zinc-950 flex overflow-hidden">
+    <div className="h-full w-full bg-white flex overflow-hidden">
       <LeftSidebar
         selectedChannel={selectedChannel}
         onChannelSelect={setSelectedChannel}
@@ -320,9 +332,11 @@ function ExcomDashboard() {
             activeAccountId={selectedAccountId || selectedContact.activeAccountId}
             onAccountSwitch={handleAccountSwitch}
             onRefreshThreads={refreshThreads}
+            isIdentityPanelCollapsed={isIdentityCollapsed}
+            onToggleIdentityPanel={handleToggleIdentity}
           />
 
-          {!isAIAssistantOpen && unifiedConversation && (
+          {!isAIAssistantOpen && !isIdentityCollapsed && unifiedConversation && (
             <OmniIdentityPanel
               conversation={unifiedConversation}
               onAccountSwitch={handleAccountSwitch}
@@ -337,11 +351,11 @@ function ExcomDashboard() {
           />
         </>
       ) : (
-        <div className="flex-1 flex items-center justify-center bg-zinc-950">
+        <div className="flex-1 flex items-center justify-center bg-white">
           <div className="text-center">
-            <div className="w-20 h-20 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <div className="w-20 h-20 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
               <svg
-                className="w-10 h-10 text-blue-400"
+                className="w-10 h-10 text-blue-700"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -354,16 +368,16 @@ function ExcomDashboard() {
                 />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-white mb-2">
+            <h2 className="text-xl font-semibold text-zinc-900 mb-2">
               Excom Chat
             </h2>
-            <p className="text-zinc-400 text-sm max-w-sm mb-4">
+            <p className="text-zinc-600 text-sm max-w-sm mb-3">
               Select a conversation from the list to start messaging. All your
               channels are unified in one place.
             </p>
             <button
               onClick={() => setShowNewConversation(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
             >
               <svg
                 className="w-4 h-4"
@@ -406,9 +420,9 @@ function App() {
         position="top-right"
         toastOptions={{
           style: {
-            background: "#27272a",
-            border: "1px solid #3f3f46",
-            color: "#fafafa",
+            background: "#ffffff",
+            border: "1px solid #e4e4e7",
+            color: "#18181b",
           },
         }}
       />

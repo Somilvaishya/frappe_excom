@@ -96,13 +96,13 @@ function StatCard({
     rose: "from-rose-500/20 to-rose-600/10 border-rose-500/30",
   };
   return (
-    <div className={`rounded-xl border bg-gradient-to-br p-4 ${colorMap[color] || colorMap.blue}`}>
+    <div className={`rounded-xl border bg-gradient-to-br p-3 ${colorMap[color] || colorMap.blue}`}>
       <div className="flex items-center gap-2 mb-2">
-        <Icon className="w-4 h-4 text-zinc-400" />
-        <span className="text-xs text-zinc-400 font-medium">{label}</span>
+        <Icon className="w-4 h-4 text-zinc-600" />
+        <span className="text-xs text-zinc-600 font-medium">{label}</span>
       </div>
-      <p className="text-2xl font-bold text-white">{typeof value === "number" ? formatNumber(value) : value}</p>
-      {sub && <p className="text-xs text-zinc-500 mt-1">{sub}</p>}
+      <p className="text-2xl font-bold text-zinc-900">{typeof value === "number" ? formatNumber(value) : value}</p>
+      {sub && <p className="text-xs text-zinc-600 mt-1">{sub}</p>}
     </div>
   );
 }
@@ -214,20 +214,20 @@ export function AnalyticsPage({ onNavigateBack }: AnalyticsPageProps) {
   ];
 
   return (
-    <div className="h-full w-full bg-zinc-950 flex flex-col overflow-hidden">
+    <div className="h-full w-full bg-white flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="shrink-0 border-b border-zinc-800 px-6 py-4">
+      <div className="shrink-0 border-b border-zinc-200 px-4 py-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={onNavigateBack} className="text-zinc-400 hover:text-white">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={onNavigateBack} className="text-zinc-600 hover:text-zinc-900">
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold text-white flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-blue-400" />
+              <h1 className="text-xl font-bold text-zinc-900 flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-blue-700" />
                 Analytics
               </h1>
-              <p className="text-xs text-zinc-500 mt-0.5">WhatsApp & platform metrics</p>
+              <p className="text-xs text-zinc-600 mt-0.5">WhatsApp & platform metrics</p>
             </div>
           </div>
 
@@ -236,7 +236,7 @@ export function AnalyticsPage({ onNavigateBack }: AnalyticsPageProps) {
               <select
                 value={selectedAccount}
                 onChange={(e) => setSelectedAccount(e.target.value)}
-                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                className="bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-1.5 text-sm text-zinc-900 focus:outline-none focus:border-blue-500"
               >
                 {accounts.map((a: any) => (
                   <option key={a.name} value={a.name}>{a.account_name || a.name}</option>
@@ -247,18 +247,18 @@ export function AnalyticsPage({ onNavigateBack }: AnalyticsPageProps) {
             <div className="relative">
               <button
                 onClick={() => setShowPeriodMenu(!showPeriodMenu)}
-                className="flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-white hover:border-zinc-600"
+                className="flex items-center gap-1.5 bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-1.5 text-sm text-zinc-900 hover:border-zinc-300"
               >
                 {PERIOD_LABELS[period]}
-                <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                <ChevronDown className="w-3.5 h-3.5 text-zinc-600" />
               </button>
               {showPeriodMenu && (
-                <div className="absolute right-0 top-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 py-1">
+                <div className="absolute right-0 top-full mt-1 bg-zinc-100 border border-zinc-300 rounded-lg shadow-xl z-50 py-1">
                   {(Object.entries(PERIOD_LABELS) as [Period, string][]).map(([k, v]) => (
                     <button
                       key={k}
                       onClick={() => { setPeriod(k); setShowPeriodMenu(false); }}
-                      className={`w-full px-4 py-1.5 text-sm text-left hover:bg-zinc-700 ${period === k ? "text-blue-400" : "text-zinc-300"}`}
+                      className={`w-full px-3 py-1.5 text-sm text-left hover:bg-zinc-200 ${period === k ? "text-blue-700" : "text-zinc-700"}`}
                     >
                       {v}
                     </button>
@@ -267,7 +267,7 @@ export function AnalyticsPage({ onNavigateBack }: AnalyticsPageProps) {
               )}
             </div>
 
-            <Button variant="ghost" size="icon" onClick={handleRefresh} className="text-zinc-400 hover:text-white" disabled={isLoading}>
+            <Button variant="ghost" size="icon" onClick={handleRefresh} className="text-zinc-600 hover:text-zinc-900" disabled={isLoading}>
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             </Button>
           </div>
@@ -281,8 +281,8 @@ export function AnalyticsPage({ onNavigateBack }: AnalyticsPageProps) {
               onClick={() => setActiveTab(t.id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === t.id
-                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                  ? "bg-blue-500/20 text-blue-700 border border-blue-500/40"
+                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
               }`}
             >
               <t.icon className="w-3.5 h-3.5" />
@@ -293,10 +293,10 @@ export function AnalyticsPage({ onNavigateBack }: AnalyticsPageProps) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4">
         {isLoading && !overview.messaging && !internal.messages_by_day ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+            <Loader2 className="w-8 h-8 text-blue-700 animate-spin" />
           </div>
         ) : (
           <>
@@ -347,9 +347,9 @@ function OverviewTab({
   typeBarData,
 }: any) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           label="Messages Sent"
           value={overview?.messaging?.total_sent || 0}
@@ -381,12 +381,12 @@ function OverviewTab({
       </div>
 
       {/* Charts row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Message Volume (Internal)" subtitle="Inbound vs Outbound">
           {internalDayData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <AreaChart data={internalDayData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
                 <XAxis dataKey="day" tick={{ fill: "#71717a", fontSize: 11 }} />
                 <YAxis tick={{ fill: "#71717a", fontSize: 11 }} />
                 <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, color: "#fff" }} />
@@ -415,7 +415,7 @@ function OverviewTab({
       </div>
 
       {/* Charts row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Conversation Categories" subtitle="From Meta Analytics">
           {categoryPieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
@@ -435,7 +435,7 @@ function OverviewTab({
           {typeBarData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={typeBarData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
                 <XAxis type="number" tick={{ fill: "#71717a", fontSize: 11 }} />
                 <YAxis type="category" dataKey="type" tick={{ fill: "#71717a", fontSize: 11 }} width={80} />
                 <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, color: "#fff" }} />
@@ -454,13 +454,13 @@ function OverviewTab({
               const maxCount = internal.agent_performance[0]?.messages_sent || 1;
               return (
                 <div key={i} className="flex items-center gap-3">
-                  <span className="text-xs text-zinc-400 w-40 truncate">{agent.agent}</span>
-                  <div className="flex-1 bg-zinc-800 rounded-full h-5 overflow-hidden">
+                  <span className="text-xs text-zinc-600 w-40 truncate">{agent.agent}</span>
+                  <div className="flex-1 bg-zinc-100 rounded-full h-5 overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-end pr-2"
                       style={{ width: `${Math.max((agent.messages_sent / maxCount) * 100, 10)}%` }}
                     >
-                      <span className="text-[10px] text-white font-medium">{agent.messages_sent}</span>
+                      <span className="text-[10px] text-zinc-900 font-medium">{agent.messages_sent}</span>
                     </div>
                   </div>
                 </div>
@@ -476,8 +476,8 @@ function OverviewTab({
 
 function MessagingTab({ overview, internal, messagingChartData, internalDayData }: any) {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Total Sent" value={overview?.messaging?.total_sent || 0} icon={MessageCircle} color="blue" />
         <StatCard label="Total Delivered" value={overview?.messaging?.total_delivered || 0} icon={TrendingUp} color="green" />
         <StatCard label="Delivery Rate" value={`${overview?.messaging?.delivery_rate || 0}%`} icon={Activity} color="purple" />
@@ -488,7 +488,7 @@ function MessagingTab({ overview, internal, messagingChartData, internalDayData 
         {messagingChartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={320}>
             <AreaChart data={messagingChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
               <XAxis dataKey="date" tick={{ fill: "#71717a", fontSize: 11 }} />
               <YAxis tick={{ fill: "#71717a", fontSize: 11 }} />
               <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, color: "#fff" }} />
@@ -504,7 +504,7 @@ function MessagingTab({ overview, internal, messagingChartData, internalDayData 
         {internalDayData.length > 0 ? (
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={internalDayData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
               <XAxis dataKey="day" tick={{ fill: "#71717a", fontSize: 11 }} />
               <YAxis tick={{ fill: "#71717a", fontSize: 11 }} />
               <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, color: "#fff" }} />
@@ -543,15 +543,15 @@ function ConversationsTab({ overview, internal, categoryPieData }: any) {
   }, [convPoints]);
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Total Conversations" value={overview?.conversations?.total || 0} icon={Users} color="purple" />
         <StatCard label="Total Cost" value={`$${overview?.conversations?.total_cost || 0}`} icon={DollarSign} color="amber" />
         <StatCard label="Active Threads" value={internal?.active_threads || 0} icon={Activity} color="green" />
         <StatCard label="Avg Response" value={formatDuration(internal?.avg_response_time_seconds || 0)} icon={Clock} color="blue" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Conversations by Category" subtitle="From Meta Analytics">
           {categoryPieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
@@ -572,7 +572,7 @@ function ConversationsTab({ overview, internal, categoryPieData }: any) {
           {dailyConvData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={dailyConvData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
                 <XAxis dataKey="day" tick={{ fill: "#71717a", fontSize: 11 }} />
                 <YAxis tick={{ fill: "#71717a", fontSize: 11 }} />
                 <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, color: "#fff" }} />
@@ -591,12 +591,12 @@ function ConversationsTab({ overview, internal, categoryPieData }: any) {
         <ChartCard title="Category Breakdown" subtitle="Conversation counts by type">
           <div className="mt-3 space-y-2">
             {Object.entries(overview.conversations.by_category).map(([cat, count]: [string, any]) => (
-              <div key={cat} className="flex items-center justify-between py-2 px-3 rounded-lg bg-zinc-800/50">
+              <div key={cat} className="flex items-center justify-between py-2 px-3 rounded-lg bg-zinc-100/50">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[cat] || "#6b7280" }} />
-                  <span className="text-sm text-zinc-300">{cat.charAt(0) + cat.slice(1).toLowerCase()}</span>
+                  <span className="text-sm text-zinc-700">{cat.charAt(0) + cat.slice(1).toLowerCase()}</span>
                 </div>
-                <span className="text-sm font-medium text-white">{formatNumber(count)}</span>
+                <span className="text-sm font-medium text-zinc-900">{formatNumber(count)}</span>
               </div>
             ))}
           </div>
@@ -636,8 +636,8 @@ function PricingTab({ overview }: any) {
   }, [pricingPoints]);
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <StatCard label="Total Cost" value={`$${overview?.pricing?.total_cost || 0}`} icon={DollarSign} color="rose" />
         <StatCard label="Total Volume" value={overview?.pricing?.total_volume || 0} icon={MessageCircle} color="blue" />
         <StatCard
@@ -652,12 +652,12 @@ function PricingTab({ overview }: any) {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Daily Spending" subtitle="Cost over time">
           {dailyPricing.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={dailyPricing}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
                 <XAxis dataKey="day" tick={{ fill: "#71717a", fontSize: 11 }} />
                 <YAxis tick={{ fill: "#71717a", fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
                 <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, color: "#fff" }} formatter={(v) => [`$${Number(v).toFixed(2)}`, "Cost"]} />
@@ -671,7 +671,7 @@ function PricingTab({ overview }: any) {
           {pricingByCategory.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={pricingByCategory}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
                 <XAxis dataKey="name" tick={{ fill: "#71717a", fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
                 <YAxis tick={{ fill: "#71717a", fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
                 <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, color: "#fff" }} />
@@ -685,16 +685,16 @@ function PricingTab({ overview }: any) {
       {pricingByCategory.length > 0 && (
         <ChartCard title="Pricing Breakdown" subtitle="Volume and cost by category">
           <div className="mt-3">
-            <div className="grid grid-cols-3 gap-2 text-xs text-zinc-500 font-medium px-3 py-1.5">
+            <div className="grid grid-cols-3 gap-2 text-xs text-zinc-600 font-medium px-3 py-1.5">
               <span>Category</span>
               <span className="text-right">Volume</span>
               <span className="text-right">Cost</span>
             </div>
             {pricingByCategory.map((row) => (
-              <div key={row.name} className="grid grid-cols-3 gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800/50">
-                <span className="text-sm text-zinc-300">{row.name}</span>
-                <span className="text-sm text-white text-right">{formatNumber(row.volume)}</span>
-                <span className="text-sm text-white text-right">${row.cost.toFixed(2)}</span>
+              <div key={row.name} className="grid grid-cols-3 gap-2 px-3 py-2 rounded-lg hover:bg-zinc-100/50">
+                <span className="text-sm text-zinc-700">{row.name}</span>
+                <span className="text-sm text-zinc-900 text-right">{formatNumber(row.volume)}</span>
+                <span className="text-sm text-zinc-900 text-right">${row.cost.toFixed(2)}</span>
               </div>
             ))}
           </div>
@@ -707,9 +707,9 @@ function PricingTab({ overview }: any) {
 
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
-      <h3 className="text-sm font-semibold text-white">{title}</h3>
-      {subtitle && <p className="text-xs text-zinc-500 mt-0.5 mb-3">{subtitle}</p>}
+    <div className="bg-zinc-50/50 border border-zinc-200 rounded-xl p-4">
+      <h3 className="text-sm font-semibold text-zinc-900">{title}</h3>
+      {subtitle && <p className="text-xs text-zinc-600 mt-0.5 mb-3">{subtitle}</p>}
       {children}
     </div>
   );
@@ -718,7 +718,7 @@ function ChartCard({ title, subtitle, children }: { title: string; subtitle?: st
 
 function EmptyChart({ message = "No data available for this period" }: { message?: string }) {
   return (
-    <div className="flex items-center justify-center h-60 text-zinc-600">
+    <div className="flex items-center justify-center h-60 text-zinc-500">
       <div className="text-center">
         <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-30" />
         <p className="text-xs">{message}</p>

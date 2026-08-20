@@ -145,30 +145,30 @@ export function LeftSidebar({
     }).catch(() => {});
   }, []);
   return (
-    <div className="w-64 bg-gradient-to-b from-zinc-900 to-zinc-950 border-r border-zinc-800 flex flex-col h-full shrink-0 overflow-hidden">
-      <div className="shrink-0 p-4 border-b border-zinc-800">
+    <div className="w-64 bg-gradient-to-b from-zinc-100 to-white border-r border-zinc-200 flex flex-col h-full shrink-0 overflow-hidden">
+      <div className="shrink-0 p-3 border-b border-zinc-200">
         {branding?.show_app_name && (
-          <div className="mb-3 text-[11px] font-semibold tracking-wider uppercase text-zinc-400">
+          <div className="mb-3 text-[11px] font-semibold tracking-wider uppercase text-zinc-600">
             {branding.app_name || "Excom"}
           </div>
         )}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 mb-4">
           <div
             className="w-10 h-10 rounded-lg flex items-center justify-center"
             style={{
               background: `linear-gradient(to bottom right, ${branding?.logo_gradient_from || "#3b82f6"}, ${branding?.logo_gradient_to || "#9333ea"})`,
             }}
           >
-            <MessageCircle className="w-6 h-6 text-white" />
+            <MessageCircle className="w-6 h-6 text-zinc-900" />
           </div>
           <div>
-            <h1 className="font-semibold text-white">Excom</h1>
-            <p className="text-xs text-zinc-400">Communication Hub</p>
+            <h1 className="font-semibold text-zinc-900">Excom</h1>
+            <p className="text-xs text-zinc-600">Communication Hub</p>
           </div>
         </div>
 
         <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
           <Input
             placeholder="Search conversations..."
             value={searchQuery}
@@ -192,8 +192,8 @@ export function LeftSidebar({
                   }}
                   className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium transition-all border ${
                     isActive
-                      ? "bg-blue-500/20 text-blue-300 border-blue-500/50"
-                      : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-200 hover:border-zinc-600"
+                      ? "bg-blue-500/20 text-blue-700 border-blue-500/50"
+                      : "bg-zinc-100/50 text-zinc-600 border-zinc-300 hover:text-zinc-900 hover:border-zinc-300"
                   }`}
                 >
                   {icon}
@@ -210,8 +210,8 @@ export function LeftSidebar({
                 onClick={() => onAccountFilterChange?.("")}
                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-all border ${
                   !selectedAccountFilter
-                    ? "bg-blue-500/15 text-blue-400 border-blue-500/40"
-                    : "bg-zinc-800/30 text-zinc-500 border-zinc-700/60 hover:text-zinc-300"
+                    ? "bg-blue-500/15 text-blue-700 border-blue-500/40"
+                    : "bg-zinc-100/30 text-zinc-600 border-zinc-300/60 hover:text-zinc-700"
                 }`}
               >
                 All {CHANNEL_DISPLAY[selectedChannel] || selectedChannel}
@@ -224,8 +224,8 @@ export function LeftSidebar({
                     onClick={() => onAccountFilterChange?.(acc.name)}
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-all border truncate max-w-[120px] ${
                       selectedAccountFilter === acc.name
-                        ? "bg-blue-500/15 text-blue-400 border-blue-500/40"
-                        : "bg-zinc-800/30 text-zinc-500 border-zinc-700/60 hover:text-zinc-300"
+                        ? "bg-blue-500/15 text-blue-700 border-blue-500/40"
+                        : "bg-zinc-100/30 text-zinc-600 border-zinc-300/60 hover:text-zinc-700"
                     }`}
                     title={acc.label}
                   >
@@ -251,29 +251,29 @@ export function LeftSidebar({
         </div>
       </div>
 
-      <div className="shrink-0 p-4 border-b border-zinc-800">
+      <div className="shrink-0 p-3 border-b border-zinc-200">
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-zinc-800/50 rounded-lg p-3">
-            <div className="text-2xl font-semibold text-white">
+          <div className="bg-zinc-100/50 rounded-lg p-3">
+            <div className="text-2xl font-semibold text-zinc-900">
               {totalConversations}
             </div>
-            <div className="text-xs text-zinc-400">Total Chats</div>
+            <div className="text-xs text-zinc-600">Total Chats</div>
           </div>
-          <div className="bg-zinc-800/50 rounded-lg p-3">
-            <div className="text-2xl font-semibold text-blue-400">
+          <div className="bg-zinc-100/50 rounded-lg p-3">
+            <div className="text-2xl font-semibold text-blue-700">
               {totalUnread}
             </div>
-            <div className="text-xs text-zinc-400">Unread</div>
+            <div className="text-xs text-zinc-600">Unread</div>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
         {allTags.length > 0 && (
           <div>
             <div className="flex items-center gap-1.5 mb-2">
-              <Tag className="w-3.5 h-3.5 text-zinc-400" />
-              <span className="text-xs font-medium text-zinc-400">Filter by Tag</span>
+              <Tag className="w-3.5 h-3.5 text-zinc-600" />
+              <span className="text-xs font-medium text-zinc-600">Filter by Tag</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {allTags.map((tag) => {
@@ -315,10 +315,10 @@ export function LeftSidebar({
               onClick={() => setShowDateFilter(!showDateFilter)}
               className="flex items-center gap-1.5 mb-2 w-full"
             >
-              <Calendar className="w-3.5 h-3.5 text-blue-400" />
-              <span className="text-xs font-medium text-zinc-400">Date Filter</span>
+              <Calendar className="w-3.5 h-3.5 text-blue-700" />
+              <span className="text-xs font-medium text-zinc-600">Date Filter</span>
               {(dateFrom || dateTo) && (
-                <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
+                <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-blue-500/20 text-blue-700 border border-blue-500/30 shrink-0">
                   active
                 </span>
               )}
@@ -332,10 +332,10 @@ export function LeftSidebar({
                   className="ml-auto mr-0.5"
                   title="Clear date filter"
                 >
-                  <X className="w-3 h-3 text-zinc-500 hover:text-zinc-300" />
+                  <X className="w-3 h-3 text-zinc-600 hover:text-zinc-700" />
                 </button>
               )}
-              <ChevronDown className={`w-3 h-3 text-zinc-500 ${!dateFrom && !dateTo ? "ml-auto" : ""} transition-transform ${showDateFilter ? "rotate-180" : ""}`} />
+              <ChevronDown className={`w-3 h-3 text-zinc-600 ${!dateFrom && !dateTo ? "ml-auto" : ""} transition-transform ${showDateFilter ? "rotate-180" : ""}`} />
             </button>
             {showDateFilter && (
               <div className="space-y-2">
@@ -363,8 +363,8 @@ export function LeftSidebar({
                         }}
                         className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all border ${
                           isActive
-                            ? "bg-blue-500/20 text-blue-400 border-blue-500"
-                            : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                            ? "bg-blue-500/20 text-blue-700 border-blue-500"
+                            : "bg-zinc-100/50 text-zinc-600 border-zinc-300 hover:text-zinc-700"
                         }`}
                       >
                         {preset.label}
@@ -375,24 +375,24 @@ export function LeftSidebar({
                 {/* Custom range */}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-zinc-500 mb-0.5 block">From</label>
+                    <label className="text-[10px] text-zinc-600 mb-0.5 block">From</label>
                     <input
                       type="date"
                       value={dateFrom}
                       max={dateTo || undefined}
                       onChange={(e) => onDateFromChange(e.target.value)}
-                      className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-zinc-100/50 border border-zinc-300 rounded px-2 py-1 text-xs text-zinc-700 focus:outline-none focus:border-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-zinc-500 mb-0.5 block">To</label>
+                    <label className="text-[10px] text-zinc-600 mb-0.5 block">To</label>
                     <input
                       type="date"
                       value={dateTo}
                       min={dateFrom || undefined}
                       max={today()}
                       onChange={(e) => onDateToChange(e.target.value)}
-                      className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-zinc-100/50 border border-zinc-300 rounded px-2 py-1 text-xs text-zinc-700 focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
@@ -404,16 +404,16 @@ export function LeftSidebar({
         {myTeams.length > 0 && onTeamFilterChange && (
           <div>
             <div className="flex items-center gap-1.5 mb-2">
-              <Shield className="w-3.5 h-3.5 text-zinc-400" />
-              <span className="text-xs font-medium text-zinc-400">Team Filter</span>
+              <Shield className="w-3.5 h-3.5 text-zinc-600" />
+              <span className="text-xs font-medium text-zinc-600">Team Filter</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               <button
                 onClick={() => onTeamFilterChange("")}
                 className={`px-2 py-1 rounded text-[11px] font-medium transition-all border ${
                   selectedTeamFilter === ""
-                    ? "bg-blue-500/20 text-blue-400 border-blue-500"
-                    : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                    ? "bg-blue-500/20 text-blue-700 border-blue-500"
+                    : "bg-zinc-100/50 text-zinc-600 border-zinc-300 hover:text-zinc-700"
                 }`}
               >
                 All
@@ -425,9 +425,9 @@ export function LeftSidebar({
                   className={`px-2 py-1 rounded text-[11px] font-medium transition-all border ${
                     (t.name === "General" ? "__general__" : t.name) === selectedTeamFilter
                       ? t.name === "General"
-                        ? "bg-amber-500/20 text-amber-400 border-amber-500"
-                        : "bg-blue-500/20 text-blue-400 border-blue-500"
-                      : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                        ? "bg-amber-500/20 text-amber-700 border-amber-500"
+                        : "bg-blue-500/20 text-blue-700 border-blue-500"
+                      : "bg-zinc-100/50 text-zinc-600 border-zinc-300 hover:text-zinc-700"
                   }`}
                 >
                   {t.team_name}
@@ -443,9 +443,9 @@ export function LeftSidebar({
               onClick={() => setShowBroadcastFilter(!showBroadcastFilter)}
               className="flex items-center gap-1.5 mb-2 w-full"
             >
-              <Radio className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-xs font-medium text-zinc-400">Broadcast Filter</span>
-              <ChevronDown className={`w-3 h-3 text-zinc-500 ml-auto transition-transform ${showBroadcastFilter ? "rotate-180" : ""}`} />
+              <Radio className="w-3.5 h-3.5 text-emerald-700" />
+              <span className="text-xs font-medium text-zinc-600">Broadcast Filter</span>
+              <ChevronDown className={`w-3 h-3 text-zinc-600 ml-auto transition-transform ${showBroadcastFilter ? "rotate-180" : ""}`} />
             </button>
             {showBroadcastFilter && (
               <div className="space-y-1.5">
@@ -453,8 +453,8 @@ export function LeftSidebar({
                   onClick={() => { onBroadcastFilterChange(""); onBroadcastStatusChange?.(""); }}
                   className={`w-full text-left px-2 py-1.5 rounded text-[11px] font-medium transition-all border ${
                     !selectedBroadcast
-                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500"
-                      : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                      ? "bg-emerald-500/20 text-emerald-700 border-emerald-500"
+                      : "bg-zinc-100/50 text-zinc-600 border-zinc-300 hover:text-zinc-700"
                   }`}
                 >
                   None (show all)
@@ -465,20 +465,20 @@ export function LeftSidebar({
                     onClick={() => { onBroadcastFilterChange(b.name); onBroadcastStatusChange?.(""); }}
                     className={`w-full text-left px-2 py-1.5 rounded text-[11px] transition-all border ${
                       selectedBroadcast === b.name
-                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500"
-                        : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                        ? "bg-emerald-500/20 text-emerald-700 border-emerald-500"
+                        : "bg-zinc-100/50 text-zinc-600 border-zinc-300 hover:text-zinc-700"
                     }`}
                   >
                     <div className="font-medium truncate">{b.broadcast_name}</div>
-                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-500">
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-600">
                       <span>{b.channel}</span>
                       <span>{b.sent_count}/{b.total_recipients} sent</span>
-                      {b.failed_count > 0 && <span className="text-red-400">{b.failed_count} failed</span>}
+                      {b.failed_count > 0 && <span className="text-red-700">{b.failed_count} failed</span>}
                     </div>
                   </button>
                 ))}
                 {selectedBroadcast && onBroadcastStatusChange && (
-                  <div className="flex flex-wrap gap-1 pt-1 border-t border-zinc-800">
+                  <div className="flex flex-wrap gap-1 pt-1 border-t border-zinc-200">
                     {["", "Sent", "Failed"].map((st) => (
                       <button
                         key={st || "all"}
@@ -486,9 +486,9 @@ export function LeftSidebar({
                         className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all border ${
                           selectedBroadcastStatus === st
                             ? st === "Failed"
-                              ? "bg-red-500/20 text-red-400 border-red-500"
-                              : "bg-emerald-500/20 text-emerald-400 border-emerald-500"
-                            : "bg-zinc-800/50 text-zinc-500 border-zinc-700 hover:text-zinc-400"
+                              ? "bg-red-500/20 text-red-700 border-red-500"
+                              : "bg-emerald-500/20 text-emerald-700 border-emerald-500"
+                            : "bg-zinc-100/50 text-zinc-600 border-zinc-300 hover:text-zinc-600"
                         }`}
                       >
                         {st || "All"}
@@ -505,9 +505,9 @@ export function LeftSidebar({
           {onNavigateToSubscribers && (
             <button
               onClick={onNavigateToSubscribers}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
             >
-              <Users className="w-4 h-4 text-blue-400" />
+              <Users className="w-4 h-4 text-blue-700" />
               Subscriber Lists
             </button>
           )}
@@ -515,9 +515,9 @@ export function LeftSidebar({
           {onNavigateToTeams && (
             <button
               onClick={onNavigateToTeams}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
             >
-              <Shield className="w-4 h-4 text-purple-400" />
+              <Shield className="w-4 h-4 text-purple-700" />
               Teams
             </button>
           )}
@@ -525,14 +525,14 @@ export function LeftSidebar({
           {onNavigateToMergeSuggestions && (
             <button
               onClick={onNavigateToMergeSuggestions}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
             >
               <span className="flex items-center gap-2.5">
-                <GitMerge className="w-4 h-4 text-green-400" />
+                <GitMerge className="w-4 h-4 text-green-700" />
                 Merge Suggestions
               </span>
               {mergeBadge > 0 && (
-                <span className="bg-green-500/20 text-green-400 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                <span className="bg-green-500/20 text-green-700 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
                   {mergeBadge}
                 </span>
               )}
@@ -542,9 +542,9 @@ export function LeftSidebar({
           {onNavigateToSubscriberRules && (
             <button
               onClick={onNavigateToSubscriberRules}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
             >
-              <Cog className="w-4 h-4 text-amber-400" />
+              <Cog className="w-4 h-4 text-amber-700" />
               Subscriber Rules
             </button>
           )}
@@ -552,9 +552,9 @@ export function LeftSidebar({
           {onNavigateToBroadcasts && (
             <button
               onClick={onNavigateToBroadcasts}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
             >
-              <Radio className="w-4 h-4 text-emerald-400" />
+              <Radio className="w-4 h-4 text-emerald-700" />
               Broadcasts
             </button>
           )}
@@ -562,9 +562,9 @@ export function LeftSidebar({
           {onNavigateToAnalytics && (
             <button
               onClick={onNavigateToAnalytics}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
             >
-              <BarChart3 className="w-4 h-4 text-blue-400" />
+              <BarChart3 className="w-4 h-4 text-blue-700" />
               Analytics
             </button>
           )}
@@ -572,9 +572,9 @@ export function LeftSidebar({
           {onNavigateToSettings && (
             <button
               onClick={onNavigateToSettings}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
             >
-              <Settings className="w-4 h-4 text-zinc-400" />
+              <Settings className="w-4 h-4 text-zinc-600" />
               Settings
             </button>
           )}
@@ -583,18 +583,18 @@ export function LeftSidebar({
             href="https://github.com/sagarrgarg/frappe_excom/issues"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
           >
             <Bug className="w-4 h-4" />
             Report Issue
           </a>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-lg p-4 border border-blue-500/20">
-          <h3 className="text-sm font-medium text-white mb-2">
+        <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-lg p-3 border border-blue-500/20">
+          <h3 className="text-sm font-medium text-zinc-900 mb-2">
             AI-Powered Communication
           </h3>
-          <p className="text-xs text-zinc-400 leading-relaxed">
+          <p className="text-xs text-zinc-600 leading-relaxed">
             Conversations are automatically handled by AI until a team member
             takes over. Real-time status tracking ensures seamless handoffs.
           </p>

@@ -10,9 +10,9 @@ interface MobileContactsListProps {
 }
 
 const CHANNEL_ICONS: Record<string, React.ReactElement> = {
-  whatsapp: <MessageCircle className="w-3 h-3 text-green-400" />,
-  email: <Mail className="w-3 h-3 text-blue-400" />,
-  calls: <Phone className="w-3 h-3 text-purple-400" />,
+  whatsapp: <MessageCircle className="w-3 h-3 text-green-700" />,
+  email: <Mail className="w-3 h-3 text-blue-700" />,
+  calls: <Phone className="w-3 h-3 text-purple-700" />,
 };
 
 export function MobileContactsList({ contacts, onSelectContact }: MobileContactsListProps) {
@@ -38,10 +38,10 @@ export function MobileContactsList({ contacts, onSelectContact }: MobileContacts
 
   return (
     <>
-      <div className="shrink-0 p-4 border-b border-zinc-800 space-y-3">
-        <h2 className="text-lg font-semibold text-white">Contacts</h2>
+      <div className="shrink-0 p-3 border-b border-zinc-200 space-y-3">
+        <h2 className="text-lg font-semibold text-zinc-900">Contacts</h2>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
           <Input
             placeholder="Search contacts..."
             value={search}
@@ -49,14 +49,14 @@ export function MobileContactsList({ contacts, onSelectContact }: MobileContacts
             className="pl-10"
           />
         </div>
-        <p className="text-xs text-zinc-500">{sorted.length} contacts</p>
+        <p className="text-xs text-zinc-600">{sorted.length} contacts</p>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-zinc-800">
+      <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-zinc-200">
         {sorted.map((contact) => (
           <button
             key={contact.id}
             onClick={() => onSelectContact(contact.id)}
-            className="w-full p-4 text-left hover:bg-zinc-800/50 active:bg-zinc-800 transition-colors"
+            className="w-full p-3 text-left hover:bg-zinc-100/50 active:bg-zinc-100 transition-colors"
           >
             <div className="flex items-center gap-3">
               <div className="relative flex-shrink-0">
@@ -78,19 +78,19 @@ export function MobileContactsList({ contacts, onSelectContact }: MobileContacts
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-white text-sm truncate">
+                <h3 className="font-medium text-zinc-900 text-sm truncate">
                   {contact.contactName}
                 </h3>
                 <div className="flex items-center gap-2 mt-0.5">
                   {contact.contactInfo.phone && (
-                    <span className="text-xs text-zinc-400 truncate">
+                    <span className="text-xs text-zinc-600 truncate">
                       {contact.contactInfo.phone}
                     </span>
                   )}
                   {contact.contactInfo.company && (
                     <Badge
                       variant="outline"
-                      className="text-[10px] border-zinc-700 text-zinc-500 shrink-0"
+                      className="text-[10px] border-zinc-300 text-zinc-600 shrink-0"
                     >
                       {contact.contactInfo.company}
                     </Badge>
@@ -107,7 +107,7 @@ export function MobileContactsList({ contacts, onSelectContact }: MobileContacts
         ))}
         {sorted.length === 0 && (
           <div className="flex items-center justify-center h-40">
-            <p className="text-sm text-zinc-500">No contacts found</p>
+            <p className="text-sm text-zinc-600">No contacts found</p>
           </div>
         )}
       </div>

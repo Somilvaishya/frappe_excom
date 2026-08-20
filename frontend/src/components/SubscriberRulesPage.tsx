@@ -86,30 +86,30 @@ function SearchableSelect({
       <button
         type="button"
         onClick={() => { setOpen(!open); setSearch(""); }}
-        className="w-full flex items-center justify-between bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-left focus:outline-none focus:border-zinc-500"
+        className="w-full flex items-center justify-between bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-2 text-sm text-left focus:outline-none focus:border-zinc-300"
       >
-        <span className={value ? "text-white" : "text-zinc-500"}>
+        <span className={value ? "text-zinc-900" : "text-zinc-600"}>
           {displayValue || value || placeholder}
         </span>
-        <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
+        <ChevronDown className="w-4 h-4 text-zinc-600 shrink-0" />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-20 max-h-56 overflow-hidden flex flex-col">
-          <div className="p-2 border-b border-zinc-700 shrink-0">
+        <div className="absolute left-0 right-0 mt-1 bg-zinc-100 border border-zinc-300 rounded-lg shadow-xl z-20 max-h-56 overflow-hidden flex flex-col">
+          <div className="p-2 border-b border-zinc-300 shrink-0">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search..."
                 autoFocus
-                className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-1.5 pl-8 text-xs text-white focus:outline-none focus:border-zinc-500"
+                className="w-full bg-zinc-50 border border-zinc-300 rounded px-3 py-1.5 pl-8 text-xs text-zinc-900 focus:outline-none focus:border-zinc-300"
               />
             </div>
           </div>
           <div className="overflow-y-auto flex-1">
             {options.length === 0 ? (
-              <div className="px-3 py-3 text-xs text-zinc-500 text-center">
+              <div className="px-3 py-2 text-xs text-zinc-600 text-center">
                 {search ? "No results" : "Type to search..."}
               </div>
             ) : (
@@ -117,13 +117,13 @@ function SearchableSelect({
                 <button
                   key={opt.value}
                   onClick={() => { onChange(opt.value); setOpen(false); }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-zinc-700/50 transition-colors ${
-                    opt.value === value ? "bg-zinc-700/30 text-blue-400" : "text-white"
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-zinc-200/50 transition-colors ${
+                    opt.value === value ? "bg-zinc-200/30 text-blue-700" : "text-zinc-900"
                   }`}
                 >
                   {opt.label}
                   {opt.sublabel && (
-                    <span className="text-[10px] text-zinc-500 ml-2">{opt.sublabel}</span>
+                    <span className="text-[10px] text-zinc-600 ml-2">{opt.sublabel}</span>
                   )}
                 </button>
               ))
@@ -199,8 +199,8 @@ function RuleFormDialog({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-white mb-4">
+      <div className="bg-zinc-50 border border-zinc-300 rounded-xl w-full max-w-xl p-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-zinc-900 mb-3">
           {existing ? "Edit Rule" : "Create Rule"}
         </h2>
         <div className="space-y-3">
@@ -209,7 +209,7 @@ function RuleFormDialog({
               value={form.rule_name}
               onChange={(e) => update("rule_name", e.target.value)}
               placeholder="e.g. Agra Store POS Customers"
-              className="bg-zinc-800 border-zinc-700 text-white"
+              className="bg-zinc-100 border-zinc-300 text-zinc-900"
               autoFocus
             />
           </Field>
@@ -237,7 +237,7 @@ function RuleFormDialog({
               <select
                 value={form.event}
                 onChange={(e) => update("event", e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white"
+                className="w-full bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900"
               >
                 <option>After Insert</option>
                 <option>After Save</option>
@@ -256,7 +256,7 @@ function RuleFormDialog({
                     const match = linkFields.find((f) => f.value === fieldname);
                     if (match?.sublabel) update("identity_field_type", match.sublabel);
                   }}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white"
+                  className="w-full bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900"
                 >
                   <option value="">Select field...</option>
                   {linkFields.map((f) => (
@@ -270,7 +270,7 @@ function RuleFormDialog({
                   value={form.identity_field}
                   onChange={(e) => update("identity_field", e.target.value)}
                   placeholder={form.reference_doctype ? "No link fields found, type manually" : "Select DocType first"}
-                  className="bg-zinc-800 border-zinc-700 text-white"
+                  className="bg-zinc-100 border-zinc-300 text-zinc-900"
                 />
               )}
             </Field>
@@ -278,7 +278,7 @@ function RuleFormDialog({
               <select
                 value={form.identity_field_type}
                 onChange={(e) => update("identity_field_type", e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white"
+                className="w-full bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900"
               >
                 <option>Customer</option>
                 <option>Supplier</option>
@@ -293,7 +293,7 @@ function RuleFormDialog({
               onChange={(e) => update("condition", e.target.value)}
               placeholder='doc.territory == "Agra" and doc.customer'
               rows={3}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white font-mono resize-none focus:outline-none focus:border-zinc-500"
+              className="w-full bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900 font-mono resize-none focus:outline-none focus:border-zinc-300"
             />
           </Field>
           <Field label="Description">
@@ -301,12 +301,12 @@ function RuleFormDialog({
               value={form.description}
               onChange={(e) => update("description", e.target.value)}
               placeholder="What does this rule do?"
-              className="bg-zinc-800 border-zinc-700 text-white"
+              className="bg-zinc-100 border-zinc-300 text-zinc-900"
             />
           </Field>
         </div>
-        <div className="flex justify-end gap-2 mt-6">
-          <Button variant="outline" onClick={onClose} className="border-zinc-700 text-zinc-300">
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="outline" onClick={onClose} className="border-zinc-300 text-zinc-700">
             Cancel
           </Button>
           <Button
@@ -325,7 +325,7 @@ function RuleFormDialog({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-xs text-zinc-400 mb-1 block">{label}</label>
+      <label className="text-xs text-zinc-600 mb-1 block">{label}</label>
       {children}
     </div>
   );
@@ -358,18 +358,18 @@ function TestRuleDialog({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-white mb-1">Test Rule</h2>
-        <p className="text-xs text-zinc-400 mb-4">
-          Dry-run <span className="text-zinc-300">{rule.rule_name}</span> against a{" "}
+      <div className="bg-zinc-50 border border-zinc-300 rounded-xl w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-zinc-900 mb-1">Test Rule</h2>
+        <p className="text-xs text-zinc-600 mb-3">
+          Dry-run <span className="text-zinc-700">{rule.rule_name}</span> against a{" "}
           {rule.reference_doctype} document.
         </p>
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-3">
           <Input
             value={docName}
             onChange={(e) => setDocName(e.target.value)}
             placeholder={`${rule.reference_doctype} name...`}
-            className="bg-zinc-800 border-zinc-700 text-white flex-1"
+            className="bg-zinc-100 border-zinc-300 text-zinc-900 flex-1"
             autoFocus
           />
           <Button
@@ -383,7 +383,7 @@ function TestRuleDialog({
         </div>
 
         {result && (
-          <div className="bg-zinc-800/50 rounded-lg p-4 space-y-2">
+          <div className="bg-zinc-100/50 rounded-lg p-3 space-y-2">
             <ResultRow label="Condition Match" ok={result.condition_match} />
             <ResultRow
               label="Entity Resolved"
@@ -400,7 +400,7 @@ function TestRuleDialog({
               ok={!result.already_subscribed}
               detail={result.already_subscribed ? "Yes" : "No"}
             />
-            <div className="border-t border-zinc-700 pt-2 mt-2">
+            <div className="border-t border-zinc-300 pt-2 mt-2">
               <ResultRow
                 label="Would Subscribe"
                 ok={result.would_subscribe}
@@ -412,7 +412,7 @@ function TestRuleDialog({
         )}
 
         <div className="flex justify-end mt-4">
-          <Button variant="outline" onClick={onClose} className="border-zinc-700 text-zinc-300">
+          <Button variant="outline" onClick={onClose} className="border-zinc-300 text-zinc-700">
             Close
           </Button>
         </div>
@@ -434,13 +434,13 @@ function ResultRow({
 }) {
   return (
     <div className={`flex items-center justify-between text-sm ${highlight ? "font-medium" : ""}`}>
-      <span className="text-zinc-300">{label}</span>
+      <span className="text-zinc-700">{label}</span>
       <span className="flex items-center gap-1.5">
-        {detail && <span className="text-xs text-zinc-500 mr-1">{detail}</span>}
+        {detail && <span className="text-xs text-zinc-600 mr-1">{detail}</span>}
         {ok ? (
-          <Check className="w-4 h-4 text-green-400" />
+          <Check className="w-4 h-4 text-green-700" />
         ) : (
-          <X className="w-4 h-4 text-red-400" />
+          <X className="w-4 h-4 text-red-700" />
         )}
       </span>
     </div>
@@ -479,18 +479,18 @@ export function SubscriberRulesPage({
   }, [loadRules]);
 
   return (
-    <div className="h-full w-full bg-zinc-950 flex flex-col">
-      <div className="shrink-0 px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+    <div className="h-full w-full bg-white flex flex-col">
+      <div className="shrink-0 px-4 py-3 border-b border-zinc-200 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={onNavigateBack}
-            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <Cog className="w-5 h-5 text-amber-400" />
-          <h1 className="text-lg font-semibold text-white">Subscriber Rules</h1>
-          <span className="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full">
+          <Cog className="w-5 h-5 text-amber-700" />
+          <h1 className="text-lg font-semibold text-zinc-900">Subscriber Rules</h1>
+          <span className="text-xs bg-amber-500/10 text-amber-700 px-2 py-0.5 rounded-full">
             {rules.filter((r) => r.enabled).length} active
           </span>
         </div>
@@ -506,12 +506,12 @@ export function SubscriberRulesPage({
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4">
         {rules.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
-            <Cog className="w-12 h-12 text-zinc-600 mb-3" />
-            <p className="text-zinc-400 text-sm">No subscriber rules yet</p>
-            <p className="text-zinc-500 text-xs mt-1">
+            <Cog className="w-12 h-12 text-zinc-500 mb-3" />
+            <p className="text-zinc-600 text-sm">No subscriber rules yet</p>
+            <p className="text-zinc-600 text-xs mt-1">
               Create rules to auto-subscribe contacts to lists based on document events
             </p>
           </div>
@@ -520,15 +520,15 @@ export function SubscriberRulesPage({
             {rules.map((rule) => (
               <div
                 key={rule.name}
-                className={`bg-zinc-900 border rounded-xl p-5 transition-colors ${
-                  rule.enabled ? "border-zinc-800" : "border-zinc-800/50 opacity-60"
+                className={`bg-zinc-50 border rounded-xl p-4 transition-colors ${
+                  rule.enabled ? "border-zinc-200" : "border-zinc-200/50 opacity-60"
                 }`}
               >
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <h3 className="font-medium text-white">{rule.rule_name}</h3>
+                    <h3 className="font-medium text-zinc-900">{rule.rule_name}</h3>
                     {rule.description && (
-                      <p className="text-xs text-zinc-400 mt-0.5">{rule.description}</p>
+                      <p className="text-xs text-zinc-600 mt-0.5">{rule.description}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -552,7 +552,7 @@ export function SubscriberRulesPage({
                         }
                       }}
                       disabled={backfilling === rule.name}
-                      className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-amber-400 disabled:opacity-40"
+                      className="p-1.5 rounded hover:bg-zinc-100 text-zinc-600 hover:text-amber-700 disabled:opacity-40"
                       title="Apply to all existing records"
                     >
                       {backfilling === rule.name ? (
@@ -563,7 +563,7 @@ export function SubscriberRulesPage({
                     </button>
                     <button
                       onClick={() => setTestingRule(rule)}
-                      className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-blue-400"
+                      className="p-1.5 rounded hover:bg-zinc-100 text-zinc-600 hover:text-blue-700"
                       title="Test Rule"
                     >
                       <Play className="w-4 h-4" />
@@ -573,7 +573,7 @@ export function SubscriberRulesPage({
                         setEditingRule(rule);
                         setShowForm(true);
                       }}
-                      className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-white"
+                      className="p-1.5 rounded hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900"
                       title="Edit"
                     >
                       <Pencil className="w-4 h-4" />
@@ -584,11 +584,11 @@ export function SubscriberRulesPage({
                         toast.success(rule.enabled ? "Rule disabled" : "Rule enabled");
                         loadRules();
                       }}
-                      className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-white"
+                      className="p-1.5 rounded hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900"
                       title={rule.enabled ? "Disable" : "Enable"}
                     >
                       {rule.enabled ? (
-                        <ToggleRight className="w-5 h-5 text-green-400" />
+                        <ToggleRight className="w-5 h-5 text-green-700" />
                       ) : (
                         <ToggleLeft className="w-5 h-5" />
                       )}
@@ -604,11 +604,11 @@ export function SubscriberRulesPage({
                 </div>
 
                 {rule.condition && (
-                  <div className="mt-3 bg-zinc-800/50 rounded-lg p-2.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">
+                  <div className="mt-3 bg-zinc-100/50 rounded-lg p-2.5">
+                    <span className="text-[10px] text-zinc-600 uppercase tracking-wider block mb-1">
                       Condition
                     </span>
-                    <code className="text-xs text-amber-300 font-mono">{rule.condition}</code>
+                    <code className="text-xs text-amber-700 font-mono">{rule.condition}</code>
                   </div>
                 )}
               </div>
@@ -655,8 +655,8 @@ export function SubscriberRulesPage({
 
 function Tag({ label, value }: { label: string; value: string }) {
   return (
-    <span className="text-[11px] bg-zinc-800 text-zinc-300 px-2 py-1 rounded border border-zinc-700">
-      <span className="text-zinc-500">{label}:</span> {value}
+    <span className="text-[11px] bg-zinc-100 text-zinc-700 px-2 py-1 rounded border border-zinc-300">
+      <span className="text-zinc-600">{label}:</span> {value}
     </span>
   );
 }

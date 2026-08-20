@@ -32,23 +32,23 @@ export function TagManager({ threadId }: TagManagerProps) {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 transition-colors"
       >
         <Tag className="w-3.5 h-3.5" />
         Tags
         {threadTags.length > 0 && (
-          <span className="bg-blue-500/20 text-blue-400 text-[10px] px-1.5 rounded-full">
+          <span className="bg-blue-500/20 text-blue-700 text-[10px] px-1.5 rounded-full">
             {threadTags.length}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-1 z-50 w-64 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl">
-          <div className="p-3 border-b border-zinc-700">
-            <h4 className="text-xs font-medium text-zinc-300 mb-2">Applied Tags</h4>
+        <div className="absolute right-0 top-full mt-1 z-50 w-64 bg-zinc-100 border border-zinc-300 rounded-lg shadow-xl">
+          <div className="p-3 border-b border-zinc-300">
+            <h4 className="text-xs font-medium text-zinc-700 mb-2">Applied Tags</h4>
             {threadTags.length === 0 ? (
-              <p className="text-[10px] text-zinc-500">No tags</p>
+              <p className="text-[10px] text-zinc-600">No tags</p>
             ) : (
               <div className="flex flex-wrap gap-1">
                 {threadTags.map((tag) => (
@@ -75,7 +75,7 @@ export function TagManager({ threadId }: TagManagerProps) {
           </div>
 
           <div className="p-3">
-            <h4 className="text-xs font-medium text-zinc-300 mb-2">Available Tags</h4>
+            <h4 className="text-xs font-medium text-zinc-700 mb-2">Available Tags</h4>
             {availableTags.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-2 max-h-32 overflow-y-auto">
                 {availableTags.map((tag) => (
@@ -105,7 +105,7 @@ export function TagManager({ threadId }: TagManagerProps) {
                   if (e.key === "Enter") handleCreateAndAdd();
                 }}
                 placeholder="New tag name..."
-                className="flex-1 px-2 py-1 text-xs bg-zinc-900 border border-zinc-700 rounded text-white placeholder:text-zinc-500 focus:outline-none focus:border-blue-500"
+                className="flex-1 px-2 py-1 text-xs bg-zinc-50 border border-zinc-300 rounded text-zinc-900 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500"
               />
               <Button
                 size="sm"
@@ -121,7 +121,7 @@ export function TagManager({ threadId }: TagManagerProps) {
           <div className="px-3 pb-2">
             <button
               onClick={() => setIsOpen(false)}
-              className="w-full text-center text-[10px] text-zinc-500 hover:text-zinc-300 py-1"
+              className="w-full text-center text-[10px] text-zinc-600 hover:text-zinc-700 py-1"
             >
               Close
             </button>

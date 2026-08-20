@@ -62,35 +62,35 @@ export function EmailCompose({
   };
 
   return (
-    <div className="border-t border-zinc-700 bg-zinc-900/90">
+    <div className="border-t border-zinc-300 bg-zinc-50/90">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800">
-        <span className="text-xs font-medium text-zinc-300">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-200">
+        <span className="text-xs font-medium text-zinc-700">
           {inReplyToGmailId ? "Reply" : "New Email"}
         </span>
         <button
           onClick={onClose}
-          className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+          className="p-1 rounded hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* Fields */}
-      <div className="px-4 py-2 space-y-2">
+      <div className="px-3 py-2 space-y-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-500 w-12 shrink-0">To:</span>
+          <span className="text-xs text-zinc-600 w-12 shrink-0">To:</span>
           <input
             type="text"
             value={to}
             onChange={(e) => setTo(e.target.value)}
             placeholder="recipient@example.com"
-            className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-500"
+            className="flex-1 bg-transparent text-sm text-zinc-900 outline-none placeholder-zinc-400"
           />
           {!showCc && (
             <button
               onClick={() => setShowCc(true)}
-              className="text-[10px] text-zinc-500 hover:text-zinc-300"
+              className="text-[10px] text-zinc-600 hover:text-zinc-700"
             >
               Cc
             </button>
@@ -99,43 +99,43 @@ export function EmailCompose({
 
         {showCc && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500 w-12 shrink-0">Cc:</span>
+            <span className="text-xs text-zinc-600 w-12 shrink-0">Cc:</span>
             <input
               type="text"
               value={cc}
               onChange={(e) => setCc(e.target.value)}
               placeholder="cc@example.com"
-              className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-500"
+              className="flex-1 bg-transparent text-sm text-zinc-900 outline-none placeholder-zinc-400"
             />
           </div>
         )}
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-500 w-12 shrink-0">Subject:</span>
+          <span className="text-xs text-zinc-600 w-12 shrink-0">Subject:</span>
           <input
             type="text"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder="Subject"
-            className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-500"
+            className="flex-1 bg-transparent text-sm text-zinc-900 outline-none placeholder-zinc-400"
           />
         </div>
       </div>
 
       {/* Body */}
-      <div className="px-4 pb-2">
+      <div className="px-3 pb-2">
         <textarea
           value={bodyHtml}
           onChange={(e) => setBodyHtml(e.target.value)}
           placeholder="Write your message..."
           rows={6}
-          className="w-full bg-zinc-800/50 rounded-lg p-3 text-sm text-white outline-none resize-none placeholder-zinc-500 border border-zinc-700/50 focus:border-blue-500/30"
+          className="w-full bg-zinc-100/50 rounded-lg p-3 text-sm text-zinc-900 outline-none resize-none placeholder-zinc-400 border border-zinc-300/50 focus:border-blue-500/30"
         />
         {signature && (
-          <div className="mt-2 pt-2 border-t border-zinc-700/50">
-            <p className="text-[10px] text-zinc-600 mb-1 uppercase tracking-wide">Signature preview</p>
+          <div className="mt-2 pt-2 border-t border-zinc-300/50">
+            <p className="text-[10px] text-zinc-500 mb-1 uppercase tracking-wide">Signature preview</p>
             <div
-              className="text-xs text-zinc-400"
+              className="text-xs text-zinc-600"
               dangerouslySetInnerHTML={{ __html: signature }}
             />
           </div>
@@ -143,17 +143,17 @@ export function EmailCompose({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-2 px-4 pb-3">
+      <div className="flex items-center justify-end gap-2 px-3 pb-3">
         <button
           onClick={onClose}
-          className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
+          className="px-3 py-1.5 text-xs text-zinc-600 hover:text-zinc-900 transition-colors"
         >
           Discard
         </button>
         <button
           onClick={() => void handleSend()}
           disabled={loading || !to.trim() || !bodyHtml.trim()}
-          className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors"
         >
           {loading ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />

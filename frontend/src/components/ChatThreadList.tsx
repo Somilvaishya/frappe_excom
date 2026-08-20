@@ -11,10 +11,10 @@ import { toast } from "sonner";
 import type { UnifiedContact } from "../types";
 
 const BROADCAST_STATUS_STYLES: Record<string, string> = {
-  Sent: "bg-emerald-500/20 text-emerald-400 border-emerald-500/40",
-  Failed: "bg-red-500/20 text-red-400 border-red-500/40",
-  Queued: "bg-amber-500/20 text-amber-400 border-amber-500/40",
-  Skipped: "bg-zinc-700/30 text-zinc-400 border-zinc-600",
+  Sent: "bg-emerald-500/20 text-emerald-700 border-emerald-500/40",
+  Failed: "bg-red-500/20 text-red-700 border-red-500/40",
+  Queued: "bg-amber-500/20 text-amber-700 border-amber-500/40",
+  Skipped: "bg-zinc-200/30 text-zinc-600 border-zinc-300",
 };
 
 interface ChatThreadListProps {
@@ -34,16 +34,16 @@ const CHANNEL_ICONS: Record<string, React.FC<{ className?: string }>> = {
 };
 
 const CHANNEL_COLORS: Record<string, string> = {
-  whatsapp: "text-green-400",
-  calls: "text-blue-400",
-  instagram: "text-pink-400",
-  email: "text-purple-400",
+  whatsapp: "text-green-700",
+  calls: "text-blue-700",
+  instagram: "text-pink-700",
+  email: "text-purple-700",
 };
 
 const STATUS_COLORS: Record<string, string> = {
   online: "bg-green-500",
   away: "bg-yellow-500",
-  offline: "bg-zinc-600",
+  offline: "bg-zinc-300",
 };
 
 interface ContextMenuState {
@@ -148,10 +148,10 @@ export function ChatThreadList({
 
   if (isCollapsed) {
     return (
-      <div className="w-12 bg-zinc-900/50 border-r border-zinc-800 flex flex-col h-full shrink-0 items-center py-3 gap-3">
+      <div className="w-12 bg-zinc-50/50 border-r border-zinc-200 flex flex-col h-full shrink-0 items-center py-2 gap-3">
         <button
           onClick={onToggleCollapse}
-          className="p-2 rounded-lg hover:bg-zinc-800/60 text-zinc-400 hover:text-white transition-colors"
+          className="p-2 rounded-lg hover:bg-zinc-100/60 text-zinc-600 hover:text-zinc-900 transition-colors"
           title="Expand conversation list"
         >
           <ChevronRight className="w-4 h-4" />
@@ -166,17 +166,17 @@ export function ChatThreadList({
   }
 
   return (
-    <div className="w-96 bg-zinc-900/50 border-r border-zinc-800 flex flex-col h-full shrink-0 overflow-hidden">
-      <div className="shrink-0 p-4 border-b border-zinc-800 flex items-center justify-between">
+    <div className="w-96 bg-zinc-50/50 border-r border-zinc-200 flex flex-col h-full shrink-0 overflow-hidden">
+      <div className="shrink-0 p-3 border-b border-zinc-200 flex items-center justify-between">
         <div>
-          <h2 className="font-semibold text-white">Conversations</h2>
-          <p className="text-sm text-zinc-400 mt-1">
+          <h2 className="font-semibold text-zinc-900">Conversations</h2>
+          <p className="text-sm text-zinc-600 mt-1">
             {conversations.length} active threads
           </p>
         </div>
         <button
           onClick={onToggleCollapse}
-          className="p-1.5 rounded-lg hover:bg-zinc-800/60 text-zinc-400 hover:text-white transition-colors"
+          className="p-1.5 rounded-lg hover:bg-zinc-100/60 text-zinc-600 hover:text-zinc-900 transition-colors"
           title="Collapse conversation list"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -184,7 +184,7 @@ export function ChatThreadList({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="divide-y divide-zinc-800">
+        <div className="divide-y divide-zinc-200">
           {conversations.map((contact) => {
             const isSelected =
               selectedConversationId ===
@@ -196,10 +196,10 @@ export function ChatThreadList({
                 ref={isSelected ? selectedRef : undefined}
                 onClick={() => onSelectConversation(contact.id)}
                 onContextMenu={(e) => handleContextMenu(e, contact)}
-                className={`w-full p-4 text-left transition-all ${
+                className={`w-full p-3 text-left transition-all ${
                   isSelected
                     ? "bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-l-2 border-blue-500"
-                    : "hover:bg-zinc-800/50"
+                    : "hover:bg-zinc-100/50"
                 }`}
               >
                 <div className="flex gap-3">
@@ -208,10 +208,10 @@ export function ChatThreadList({
                       <img
                         src={contact.contactAvatar}
                         alt={contact.contactName}
-                        className="w-12 h-12 rounded-full object-cover ring-2 ring-zinc-700"
+                        className="w-12 h-12 rounded-full object-cover ring-2 ring-zinc-300"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 ring-2 ring-zinc-700 flex items-center justify-center text-white font-medium">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 ring-2 ring-zinc-300 flex items-center justify-center text-white font-medium">
                         {contact.contactName
                           .split(" ")
                           .map((w) => w[0])
@@ -221,18 +221,18 @@ export function ChatThreadList({
                       </div>
                     )}
                     <div
-                      className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-900 ${
-                        STATUS_COLORS[contact.status] || "bg-zinc-600"
+                      className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-200 ${
+                        STATUS_COLORS[contact.status] || "bg-zinc-300"
                       }`}
                     />
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <h3 className="font-medium text-white truncate">
+                      <h3 className="font-medium text-zinc-900 truncate">
                         {contact.contactName}
                       </h3>
-                      <span className="text-xs text-zinc-500 flex-shrink-0">
+                      <span className="text-xs text-zinc-600 flex-shrink-0">
                         {formatDistanceToNow(contact.timestamp, {
                           addSuffix: true,
                         })}
@@ -247,18 +247,18 @@ export function ChatThreadList({
                           <ChannelIcon
                             key={`${channel}-${index}`}
                             className={`w-3.5 h-3.5 ${
-                              CHANNEL_COLORS[channel] || "text-zinc-400"
+                              CHANNEL_COLORS[channel] || "text-zinc-600"
                             }`}
                           />
                         );
                       })}
-                      <span className="text-xs text-zinc-500 truncate ml-1">
+                      <span className="text-xs text-zinc-600 truncate ml-1">
                         {contact.allAccounts.length} account
                         {contact.allAccounts.length > 1 ? "s" : ""}
                       </span>
                     </div>
 
-                    <p className="text-sm text-zinc-400 truncate mb-2">
+                    <p className="text-sm text-zinc-600 truncate mb-2">
                       {contact.lastMessage}
                     </p>
 
@@ -285,7 +285,7 @@ export function ChatThreadList({
                       {contact.contactInfo.erpEntity && (
                         <Badge
                           variant="outline"
-                          className="text-xs border-zinc-700 text-zinc-400"
+                          className="text-xs border-zinc-300 text-zinc-600"
                         >
                           {contact.contactInfo.erpEntity.type}
                         </Badge>
@@ -318,16 +318,16 @@ export function ChatThreadList({
       {contextMenu.visible && contextMenu.contact && (
         <div
           ref={menuRef}
-          className="fixed z-[100] min-w-[200px] py-1.5 bg-zinc-800/95 border border-zinc-700/80 rounded-xl shadow-2xl shadow-black/40 backdrop-blur-xl"
+          className="fixed z-[100] min-w-[200px] py-1.5 bg-zinc-100/95 border border-zinc-300/80 rounded-xl shadow-2xl shadow-black/40 backdrop-blur-xl"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header with contact name */}
-          <div className="px-3 py-2 border-b border-zinc-700/50">
-            <p className="text-xs font-medium text-zinc-300 truncate">
+          <div className="px-3 py-2 border-b border-zinc-300/50">
+            <p className="text-xs font-medium text-zinc-700 truncate">
               {contextMenu.contact.contactName}
             </p>
-            <p className="text-[10px] text-zinc-500 truncate">
+            <p className="text-[10px] text-zinc-600 truncate">
               {contextMenu.contact.contactInfo.phone || contextMenu.contact.contactInfo.email || contextMenu.contact.channels.join(", ")}
             </p>
           </div>
@@ -369,13 +369,13 @@ export function ChatThreadList({
             />
           </div>
 
-          <div className="h-px bg-zinc-700/50 mx-2" />
+          <div className="h-px bg-zinc-200/50 mx-2" />
 
           <div className="py-1">
             <ContextMenuItem
               icon={<AlertOctagon className="w-3.5 h-3.5" />}
               label="Mark as spam"
-              className="text-amber-400 hover:bg-amber-500/10"
+              className="text-amber-700 hover:bg-amber-500/10"
               loading={actionLoading === `${contextMenu.contact.activeAccountId}-spam`}
               onClick={() =>
                 handleAction(contextMenu.contact!.activeAccountId, "spam", spamCall)
@@ -384,7 +384,7 @@ export function ChatThreadList({
             <ContextMenuItem
               icon={<Archive className="w-3.5 h-3.5" />}
               label="Archive"
-              className="text-blue-400 hover:bg-blue-500/10"
+              className="text-blue-700 hover:bg-blue-500/10"
               loading={actionLoading === `${contextMenu.contact.activeAccountId}-archive`}
               onClick={() =>
                 handleAction(contextMenu.contact!.activeAccountId, "archive", archiveCall)
@@ -394,7 +394,7 @@ export function ChatThreadList({
               <ContextMenuItem
                 icon={<Trash2 className="w-3.5 h-3.5" />}
                 label="Delete"
-                className="text-red-400 hover:bg-red-500/10"
+                className="text-red-700 hover:bg-red-500/10"
                 loading={actionLoading === `${contextMenu.contact.activeAccountId}-delete`}
                 onClick={() =>
                   handleAction(contextMenu.contact!.activeAccountId, "delete", deleteCall)
@@ -426,7 +426,7 @@ function ContextMenuItem({
       onClick={onClick}
       disabled={loading}
       className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors disabled:opacity-60 ${
-        className || "text-zinc-300 hover:bg-zinc-700/60 hover:text-white"
+        className || "text-zinc-700 hover:bg-zinc-200/60 hover:text-zinc-900"
       }`}
     >
       {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : icon}

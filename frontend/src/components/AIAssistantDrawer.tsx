@@ -22,9 +22,9 @@ interface AIAssistantDrawerProps {
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
-  high: "bg-red-500/10 text-red-400 border-red-500/20",
-  medium: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  low: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  high: "bg-red-500/10 text-red-700 border-red-500/20",
+  medium: "bg-yellow-500/10 text-yellow-700 border-yellow-500/20",
+  low: "bg-blue-500/10 text-blue-700 border-blue-500/20",
 };
 
 const PRIORITY_ICONS: Record<string, React.FC<{ className?: string }>> = {
@@ -49,26 +49,26 @@ export function AIAssistantDrawer({
   const { suggested_replies, summary, next_actions, insights } = suggestions;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-96 bg-gradient-to-b from-zinc-900 via-zinc-900 to-zinc-950 border-l border-zinc-800 shadow-2xl z-50 flex flex-col overflow-hidden">
+    <div className="fixed inset-y-0 right-0 w-96 bg-gradient-to-b from-zinc-100 via-zinc-50 to-white border-l border-zinc-200 shadow-2xl z-50 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="shrink-0 p-4 border-b border-zinc-800 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+      <div className="shrink-0 p-3 border-b border-zinc-200 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
+              <Sparkles className="w-5 h-5 text-zinc-900" />
             </div>
-            <h2 className="font-semibold text-white">AI Assistant</h2>
+            <h2 className="font-semibold text-zinc-900">AI Assistant</h2>
           </div>
           <Button
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="text-zinc-400 hover:text-white"
+            className="text-zinc-600 hover:text-zinc-900"
           >
             <X className="w-5 h-5" />
           </Button>
         </div>
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-zinc-600">
           Intelligent suggestions for {contactName}
         </p>
       </div>
@@ -76,15 +76,15 @@ export function AIAssistantDrawer({
       <div className="flex-1 min-h-0 overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
-            <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+            <Loader2 className="w-8 h-8 text-blue-700 animate-spin" />
           </div>
         ) : (
-          <div className="p-4 space-y-6">
+          <div className="p-3 space-y-4">
             {/* Suggested Replies */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-blue-400" />
-                <h3 className="text-sm font-medium text-white">
+                <Sparkles className="w-4 h-4 text-blue-700" />
+                <h3 className="text-sm font-medium text-zinc-900">
                   Suggested Replies
                 </h3>
               </div>
@@ -94,44 +94,44 @@ export function AIAssistantDrawer({
                     <button
                       key={index}
                       onClick={() => onUseSuggestion?.(reply.text)}
-                      className="w-full text-left p-3 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg border border-zinc-700 hover:border-blue-500/50 transition-all group"
+                      className="w-full text-left p-3 bg-zinc-100/50 hover:bg-zinc-100 rounded-lg border border-zinc-300 hover:border-blue-500/50 transition-all group"
                     >
-                      <p className="text-sm text-zinc-300 mb-2">{reply.text}</p>
+                      <p className="text-sm text-zinc-700 mb-2">{reply.text}</p>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-zinc-500">Click to use</span>
-                        <ArrowRight className="w-3 h-3 text-zinc-500 group-hover:text-blue-400 transition-colors" />
+                        <span className="text-xs text-zinc-600">Click to use</span>
+                        <ArrowRight className="w-3 h-3 text-zinc-600 group-hover:text-blue-700 transition-colors" />
                       </div>
                     </button>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-zinc-500">No suggestions available yet</p>
+                <p className="text-xs text-zinc-600">No suggestions available yet</p>
               )}
             </div>
 
-            <Separator className="bg-zinc-800" />
+            <Separator className="bg-zinc-100" />
 
             {/* Conversation Summary */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-400" />
-                <h3 className="text-sm font-medium text-white">
+                <Sparkles className="w-4 h-4 text-purple-700" />
+                <h3 className="text-sm font-medium text-zinc-900">
                   Conversation Summary
                 </h3>
               </div>
-              <div className="bg-gradient-to-br from-purple-500/5 to-blue-500/5 rounded-lg p-4 border border-purple-500/20">
-                <p className="text-sm text-zinc-300 leading-relaxed">
+              <div className="bg-gradient-to-br from-purple-500/5 to-blue-500/5 rounded-lg p-3 border border-purple-500/20">
+                <p className="text-sm text-zinc-700 leading-relaxed">
                   {summary.text || "No summary available"}
                 </p>
                 <div className="mt-3 flex items-center gap-2">
                   <Badge
                     variant="outline"
-                    className="border-purple-500/30 text-purple-400 text-xs"
+                    className="border-purple-500/30 text-purple-700 text-xs"
                   >
                     {summary.sentiment}
                   </Badge>
                   {summary.updated_at && (
-                    <span className="text-xs text-zinc-500">
+                    <span className="text-xs text-zinc-600">
                       Updated {new Date(summary.updated_at).toLocaleTimeString()}
                     </span>
                   )}
@@ -139,15 +139,15 @@ export function AIAssistantDrawer({
               </div>
             </div>
 
-            <Separator className="bg-zinc-800" />
+            <Separator className="bg-zinc-100" />
 
             {/* Next Actions */}
             {next_actions.length > 0 && (
               <>
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-green-400" />
-                    <h3 className="text-sm font-medium text-white">
+                    <CheckCircle2 className="w-4 h-4 text-green-700" />
+                    <h3 className="text-sm font-medium text-zinc-900">
                       Recommended Actions
                     </h3>
                   </div>
@@ -158,14 +158,14 @@ export function AIAssistantDrawer({
                       return (
                         <div
                           key={index}
-                          className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700 hover:border-zinc-600 transition-all"
+                          className="bg-zinc-100/50 rounded-lg p-3 border border-zinc-300 hover:border-zinc-300 transition-all"
                         >
                           <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-zinc-700/50 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <PriorityIcon className="w-4 h-4 text-zinc-400" />
+                            <div className="w-8 h-8 bg-zinc-200/50 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <PriorityIcon className="w-4 h-4 text-zinc-600" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-white mb-2">{item.action}</p>
+                              <p className="text-sm text-zinc-900 mb-2">{item.action}</p>
                               <div className="flex items-center gap-2 flex-wrap">
                                 <Badge
                                   className={`${
@@ -175,7 +175,7 @@ export function AIAssistantDrawer({
                                   {item.priority}
                                 </Badge>
                                 {item.due && (
-                                  <span className="text-xs text-zinc-500">
+                                  <span className="text-xs text-zinc-600">
                                     Due: {item.due}
                                   </span>
                                 )}
@@ -184,7 +184,7 @@ export function AIAssistantDrawer({
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="flex-shrink-0 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                              className="flex-shrink-0 text-blue-700 hover:text-blue-700 hover:bg-blue-500/10"
                               onClick={() => {
                                 const match = item.action.match(/Lead\s+(.+)/);
                                 if (match) {
@@ -201,32 +201,32 @@ export function AIAssistantDrawer({
                     })}
                   </div>
                 </div>
-                <Separator className="bg-zinc-800" />
+                <Separator className="bg-zinc-100" />
               </>
             )}
 
             {/* AI Insights */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-orange-400" />
-                <h3 className="text-sm font-medium text-white">Quick Insights</h3>
+                <Sparkles className="w-4 h-4 text-orange-700" />
+                <h3 className="text-sm font-medium text-zinc-900">Quick Insights</h3>
               </div>
               <div className="space-y-2">
                 <div className="bg-gradient-to-r from-orange-500/5 to-yellow-500/5 rounded-lg p-3 border border-orange-500/20">
-                  <p className="text-xs text-zinc-400 mb-1">Response Pattern</p>
-                  <p className="text-sm text-zinc-300">{insights.response_pattern}</p>
+                  <p className="text-xs text-zinc-600 mb-1">Response Pattern</p>
+                  <p className="text-sm text-zinc-700">{insights.response_pattern}</p>
                 </div>
                 <div className="bg-gradient-to-r from-green-500/5 to-emerald-500/5 rounded-lg p-3 border border-green-500/20">
-                  <p className="text-xs text-zinc-400 mb-1">Engagement Level</p>
-                  <p className="text-sm text-zinc-300">
+                  <p className="text-xs text-zinc-600 mb-1">Engagement Level</p>
+                  <p className="text-sm text-zinc-700">
                     {insights.engagement_rate > 0
                       ? `${Math.round(insights.engagement_rate * 100)}% reply ratio`
                       : "No engagement data"}
                   </p>
                 </div>
                 <div className="bg-gradient-to-r from-blue-500/5 to-cyan-500/5 rounded-lg p-3 border border-blue-500/20">
-                  <p className="text-xs text-zinc-400 mb-1">Best Contact Time</p>
-                  <p className="text-sm text-zinc-300">{insights.best_contact_time}</p>
+                  <p className="text-xs text-zinc-600 mb-1">Best Contact Time</p>
+                  <p className="text-sm text-zinc-700">{insights.best_contact_time}</p>
                 </div>
               </div>
             </div>
@@ -235,7 +235,7 @@ export function AIAssistantDrawer({
       </div>
 
       {/* Footer */}
-      <div className="shrink-0 p-4 border-t border-zinc-800 bg-zinc-900/50">
+      <div className="shrink-0 p-3 border-t border-zinc-200 bg-zinc-50/50">
         <Button
           onClick={() => refresh()}
           className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"

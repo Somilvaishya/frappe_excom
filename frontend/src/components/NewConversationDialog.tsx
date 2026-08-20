@@ -205,34 +205,34 @@ export function NewConversationDialog({
       onClick={onClose}
     >
       <div
-        className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-lg shadow-2xl"
+        className="bg-zinc-50 border border-zinc-300 rounded-xl w-full max-w-lg shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+        <div className="flex items-center justify-between p-4 border-b border-zinc-200">
           <div className="flex items-center gap-2">
-            <Plus className="w-5 h-5 text-blue-400" />
-            <h2 className="text-lg font-semibold text-white">New Conversation</h2>
+            <Plus className="w-5 h-5 text-blue-700" />
+            <h2 className="text-lg font-semibold text-zinc-900">New Conversation</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-5 space-y-5">
+        <div className="p-4 space-y-5">
           {/* Channel Selection */}
           <div>
-            <label className="text-xs text-zinc-400 mb-2 block font-medium">Channel</label>
+            <label className="text-xs text-zinc-600 mb-2 block font-medium">Channel</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setChannel("whatsapp")}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border ${
                   channel === "whatsapp"
-                    ? "bg-green-500/15 text-green-400 border-green-500/40"
-                    : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                    ? "bg-green-500/15 text-green-700 border-green-500/40"
+                    : "bg-zinc-100 text-zinc-600 border-zinc-300 hover:text-zinc-700"
                 }`}
               >
                 <MessageCircle className="w-4 h-4" />
@@ -240,10 +240,10 @@ export function NewConversationDialog({
               </button>
               <button
                 onClick={() => setChannel("email")}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border ${
                   channel === "email"
-                    ? "bg-blue-500/15 text-blue-400 border-blue-500/40"
-                    : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+                    ? "bg-blue-500/15 text-blue-700 border-blue-500/40"
+                    : "bg-zinc-100 text-zinc-600 border-zinc-300 hover:text-zinc-700"
                 }`}
               >
                 <Mail className="w-4 h-4" />
@@ -254,16 +254,16 @@ export function NewConversationDialog({
 
           {/* Account Selection */}
           <div>
-            <label className="text-xs text-zinc-400 mb-1.5 block font-medium">
+            <label className="text-xs text-zinc-600 mb-1.5 block font-medium">
               Send From Account
             </label>
             {loadingAccounts ? (
-              <div className="flex items-center gap-2 py-2 text-xs text-zinc-500">
+              <div className="flex items-center gap-2 py-2 text-xs text-zinc-600">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 Loading accounts...
               </div>
             ) : accounts.length === 0 ? (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-xs text-red-400">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-xs text-red-700">
                 No {channel} accounts found. Create one in Excom Channel Account first.
               </div>
             ) : (
@@ -271,7 +271,7 @@ export function NewConversationDialog({
                 <select
                   value={selectedAccount}
                   onChange={(e) => setSelectedAccount(e.target.value)}
-                  className="w-full appearance-none bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-500 pr-8"
+                  className="w-full appearance-none bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:border-zinc-300 pr-8"
                 >
                   {accounts.map((acc) => (
                     <option key={acc.name} value={acc.name}>
@@ -280,19 +280,19 @@ export function NewConversationDialog({
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600 pointer-events-none" />
               </div>
             )}
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-1">
+          <div className="flex gap-1 bg-zinc-100/50 rounded-lg p-1">
             <button
               onClick={() => { setTab("search"); setSelectedIdentity(null); }}
               className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-all ${
                 tab === "search"
-                  ? "bg-zinc-700 text-white"
-                  : "text-zinc-400 hover:text-zinc-300"
+                  ? "bg-zinc-200 text-zinc-900"
+                  : "text-zinc-600 hover:text-zinc-700"
               }`}
             >
               <Search className="w-3 h-3 inline mr-1.5" />
@@ -302,8 +302,8 @@ export function NewConversationDialog({
               onClick={() => { setTab("create"); setSelectedIdentity(null); }}
               className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-all ${
                 tab === "create"
-                  ? "bg-zinc-700 text-white"
-                  : "text-zinc-400 hover:text-zinc-300"
+                  ? "bg-zinc-200 text-zinc-900"
+                  : "text-zinc-600 hover:text-zinc-700"
               }`}
             >
               <Plus className="w-3 h-3 inline mr-1.5" />
@@ -315,29 +315,29 @@ export function NewConversationDialog({
           {tab === "search" && (
             <div className="space-y-3">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
                 <Input
                   placeholder="Search by name, phone, email..."
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
-                  className="pl-10 bg-zinc-800 border-zinc-700 text-white"
+                  className="pl-10 bg-zinc-100 border-zinc-300 text-zinc-900"
                   autoFocus
                 />
               </div>
 
-              <div className="max-h-56 overflow-y-auto space-y-1 rounded-lg border border-zinc-800">
+              <div className="max-h-56 overflow-y-auto space-y-1 rounded-lg border border-zinc-200">
                 {searching && (
-                  <div className="flex items-center justify-center py-6">
-                    <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-5 h-5 text-blue-700 animate-spin" />
                   </div>
                 )}
                 {!searching && identities.length === 0 && searchText.trim() && (
-                  <div className="text-center py-6 text-sm text-zinc-500">
+                  <div className="text-center py-4 text-sm text-zinc-600">
                     No identities found
                   </div>
                 )}
                 {!searching && identities.length === 0 && !searchText.trim() && (
-                  <div className="text-center py-6 text-sm text-zinc-500">
+                  <div className="text-center py-4 text-sm text-zinc-600">
                     Start typing to search
                   </div>
                 )}
@@ -348,7 +348,7 @@ export function NewConversationDialog({
                     className={`w-full text-left px-3 py-2.5 flex items-center gap-3 transition-colors ${
                       selectedIdentity?.name === id.name
                         ? "bg-blue-500/15 border-l-2 border-blue-500"
-                        : "hover:bg-zinc-800/70 border-l-2 border-transparent"
+                        : "hover:bg-zinc-100/70 border-l-2 border-transparent"
                     }`}
                   >
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-medium shrink-0">
@@ -360,10 +360,10 @@ export function NewConversationDialog({
                         .toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-white font-medium truncate">
+                      <p className="text-sm text-zinc-900 font-medium truncate">
                         {id.display_name || id.name}
                       </p>
-                      <div className="flex items-center gap-3 text-[11px] text-zinc-500">
+                      <div className="flex items-center gap-3 text-[11px] text-zinc-600">
                         {id.primary_phone && (
                           <span className="flex items-center gap-1">
                             <Phone className="w-3 h-3" />
@@ -384,12 +384,12 @@ export function NewConversationDialog({
 
               {selectedIdentity && (
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex items-center gap-3">
-                  <User className="w-4 h-4 text-blue-400 shrink-0" />
+                  <User className="w-4 h-4 text-blue-700 shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-white font-medium truncate">
+                    <p className="text-sm text-zinc-900 font-medium truncate">
                       {selectedIdentity.display_name || selectedIdentity.name}
                     </p>
-                    <p className="text-[11px] text-zinc-400 truncate">
+                    <p className="text-[11px] text-zinc-600 truncate">
                       {channel === "whatsapp"
                         ? selectedIdentity.primary_whatsapp || selectedIdentity.primary_phone || "No phone"
                         : selectedIdentity.primary_email || "No email"}
@@ -397,7 +397,7 @@ export function NewConversationDialog({
                   </div>
                   <button
                     onClick={() => setSelectedIdentity(null)}
-                    className="p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-white"
+                    className="p-1 rounded hover:bg-zinc-200 text-zinc-600 hover:text-zinc-900"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -410,41 +410,41 @@ export function NewConversationDialog({
           {tab === "create" && (
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-zinc-400 mb-1 block">Name</label>
+                <label className="text-xs text-zinc-600 mb-1 block">Name</label>
                 <Input
                   placeholder="Contact name"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="bg-zinc-800 border-zinc-700 text-white"
+                  className="bg-zinc-100 border-zinc-300 text-zinc-900"
                   autoFocus
                 />
               </div>
               {channel === "whatsapp" && (
                 <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">
-                    Phone Number <span className="text-red-400">*</span>
+                  <label className="text-xs text-zinc-600 mb-1 block">
+                    Phone Number <span className="text-red-700">*</span>
                   </label>
                   <Input
                     placeholder="+91 98765 43210"
                     value={newPhone}
                     onChange={(e) => setNewPhone(e.target.value)}
-                    className="bg-zinc-800 border-zinc-700 text-white"
+                    className="bg-zinc-100 border-zinc-300 text-zinc-900"
                   />
-                  <p className="text-[10px] text-zinc-500 mt-1">
+                  <p className="text-[10px] text-zinc-600 mt-1">
                     Include country code (e.g. +91)
                   </p>
                 </div>
               )}
               {channel === "email" && (
                 <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">
-                    Email Address <span className="text-red-400">*</span>
+                  <label className="text-xs text-zinc-600 mb-1 block">
+                    Email Address <span className="text-red-700">*</span>
                   </label>
                   <Input
                     placeholder="contact@example.com"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
-                    className="bg-zinc-800 border-zinc-700 text-white"
+                    className="bg-zinc-100 border-zinc-300 text-zinc-900"
                   />
                 </div>
               )}
@@ -453,11 +453,11 @@ export function NewConversationDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 p-5 border-t border-zinc-800">
+        <div className="flex justify-end gap-2 p-4 border-t border-zinc-200">
           <Button
             variant="outline"
             onClick={onClose}
-            className="border-zinc-700 text-zinc-300"
+            className="border-zinc-300 text-zinc-700"
           >
             Cancel
           </Button>

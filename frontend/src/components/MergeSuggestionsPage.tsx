@@ -92,43 +92,43 @@ export function MergeSuggestionsPage({
   };
 
   return (
-    <div className="h-full w-full bg-zinc-950 flex flex-col">
-      <div className="shrink-0 px-6 py-4 border-b border-zinc-800 flex items-center gap-3">
+    <div className="h-full w-full bg-white flex flex-col">
+      <div className="shrink-0 px-4 py-3 border-b border-zinc-200 flex items-center gap-3">
         <button
           onClick={onNavigateBack}
-          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+          className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <GitMerge className="w-5 h-5 text-green-400" />
-        <h1 className="text-lg font-semibold text-white">Merge Suggestions</h1>
-        <span className="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full ml-2">
+        <GitMerge className="w-5 h-5 text-green-700" />
+        <h1 className="text-lg font-semibold text-zinc-900">Merge Suggestions</h1>
+        <span className="text-xs bg-green-500/10 text-green-700 px-2 py-0.5 rounded-full ml-2">
           {suggestions.length} pending
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4">
         {suggestions.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
-            <GitMerge className="w-12 h-12 text-zinc-600 mb-3" />
-            <p className="text-zinc-400 text-sm">No merge suggestions</p>
-            <p className="text-zinc-500 text-xs mt-1">
+            <GitMerge className="w-12 h-12 text-zinc-500 mb-3" />
+            <p className="text-zinc-600 text-sm">No merge suggestions</p>
+            <p className="text-zinc-600 text-xs mt-1">
               The system scans daily for potential duplicate identities
             </p>
           </div>
         ) : (
-          <div className="space-y-4 max-w-4xl mx-auto">
+          <div className="space-y-3 max-w-4xl mx-auto">
             {suggestions.map((s) => (
               <div
                 key={s.source_name}
-                className="bg-zinc-900 border border-zinc-800 rounded-xl p-5"
+                className="bg-zinc-50 border border-zinc-200 rounded-xl p-4"
               >
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
                     {s.shared_fields.map((f) => (
                       <span
                         key={f}
-                        className="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20"
+                        className="text-[10px] bg-amber-500/10 text-amber-700 px-2 py-0.5 rounded-full border border-amber-500/20"
                       >
                         {f === "Phone" && <Phone className="w-3 h-3 inline mr-0.5" />}
                         {f === "Email" && <Mail className="w-3 h-3 inline mr-0.5" />}
@@ -141,7 +141,7 @@ export function MergeSuggestionsPage({
                     <Button
                       size="sm"
                       variant="outline"
-                      className="border-zinc-700 text-zinc-400 hover:text-white"
+                      className="border-zinc-300 text-zinc-600 hover:text-zinc-900"
                       disabled={processing.has(s.source_name)}
                       onClick={() => handleDismiss(s.source_name)}
                     >
@@ -160,7 +160,7 @@ export function MergeSuggestionsPage({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <IdentityCard
                     label="Identity A"
                     name={s.target_name}
@@ -203,22 +203,22 @@ function IdentityCard({
   whatsapp: string;
 }) {
   return (
-    <div className="bg-zinc-800/50 rounded-lg p-4">
-      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{label}</span>
-      <p className="text-sm font-medium text-white mt-1">{displayName || name}</p>
+    <div className="bg-zinc-100/50 rounded-lg p-3">
+      <span className="text-[10px] text-zinc-600 uppercase tracking-wider">{label}</span>
+      <p className="text-sm font-medium text-zinc-900 mt-1">{displayName || name}</p>
       <div className="mt-2 space-y-1">
         {phone && (
-          <p className="text-xs text-zinc-400 flex items-center gap-1.5">
+          <p className="text-xs text-zinc-600 flex items-center gap-1.5">
             <Phone className="w-3 h-3" /> {phone}
           </p>
         )}
         {email && (
-          <p className="text-xs text-zinc-400 flex items-center gap-1.5">
+          <p className="text-xs text-zinc-600 flex items-center gap-1.5">
             <Mail className="w-3 h-3" /> {email}
           </p>
         )}
         {whatsapp && (
-          <p className="text-xs text-zinc-400 flex items-center gap-1.5">
+          <p className="text-xs text-zinc-600 flex items-center gap-1.5">
             <MessageCircle className="w-3 h-3" /> {whatsapp}
           </p>
         )}

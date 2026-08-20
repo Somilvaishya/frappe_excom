@@ -26,6 +26,8 @@ import {
   Sticker,
   AlertCircle,
   RotateCcw,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import { useFrappePostCall } from "frappe-react-sdk";
 import { Button } from "./ui/button";
@@ -60,6 +62,8 @@ interface ChannelTabsViewProps {
   activeAccountId?: string;
   onAccountSwitch?: (accountId: string) => void;
   onRefreshThreads?: () => void;
+  isIdentityPanelCollapsed?: boolean;
+  onToggleIdentityPanel?: () => void;
 }
 
 const CHANNEL_ICONS: Record<string, React.ReactElement> = {
@@ -84,15 +88,15 @@ function getChannelIcon(channel?: string) {
 function DeliveryIcon({ status }: { status?: string }) {
   switch (status) {
     case "queued":
-      return <Loader2 className="w-3 h-3 text-zinc-500 animate-spin" />;
+      return <Loader2 className="w-3 h-3 text-zinc-600 animate-spin" />;
     case "sent":
-      return <Check className="w-3 h-3 text-zinc-500" />;
+      return <Check className="w-3 h-3 text-zinc-600" />;
     case "delivered":
-      return <CheckCheck className="w-3 h-3 text-zinc-500" />;
+      return <CheckCheck className="w-3 h-3 text-zinc-600" />;
     case "read":
-      return <CheckCheck className="w-3 h-3 text-blue-400" />;
+      return <CheckCheck className="w-3 h-3 text-blue-700" />;
     case "failed":
-      return <AlertCircle className="w-3 h-3 text-red-400" />;
+      return <AlertCircle className="w-3 h-3 text-red-700" />;
     default:
       return null;
   }
@@ -118,7 +122,7 @@ function DeliveryTimer({ sentAt }: { sentAt: Date }) {
   const display = `${mins}:${secs.toString().padStart(2, "0")}`;
 
   return (
-    <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+    <span className="text-[10px] text-zinc-600 flex items-center gap-1">
       <Loader2 className="w-2.5 h-2.5 animate-spin" />
       Checking delivery… {display}
     </span>
@@ -131,7 +135,10 @@ export function ChannelTabsView({
   activeAccountId: parentAccountId,
   onAccountSwitch,
   onRefreshThreads,
+  isIdentityPanelCollapsed,
+  onToggleIdentityPanel,
 }: ChannelTabsViewProps) {
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
   const [messageInput, setMessageInput] = useState("");
   const [selectedChannel, setSelectedChannel] = useState(contact.channels[0]);
   const [selectedAccountId, setSelectedAccountId] = useState(
@@ -418,10 +425,10 @@ export function ChannelTabsView({
   const hasMultipleAccounts = channelAccounts.length > 1;
 
   return (
-    <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-zinc-950">
+    <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-white">
       {/* Header */}
-      <div className="shrink-0 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800">
-        <div className="p-4">
+      <div className="shrink-0 bg-zinc-50/80 backdrop-blur-sm border-b border-zinc-200">
+        <div className={isHeaderCollapsed ? "px-3 py-1.5" : "p-3"}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
               <div className="relative shrink-0">
@@ -429,10 +436,16 @@ export function ChannelTabsView({
                   <img
                     src={contact.contactAvatar}
                     alt={contact.contactName}
-                    className="w-10 h-10 rounded-full object-cover ring-2 ring-zinc-700"
+                    className={`rounded-full object-cover ring-2 ring-zinc-300 ${
+                      isHeaderCollapsed ? "w-7 h-7" : "w-10 h-10"
+                    }`}
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 ring-2 ring-zinc-700 flex items-center justify-center text-white text-sm font-medium">
+                  <div
+                    className={`rounded-full bg-gradient-to-br from-blue-500 to-purple-600 ring-2 ring-zinc-300 flex items-center justify-center text-white text-sm font-medium ${
+                      isHeaderCollapsed ? "w-7 h-7 text-xs" : "w-10 h-10"
+                    }`}
+                  >
                     {contact.contactName
                       .split(" ")
                       .map((w) => w[0])
@@ -442,55 +455,57 @@ export function ChannelTabsView({
                   </div>
                 )}
                 <div
-                  className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-900 ${
+                  className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-200 ${
                     contact.status === "online"
                       ? "bg-green-500"
                       : contact.status === "away"
                       ? "bg-yellow-500"
-                      : "bg-zinc-600"
+                      : "bg-zinc-300"
                   }`}
                 />
               </div>
               <div className="min-w-0">
-                <h3 className="font-semibold text-white truncate">
+                <h3 className="font-semibold text-zinc-900 truncate">
                   {contact.contactName}
                 </h3>
-                <div className="flex items-center gap-2">
-                  <p className="text-xs text-zinc-400 truncate">
-                    {contact.status === "online"
-                      ? "Active now"
-                      : formatServerLastSeen(contact.timestamp)}
-                  </p>
-                  {contact.assignedTo && (
-                    <>
-                      <span className="text-zinc-600 shrink-0">&bull;</span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {contact.assignedTo.avatar && (
-                          <img
-                            src={contact.assignedTo.avatar}
-                            alt={contact.assignedTo.name}
-                            className="w-4 h-4 rounded-full"
-                          />
-                        )}
-                        <span className="text-xs text-zinc-400">
-                          Assigned to {contact.assignedTo.name}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
+                {!isHeaderCollapsed && (
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-zinc-600 truncate">
+                      {contact.status === "online"
+                        ? "Active now"
+                        : formatServerLastSeen(contact.timestamp)}
+                    </p>
+                    {contact.assignedTo && (
+                      <>
+                        <span className="text-zinc-500 shrink-0">&bull;</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {contact.assignedTo.avatar && (
+                            <img
+                              src={contact.assignedTo.avatar}
+                              alt={contact.assignedTo.name}
+                              className="w-4 h-4 rounded-full"
+                            />
+                          )}
+                          <span className="text-xs text-zinc-600">
+                            Assigned to {contact.assignedTo.name}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
               <TagManager threadId={selectedAccountId || ""} />
               {contact.aiStatus === "active" ? (
-                <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 border">
+                <Badge className="bg-blue-500/10 text-blue-700 border-blue-500/20 border">
                   <Bot className="w-3 h-3 mr-1" />
                   AI Active
                 </Badge>
               ) : (
-                <Badge className="bg-green-500/10 text-green-400 border-green-500/20 border">
+                <Badge className="bg-green-500/10 text-green-700 border-green-500/20 border">
                   <UserCheck className="w-3 h-3 mr-1" />
                   Human Control
                 </Badge>
@@ -498,7 +513,7 @@ export function ChannelTabsView({
               <Button
                 size="sm"
                 variant="outline"
-                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
                 onClick={openTransferModal}
               >
                 <ArrowRightLeft className="w-4 h-4 mr-1.5" />
@@ -511,6 +526,41 @@ export function ChannelTabsView({
                 <Smile className="w-4 h-4 mr-2" />
                 AI Assist
               </Button>
+              <div className="w-px h-6 bg-zinc-200 mx-0.5" />
+              <button
+                type="button"
+                onClick={() => setIsHeaderCollapsed((v) => !v)}
+                title={isHeaderCollapsed ? "Expand header" : "Collapse header"}
+                aria-label={isHeaderCollapsed ? "Expand header" : "Collapse header"}
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors"
+              >
+                {isHeaderCollapsed ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronUp className="w-4 h-4" />
+                )}
+              </button>
+              {onToggleIdentityPanel && (
+                <button
+                  type="button"
+                  onClick={onToggleIdentityPanel}
+                  title={
+                    isIdentityPanelCollapsed
+                      ? "Show details panel"
+                      : "Hide details panel for a bigger chat"
+                  }
+                  aria-label={
+                    isIdentityPanelCollapsed ? "Show details panel" : "Hide details panel"
+                  }
+                  className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors"
+                >
+                  {isIdentityPanelCollapsed ? (
+                    <PanelRightOpen className="w-4 h-4" />
+                  ) : (
+                    <PanelRightClose className="w-4 h-4" />
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -518,18 +568,18 @@ export function ChannelTabsView({
 
       {showTransferModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowTransferModal(false)}>
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-white mb-1">Transfer Conversation</h2>
-            <p className="text-xs text-zinc-400 mb-4">
+          <div className="bg-zinc-50 border border-zinc-300 rounded-xl w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-zinc-900 mb-1">Transfer Conversation</h2>
+            <p className="text-xs text-zinc-600 mb-3">
               Move this thread to another team, or assign to a specific member.
             </p>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-zinc-400 mb-1 block">Target Team</label>
+                <label className="text-xs text-zinc-600 mb-1 block">Target Team</label>
                 <select
                   value={transferTarget}
                   onChange={(e) => onTeamSelected(e.target.value)}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
+                  className="w-full bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:border-zinc-300"
                 >
                   <option value="">Select team...</option>
                   {transferTeams.map((t) => (
@@ -541,13 +591,13 @@ export function ChannelTabsView({
               </div>
               {transferTarget && transferMembers.length > 0 && (
                 <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">
-                    Assign to Member <span className="text-zinc-600">(optional — leave empty for team pickup)</span>
+                  <label className="text-xs text-zinc-600 mb-1 block">
+                    Assign to Member <span className="text-zinc-500">(optional — leave empty for team pickup)</span>
                   </label>
                   <select
                     value={transferUser}
                     onChange={(e) => setTransferUser(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
+                    className="w-full bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:border-zinc-300"
                   >
                     <option value="">Anyone in the team</option>
                     {transferMembers.map((m) => (
@@ -559,20 +609,20 @@ export function ChannelTabsView({
                 </div>
               )}
               <div>
-                <label className="text-xs text-zinc-400 mb-1 block">Note (optional)</label>
+                <label className="text-xs text-zinc-600 mb-1 block">Note (optional)</label>
                 <Input
                   value={transferNote}
                   onChange={(e) => setTransferNote(e.target.value)}
                   placeholder="Reason for transfer..."
-                  className="bg-zinc-800 border-zinc-700 text-white"
+                  className="bg-zinc-100 border-zinc-300 text-zinc-900"
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 mt-6">
+            <div className="flex justify-end gap-2 mt-4">
               <Button
                 variant="outline"
                 onClick={() => setShowTransferModal(false)}
-                className="border-zinc-700 text-zinc-300"
+                className="border-zinc-300 text-zinc-700"
               >
                 Cancel
               </Button>
@@ -606,7 +656,7 @@ export function ChannelTabsView({
       )}
 
       {/* Channel Tabs */}
-      <div className="shrink-0 bg-zinc-900/60 border-b border-zinc-800">
+      <div className="shrink-0 bg-zinc-50/60 border-b border-zinc-200">
         <Tabs
           value={selectedChannel}
           onValueChange={setSelectedChannel}
@@ -619,13 +669,13 @@ export function ChannelTabsView({
                 <TabsTrigger
                   key={channel}
                   value={channel}
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-zinc-800/50 px-6 py-3 data-[state=active]:shadow-none"
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-zinc-100/50 px-4 py-2 data-[state=active]:shadow-none"
                 >
                   <div className="flex items-center gap-2">
                     {getChannelIcon(channel)}
                     <span>{CHANNEL_LABELS[channel] || channel}</span>
                     {accounts.length > 1 && (
-                      <Badge className="ml-1 text-[9px] px-1.5 h-4 bg-blue-500/20 text-blue-300 border-0">
+                      <Badge className="ml-1 text-[9px] px-1.5 h-4 bg-blue-500/20 text-blue-700 border-0">
                         {accounts.length}
                       </Badge>
                     )}
@@ -639,9 +689,9 @@ export function ChannelTabsView({
 
       {/* Account Selector */}
       {hasMultipleAccounts && (
-        <div className="shrink-0 bg-zinc-900/40 border-b border-zinc-800 px-4 py-2">
+        <div className="shrink-0 bg-zinc-50/40 border-b border-zinc-200 px-3 py-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-zinc-400">Account:</span>
+            <span className="text-xs text-zinc-600">Account:</span>
             {channelAccounts.map((account) => (
               <button
                 key={account.id}
@@ -654,8 +704,8 @@ export function ChannelTabsView({
                   account.id === selectedAccountId
                     ? "bg-blue-500 text-white"
                     : account.hasAccess
-                    ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                    : "bg-zinc-800/50 text-zinc-600 cursor-not-allowed"
+                    ? "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                    : "bg-zinc-100/50 text-zinc-500 cursor-not-allowed"
                 }`}
               >
                 <div className="flex items-center gap-1.5">
@@ -673,18 +723,18 @@ export function ChannelTabsView({
 
       {/* Active Account Banner */}
       {selectedAccount && (
-        <div className="shrink-0 px-4 py-2 bg-zinc-900/60 border-b border-zinc-800">
+        <div className="shrink-0 px-3 py-2 bg-zinc-50/60 border-b border-zinc-200">
           <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg p-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs min-w-0">
                 {getChannelIcon(selectedAccount.channel)}
-                <span className="text-zinc-400 shrink-0">Viewing & replying via:</span>
-                <span className="font-medium text-white truncate">
+                <span className="text-zinc-600 shrink-0">Viewing & replying via:</span>
+                <span className="font-medium text-zinc-900 truncate">
                   {selectedAccount.name} ({selectedAccount.identifier})
                 </span>
               </div>
               {!selectedAccount.hasAccess && (
-                <Badge className="text-[9px] px-2 h-5 bg-orange-500/20 text-orange-300 border-orange-500/30 shrink-0">
+                <Badge className="text-[9px] px-2 h-5 bg-orange-500/20 text-orange-700 border-orange-500/30 shrink-0">
                   No Access
                 </Badge>
               )}
@@ -704,27 +754,27 @@ export function ChannelTabsView({
 
       {/* Pinned Messages */}
       {pinnedMessages.length > 0 && (
-        <div className="shrink-0 border-b border-zinc-800">
+        <div className="shrink-0 border-b border-zinc-200">
           <button
             onClick={() => setShowPinned(!showPinned)}
-            className="w-full px-4 py-2 flex items-center gap-2 text-xs text-amber-400 hover:bg-zinc-800/50 transition-colors"
+            className="w-full px-3 py-2 flex items-center gap-2 text-xs text-amber-700 hover:bg-zinc-100/50 transition-colors"
           >
             <Pin className="w-3.5 h-3.5" />
             <span className="font-medium">{pinnedMessages.length} pinned message{pinnedMessages.length > 1 ? "s" : ""}</span>
             {showPinned ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
           </button>
           {showPinned && (
-            <div className="px-4 pb-2 space-y-2 max-h-48 overflow-y-auto">
+            <div className="px-3 pb-2 space-y-2 max-h-48 overflow-y-auto">
               {pinnedMessages.map((pm) => (
                 <div key={pm.name} className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-2">
                   <div className="flex items-center gap-1.5 mb-1">
-                    <Pin className="w-3 h-3 text-amber-400" />
-                    <span className="text-[10px] text-amber-400/70">{pm.sender_name || "Unknown"}</span>
-                    <span className="text-[10px] text-zinc-500 ml-auto">
+                    <Pin className="w-3 h-3 text-amber-700" />
+                    <span className="text-[10px] text-amber-700/70">{pm.sender_name || "Unknown"}</span>
+                    <span className="text-[10px] text-zinc-600 ml-auto">
                       {formatServerShortDateTime(parseFrappeDateTime(pm.creation))}
                     </span>
                   </div>
-                  <p className="text-xs text-zinc-300 line-clamp-2">{pm.content_text}</p>
+                  <p className="text-xs text-zinc-700 line-clamp-2">{pm.content_text}</p>
                 </div>
               ))}
             </div>
@@ -734,24 +784,24 @@ export function ChannelTabsView({
 
       {/* Messages - scrollable area */}
       <div
-        className={`flex-1 min-h-0 overflow-y-auto p-6 ${isDragging ? "ring-2 ring-blue-500 ring-inset bg-blue-500/5" : ""}`}
+        className={`flex-1 min-h-0 overflow-y-auto p-4 ${isDragging ? "ring-2 ring-blue-500 ring-inset bg-blue-500/5" : ""}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <div className="space-y-4 max-w-4xl mx-auto">
+        <div className="space-y-3 max-w-4xl mx-auto">
           {messagesLoading ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
-              <Loader2 className="w-8 h-8 text-blue-400 animate-spin mb-4" />
-              <p className="text-zinc-400 text-sm">Loading messages...</p>
+              <Loader2 className="w-8 h-8 text-blue-700 animate-spin mb-3" />
+              <p className="text-zinc-600 text-sm">Loading messages...</p>
             </div>
           ) : threadMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
-              <div className="w-16 h-16 rounded-full bg-zinc-800/50 flex items-center justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-zinc-100/50 flex items-center justify-center mb-3">
                 {getChannelIcon(selectedChannel)}
               </div>
-              <p className="text-zinc-400 text-sm">No messages yet</p>
-              <p className="text-zinc-600 text-xs mt-1">
+              <p className="text-zinc-600 text-sm">No messages yet</p>
+              <p className="text-zinc-500 text-xs mt-1">
                 Start a conversation with {contact.contactName}
               </p>
             </div>
@@ -769,7 +819,7 @@ export function ChannelTabsView({
               return (
                 <div key={message.id}>
                   {showTimestamp && (
-                    <div className="text-center text-xs text-zinc-500 my-4">
+                    <div className="text-center text-xs text-zinc-600 my-4">
                       {formatServerDateTimeFull(message.timestamp)}
                     </div>
                   )}
@@ -793,12 +843,12 @@ export function ChannelTabsView({
                       <div className="max-w-[80%] w-full">
                         <div className="rounded-xl p-3 bg-amber-500/10 border border-amber-500/20 shadow-lg">
                           <div className="flex items-center gap-2 mb-1.5">
-                            <Lock className="w-3 h-3 text-amber-400" />
-                            <Badge className="text-[10px] px-1.5 h-4 bg-amber-500/20 text-amber-400 border-amber-500/30 border">
+                            <Lock className="w-3 h-3 text-amber-700" />
+                            <Badge className="text-[10px] px-1.5 h-4 bg-amber-500/20 text-amber-700 border-amber-500/30 border">
                               Internal Note
                             </Badge>
                             {message.sentBy && (
-                              <span className="text-[10px] text-amber-400/70 ml-auto">
+                              <span className="text-[10px] text-amber-700/70 ml-auto">
                                 {message.sentBy.name}
                               </span>
                             )}
@@ -806,7 +856,7 @@ export function ChannelTabsView({
                           <p className="text-sm text-amber-100/90 leading-relaxed">
                             {message.content}
                           </p>
-                          <div className="flex items-center gap-1 mt-2 text-[10px] text-amber-400/50">
+                          <div className="flex items-center gap-1 mt-2 text-[10px] text-amber-700/50">
                             <span>{formatServerTime(message.timestamp)}</span>
                           </div>
                         </div>
@@ -837,28 +887,28 @@ export function ChannelTabsView({
                             <div className={`mb-1 rounded-lg p-2 border-l-2 ${
                               message.replyTo.direction === "Outbound"
                                 ? "border-blue-500 bg-blue-500/10"
-                                : "border-zinc-500 bg-zinc-800/50"
+                                : "border-zinc-300 bg-zinc-100/50"
                             }`}>
-                              <p className="text-[10px] text-zinc-400 mb-0.5">
+                              <p className="text-[10px] text-zinc-600 mb-0.5">
                                 {message.replyTo.sender || (message.replyTo.direction === "Outbound" ? "You" : contact.contactName)}
                               </p>
-                              <p className="text-xs text-zinc-300 line-clamp-2">{message.replyTo.content}</p>
+                              <p className="text-xs text-zinc-700 line-clamp-2">{message.replyTo.content}</p>
                             </div>
                           )}
 
                           <div
                             className={`rounded-2xl p-3 shadow-lg relative ${
                               message.status === "failed"
-                                ? "bg-red-950/40 border border-red-500/40 text-white"
+                                ? "bg-red-50 border border-red-200 text-red-700"
                                 : isAI
-                                ? "bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 text-white"
+                                ? "bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/30 text-zinc-900"
                                 : isUser
                                 ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white"
-                                : "bg-zinc-800 text-zinc-100"
+                                : "bg-zinc-100 text-zinc-900"
                             }`}
                           >
                             {message.isPinned && (
-                              <Pin className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 text-amber-400" />
+                              <Pin className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 text-amber-700" />
                             )}
                             {message.type === "template" ? (
                               <div className="space-y-2">
@@ -874,14 +924,14 @@ export function ChannelTabsView({
                                       href={message.mediaUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center gap-3 p-2 bg-zinc-700/50 rounded-lg hover:bg-zinc-700 transition-colors"
+                                      className="flex items-center gap-3 p-2 bg-zinc-200/50 rounded-lg hover:bg-zinc-200 transition-colors"
                                     >
-                                      <div className="w-10 h-10 bg-zinc-600 rounded-lg flex items-center justify-center">
-                                        <FileText className="w-5 h-5 text-zinc-300" />
+                                      <div className="w-10 h-10 bg-zinc-300 rounded-lg flex items-center justify-center">
+                                        <FileText className="w-5 h-5 text-zinc-700" />
                                       </div>
                                       <div>
                                         <p className="text-sm font-medium">Attachment</p>
-                                        <p className="text-xs text-zinc-400">Document</p>
+                                        <p className="text-xs text-zinc-600">Document</p>
                                       </div>
                                     </a>
                                   )
@@ -889,20 +939,20 @@ export function ChannelTabsView({
                                 {message.content && (
                                   <p className="text-sm leading-relaxed">{message.content}</p>
                                 )}
-                                <span className="inline-block text-[10px] text-zinc-400 bg-zinc-700/50 px-2 py-0.5 rounded-full">
+                                <span className="inline-block text-[10px] text-zinc-600 bg-zinc-200/50 px-2 py-0.5 rounded-full">
                                   Template
                                 </span>
                               </div>
                             ) : message.type === "document" && message.mediaUrl ? (
                               <div className="flex items-center gap-3 p-2">
-                                <div className="w-10 h-10 bg-zinc-700 rounded-lg flex items-center justify-center">
-                                  <Paperclip className="w-5 h-5 text-zinc-300" />
+                                <div className="w-10 h-10 bg-zinc-200 rounded-lg flex items-center justify-center">
+                                  <Paperclip className="w-5 h-5 text-zinc-700" />
                                 </div>
                                 <div>
                                   <p className="text-sm font-medium">
                                     {message.mediaUrl}
                                   </p>
-                                  <p className="text-xs text-zinc-400">
+                                  <p className="text-xs text-zinc-600">
                                     Document
                                   </p>
                                 </div>
@@ -941,7 +991,7 @@ export function ChannelTabsView({
                                 : "justify-start"
                             }`}
                           >
-                            <div className="flex items-center gap-1 text-zinc-500">
+                            <div className="flex items-center gap-1 text-zinc-600">
                               <span>{formatServerTime(message.timestamp)}</span>
                               {(isUser || isAI) && (
                                 <DeliveryIcon status={message.status} />
@@ -957,12 +1007,12 @@ export function ChannelTabsView({
                                   />
                                 )}
                                 {isAI ? (
-                                  <Badge className="text-[10px] px-1.5 py-0 h-4 bg-purple-500/20 text-purple-300 border-purple-500/30">
+                                  <Badge className="text-[10px] px-1.5 py-0 h-4 bg-purple-500/20 text-purple-700 border-purple-500/30">
                                     <Bot className="w-2.5 h-2.5 mr-0.5" />
                                     AI
                                   </Badge>
                                 ) : (
-                                  <span className="text-zinc-400 text-[10px]">
+                                  <span className="text-zinc-600 text-[10px]">
                                     {message.sentBy.name}
                                   </span>
                                 )}
@@ -972,13 +1022,13 @@ export function ChannelTabsView({
 
                           {message.status === "failed" && isUser && (
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] text-red-400 truncate max-w-48">
+                              <span className="text-[10px] text-red-700 truncate max-w-48">
                                 {message.failureReason || "Delivery failed"}
                               </span>
                               <button
                                 onClick={() => handleRetryMessage(message.id)}
                                 disabled={retryingMsgId === message.id}
-                                className="flex items-center gap-1 text-[11px] font-medium text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                                className="flex items-center gap-1 text-[11px] font-medium text-red-700 hover:text-red-700 transition-colors disabled:opacity-50"
                               >
                                 {retryingMsgId === message.id ? (
                                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -1010,7 +1060,7 @@ export function ChannelTabsView({
                 <div className="rounded-2xl p-3 shadow-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white opacity-70">
                   <p className="text-sm leading-relaxed">{msg.content}</p>
                 </div>
-                <div className="flex items-center gap-1 mt-1 justify-end text-xs text-zinc-500">
+                <div className="flex items-center gap-1 mt-1 justify-end text-xs text-zinc-600">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   <span>Sending...</span>
                 </div>
@@ -1055,18 +1105,18 @@ export function ChannelTabsView({
 
       {/* Reply Bar */}
       {replyingTo && (
-        <div className="shrink-0 px-4 py-2 bg-zinc-900/80 border-t border-zinc-800">
+        <div className="shrink-0 px-3 py-2 bg-zinc-50/80 border-t border-zinc-200">
           <div className="max-w-4xl mx-auto flex items-center gap-3 rounded-lg bg-blue-500/10 border border-blue-500/20 p-2">
-            <Reply className="w-4 h-4 text-blue-400 shrink-0" />
+            <Reply className="w-4 h-4 text-blue-700 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] text-blue-400 font-medium">
+              <p className="text-[10px] text-blue-700 font-medium">
                 Replying to {replyingTo.sentBy?.name || (replyingTo.sender === "user" ? "You" : contact.contactName)}
               </p>
-              <p className="text-xs text-zinc-400 truncate">{replyingTo.content}</p>
+              <p className="text-xs text-zinc-600 truncate">{replyingTo.content}</p>
             </div>
             <button
               onClick={() => setReplyingTo(null)}
-              className="p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors shrink-0"
+              className="p-1 rounded hover:bg-zinc-200 text-zinc-600 hover:text-zinc-900 transition-colors shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1075,7 +1125,7 @@ export function ChannelTabsView({
       )}
 
       {/* Input Area */}
-      <div className={`shrink-0 backdrop-blur-sm border-t p-4 ${isNoteMode ? "bg-amber-500/5 border-amber-500/20" : "bg-zinc-900/80 border-zinc-800"}`}>
+      <div className={`shrink-0 backdrop-blur-sm border-t p-3 ${isNoteMode ? "bg-amber-500/5 border-amber-500/20" : "bg-zinc-50/80 border-zinc-200"}`}>
         <div className="max-w-4xl mx-auto">
           {/* Email compose button for email channels */}
           {isEmailChannel && !emailCompose.show && (
@@ -1085,7 +1135,7 @@ export function ChannelTabsView({
                   const contactEmail = contact.contactInfo.email || "";
                   setEmailCompose({ show: true, to: contactEmail, subject: "", inReplyToGmailId: "" });
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 text-xs font-medium rounded-lg border border-blue-500/20 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 text-xs font-medium rounded-lg border border-blue-500/20 transition-colors"
               >
                 <Mail className="w-3.5 h-3.5" />
                 Compose Email
@@ -1094,8 +1144,8 @@ export function ChannelTabsView({
           )}
 
           {contact.aiStatus === "active" && (
-            <div className="mb-3 flex items-center gap-2 text-xs text-zinc-400">
-              <Bot className="w-4 h-4 text-blue-400 shrink-0" />
+            <div className="mb-3 flex items-center gap-2 text-xs text-zinc-600">
+              <Bot className="w-4 h-4 text-blue-700 shrink-0" />
               <span>
                 AI is actively monitoring this conversation. Messages will be
                 sent by AI unless you take over.
@@ -1103,7 +1153,7 @@ export function ChannelTabsView({
               <Button
                 size="sm"
                 variant="outline"
-                className="ml-auto border-blue-500/50 text-blue-400 hover:bg-blue-500/10 shrink-0"
+                className="ml-auto border-blue-500/50 text-blue-700 hover:bg-blue-500/10 shrink-0"
                 onClick={async () => {
                   if (!selectedAccountId) return;
                   try {
@@ -1126,7 +1176,7 @@ export function ChannelTabsView({
               className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                 !isNoteMode
                   ? "bg-blue-500 text-white"
-                  : "bg-zinc-800 text-zinc-400 hover:text-white"
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900"
               }`}
             >
               <MessageCircle className="w-3 h-3 inline mr-1" />
@@ -1137,14 +1187,14 @@ export function ChannelTabsView({
               className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                 isNoteMode
                   ? "bg-amber-500 text-white"
-                  : "bg-zinc-800 text-zinc-400 hover:text-white"
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900"
               }`}
             >
               <StickyNote className="w-3 h-3 inline mr-1" />
               Note
             </button>
             {isNoteMode && (
-              <span className="text-[10px] text-amber-400/70 ml-2 flex items-center gap-1">
+              <span className="text-[10px] text-amber-700/70 ml-2 flex items-center gap-1">
                 <Lock className="w-3 h-3" />
                 Only visible to your team
               </span>
@@ -1157,7 +1207,7 @@ export function ChannelTabsView({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-zinc-400 hover:text-white"
+                  className="text-zinc-600 hover:text-zinc-900"
                   onClick={openFilePicker}
                   disabled={uploading}
                 >
@@ -1170,7 +1220,7 @@ export function ChannelTabsView({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-zinc-400 hover:text-white"
+                  className="text-zinc-600 hover:text-zinc-900"
                   onClick={openFilePicker}
                   disabled={uploading}
                 >
@@ -1181,7 +1231,7 @@ export function ChannelTabsView({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="text-green-400 hover:text-green-300"
+                      className="text-green-700 hover:text-green-700"
                       onClick={() => setShowTemplatePicker(true)}
                       title="Send WhatsApp Template"
                     >
@@ -1192,7 +1242,7 @@ export function ChannelTabsView({
                         ref={stickerBtnRef}
                         variant="ghost"
                         size="icon"
-                        className="text-yellow-400 hover:text-yellow-300"
+                        className="text-yellow-700 hover:text-yellow-700"
                         onClick={() => {
                           if (!showStickerPicker && stickerBtnRef.current) {
                             const rect = stickerBtnRef.current.getBoundingClientRect();
@@ -1241,7 +1291,7 @@ export function ChannelTabsView({
               <div className={`rounded-xl border transition-colors ${
                 isNoteMode
                   ? "bg-amber-500/10 border-amber-500/30 focus-within:border-amber-400"
-                  : "bg-zinc-800 border-zinc-700 focus-within:border-blue-500"
+                  : "bg-zinc-100 border-zinc-300 focus-within:border-blue-500"
               }`}>
                 <Input
                   placeholder={
@@ -1260,14 +1310,14 @@ export function ChannelTabsView({
                   }}
                   className={`border-0 bg-transparent focus-visible:ring-0 ${
                     isNoteMode
-                      ? "text-amber-100 placeholder:text-amber-400/40"
-                      : "text-white placeholder:text-zinc-500"
+                      ? "text-amber-100 placeholder:text-amber-700/40"
+                      : "text-zinc-900 placeholder:text-zinc-600"
                   }`}
                   disabled={!selectedAccount?.hasAccess}
                 />
               </div>
               {messageInput.length > CHAR_LIMIT * 0.9 && (
-                <div className={`text-right text-[10px] mt-1 ${messageInput.length >= CHAR_LIMIT ? "text-red-400" : "text-zinc-500"}`}>
+                <div className={`text-right text-[10px] mt-1 ${messageInput.length >= CHAR_LIMIT ? "text-red-700" : "text-zinc-600"}`}>
                   {messageInput.length}/{CHAR_LIMIT}
                 </div>
               )}

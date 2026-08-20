@@ -49,16 +49,16 @@ function StatBadge({
   color: "zinc" | "green" | "red";
 }) {
   const colorMap = {
-    zinc: "text-zinc-300",
-    green: "text-green-400",
-    red: "text-red-400",
+    zinc: "text-zinc-700",
+    green: "text-green-700",
+    red: "text-red-700",
   };
   return (
     <div className="flex items-center gap-2">
       <span className={`text-lg font-semibold ${colorMap[color]}`}>
         {value}
       </span>
-      <span className="text-xs text-zinc-500">{label}</span>
+      <span className="text-xs text-zinc-600">{label}</span>
     </div>
   );
 }
@@ -75,33 +75,33 @@ function CreateListDialog({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-white mb-4">
+      <div className="bg-zinc-50 border border-zinc-300 rounded-xl w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-zinc-900 mb-3">
           Create Subscriber List
         </h2>
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-zinc-400 mb-1 block">List Name</label>
+            <label className="text-xs text-zinc-600 mb-1 block">List Name</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. VIP Customers"
-              className="bg-zinc-800 border-zinc-700 text-white"
+              className="bg-zinc-100 border-zinc-300 text-zinc-900"
               autoFocus
             />
           </div>
           <div>
-            <label className="text-xs text-zinc-400 mb-1 block">Description</label>
+            <label className="text-xs text-zinc-600 mb-1 block">Description</label>
             <Input
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
               placeholder="Optional description"
-              className="bg-zinc-800 border-zinc-700 text-white"
+              className="bg-zinc-100 border-zinc-300 text-zinc-900"
             />
           </div>
         </div>
-        <div className="flex justify-end gap-2 mt-6">
-          <Button variant="outline" onClick={onClose} className="border-zinc-700 text-zinc-300">
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="outline" onClick={onClose} className="border-zinc-300 text-zinc-700">
             Cancel
           </Button>
           <Button
@@ -159,17 +159,17 @@ function AddSubscriberDialog({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-white mb-1">Add Subscriber</h2>
-        <p className="text-xs text-zinc-400 mb-4">
-          Add to <span className="text-zinc-300">{listName}</span>
+      <div className="bg-zinc-50 border border-zinc-300 rounded-xl w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-zinc-900 mb-1">Add Subscriber</h2>
+        <p className="text-xs text-zinc-600 mb-3">
+          Add to <span className="text-zinc-700">{listName}</span>
         </p>
 
-        <div className="flex gap-1 mb-4 bg-zinc-800 rounded-lg p-1">
+        <div className="flex gap-1 mb-3 bg-zinc-100 rounded-lg p-1">
           <button
             onClick={() => setTab("search")}
             className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-colors ${
-              tab === "search" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
+              tab === "search" ? "bg-zinc-200 text-zinc-900" : "text-zinc-600 hover:text-zinc-900"
             }`}
           >
             Search Identity
@@ -177,7 +177,7 @@ function AddSubscriberDialog({
           <button
             onClick={() => setTab("manual")}
             className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-colors ${
-              tab === "manual" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
+              tab === "manual" ? "bg-zinc-200 text-zinc-900" : "text-zinc-600 hover:text-zinc-900"
             }`}
           >
             By Phone / Email
@@ -187,18 +187,18 @@ function AddSubscriberDialog({
         {tab === "search" ? (
           <div>
             <div className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
               <Input
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setSelected(null); }}
                 placeholder="Search by name, email, phone..."
-                className="pl-9 bg-zinc-800 border-zinc-700 text-white"
+                className="pl-9 bg-zinc-100 border-zinc-300 text-zinc-900"
                 autoFocus
               />
             </div>
-            <div className="max-h-52 overflow-y-auto space-y-1 mb-4">
+            <div className="max-h-52 overflow-y-auto space-y-1 mb-3">
               {results.length === 0 ? (
-                <div className="text-xs text-zinc-500 text-center py-6">
+                <div className="text-xs text-zinc-600 text-center py-4">
                   {search ? "No identities found" : "Type to search contacts..."}
                 </div>
               ) : (
@@ -209,20 +209,20 @@ function AddSubscriberDialog({
                     className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
                       selected?.name === r.name
                         ? "bg-blue-600/20 border border-blue-500/40"
-                        : "hover:bg-zinc-800 border border-transparent"
+                        : "hover:bg-zinc-100 border border-transparent"
                     }`}
                   >
-                    <div className="text-sm text-white font-medium">
+                    <div className="text-sm text-zinc-900 font-medium">
                       {r.display_name || r.name}
                     </div>
                     <div className="flex gap-3 mt-0.5">
                       {r.primary_email && (
-                        <span className="text-[11px] text-zinc-500 flex items-center gap-1">
+                        <span className="text-[11px] text-zinc-600 flex items-center gap-1">
                           <Mail className="w-3 h-3" /> {r.primary_email}
                         </span>
                       )}
                       {r.primary_phone && (
-                        <span className="text-[11px] text-zinc-500 flex items-center gap-1">
+                        <span className="text-[11px] text-zinc-600 flex items-center gap-1">
                           <Phone className="w-3 h-3" /> {r.primary_phone}
                         </span>
                       )}
@@ -232,7 +232,7 @@ function AddSubscriberDialog({
               )}
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={onClose} className="border-zinc-700 text-zinc-300">
+              <Button variant="outline" onClick={onClose} className="border-zinc-300 text-zinc-700">
                 Cancel
               </Button>
               <Button
@@ -246,28 +246,28 @@ function AddSubscriberDialog({
           </div>
         ) : (
           <div>
-            <div className="space-y-3 mb-6">
+            <div className="space-y-3 mb-4">
               <div>
-                <label className="text-xs text-zinc-400 mb-1 block">Phone</label>
+                <label className="text-xs text-zinc-600 mb-1 block">Phone</label>
                 <Input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+91 98765 43210"
-                  className="bg-zinc-800 border-zinc-700 text-white"
+                  className="bg-zinc-100 border-zinc-300 text-zinc-900"
                 />
               </div>
               <div>
-                <label className="text-xs text-zinc-400 mb-1 block">Email</label>
+                <label className="text-xs text-zinc-600 mb-1 block">Email</label>
                 <Input
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
-                  className="bg-zinc-800 border-zinc-700 text-white"
+                  className="bg-zinc-100 border-zinc-300 text-zinc-900"
                 />
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={onClose} className="border-zinc-700 text-zinc-300">
+              <Button variant="outline" onClick={onClose} className="border-zinc-300 text-zinc-700">
                 Cancel
               </Button>
               <Button
@@ -299,19 +299,19 @@ function ImportDialog({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-white mb-1">Import Subscribers</h2>
-        <p className="text-xs text-zinc-400 mb-4">
-          Bulk-add from ERPNext into <span className="text-zinc-300">{listName}</span>.
+      <div className="bg-zinc-50 border border-zinc-300 rounded-xl w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-zinc-900 mb-1">Import Subscribers</h2>
+        <p className="text-xs text-zinc-600 mb-3">
+          Bulk-add from ERPNext into <span className="text-zinc-700">{listName}</span>.
           Omni Identities will be auto-created.
         </p>
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-zinc-400 mb-1 block">Source DocType</label>
+            <label className="text-xs text-zinc-600 mb-1 block">Source DocType</label>
             <select
               value={doctype}
               onChange={(e) => setDoctype(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
+              className="w-full bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:border-zinc-300"
             >
               <option value="Customer">Customer</option>
               <option value="Supplier">Supplier</option>
@@ -319,17 +319,17 @@ function ImportDialog({
             </select>
           </div>
           <div>
-            <label className="text-xs text-zinc-400 mb-1 block">Limit (0 = all)</label>
+            <label className="text-xs text-zinc-600 mb-1 block">Limit (0 = all)</label>
             <Input
               type="number"
               value={limit}
               onChange={(e) => setLimit(parseInt(e.target.value) || 0)}
-              className="bg-zinc-800 border-zinc-700 text-white"
+              className="bg-zinc-100 border-zinc-300 text-zinc-900"
             />
           </div>
         </div>
-        <div className="flex justify-end gap-2 mt-6">
-          <Button variant="outline" onClick={onClose} className="border-zinc-700 text-zinc-300">
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="outline" onClick={onClose} className="border-zinc-300 text-zinc-700">
             Cancel
           </Button>
           <Button
@@ -391,20 +391,20 @@ function SubscriberDetailView({
   );
 
   return (
-    <div className="h-full w-full bg-zinc-950 flex flex-col">
-      <div className="shrink-0 px-6 py-4 border-b border-zinc-800">
+    <div className="h-full w-full bg-white flex flex-col">
+      <div className="shrink-0 px-4 py-3 border-b border-zinc-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+              className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-lg font-semibold text-white">{list.list_name}</h1>
+              <h1 className="text-lg font-semibold text-zinc-900">{list.list_name}</h1>
               {list.description && (
-                <p className="text-xs text-zinc-400">{list.description}</p>
+                <p className="text-xs text-zinc-600">{list.description}</p>
               )}
             </div>
           </div>
@@ -412,7 +412,7 @@ function SubscriberDetailView({
             <Button
               onClick={() => setShowImportDialog(true)}
               variant="outline"
-              className="text-sm border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+              className="text-sm border-zinc-300 text-zinc-700 hover:bg-zinc-100"
             >
               <Upload className="w-4 h-4 mr-1.5" />
               Import
@@ -436,27 +436,27 @@ function SubscriberDetailView({
           </div>
         </div>
 
-        <div className="flex items-center gap-6 mt-4">
+        <div className="flex items-center gap-4 mt-4">
           <StatBadge label="Total" value={stats.total} color="zinc" />
           <StatBadge label="Active" value={stats.active} color="green" />
           <StatBadge label="Unsubscribed" value={stats.unsubscribed} color="red" />
         </div>
       </div>
 
-      <div className="px-6 py-3 border-b border-zinc-800 flex items-center gap-3">
+      <div className="px-4 py-2 border-b border-zinc-200 flex items-center gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
           <Input
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search by name, email, or phone..."
-            className="pl-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
+            className="pl-9 bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-600"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-zinc-500"
+          className="bg-zinc-50 border border-zinc-300 rounded-lg px-3 py-2 text-sm text-zinc-700 focus:outline-none focus:border-zinc-300"
         >
           <option value="">All Status</option>
           <option value="Subscribed">Subscribed</option>
@@ -467,37 +467,37 @@ function SubscriberDetailView({
       <div className="flex-1 overflow-y-auto">
         {subscribers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
-            <UserPlus className="w-12 h-12 text-zinc-600 mb-3" />
-            <p className="text-zinc-400 text-sm">No subscribers yet</p>
-            <p className="text-zinc-500 text-xs mt-1">
+            <UserPlus className="w-12 h-12 text-zinc-500 mb-3" />
+            <p className="text-zinc-600 text-sm">No subscribers yet</p>
+            <p className="text-zinc-600 text-xs mt-1">
               Add subscribers manually or import from ERPNext
             </p>
           </div>
         ) : (
           <table className="w-full">
             <thead>
-              <tr className="border-b border-zinc-800 text-xs text-zinc-500 uppercase tracking-wider">
-                <th className="text-left px-6 py-3">Name</th>
-                <th className="text-left px-6 py-3">Email</th>
-                <th className="text-left px-6 py-3">Phone</th>
-                <th className="text-left px-6 py-3">Status</th>
-                <th className="text-left px-6 py-3">Subscribed</th>
-                <th className="text-right px-6 py-3">Actions</th>
+              <tr className="border-b border-zinc-200 text-xs text-zinc-600 uppercase tracking-wider">
+                <th className="text-left px-4 py-2">Name</th>
+                <th className="text-left px-4 py-2">Email</th>
+                <th className="text-left px-4 py-2">Phone</th>
+                <th className="text-left px-4 py-2">Status</th>
+                <th className="text-left px-4 py-2">Subscribed</th>
+                <th className="text-right px-4 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               {subscribers.map((sub) => (
                 <tr
                   key={sub.name}
-                  className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors"
+                  className="border-b border-zinc-200/50 hover:bg-zinc-50/50 transition-colors"
                 >
-                  <td className="px-6 py-3">
-                    <span className="text-sm text-white">
+                  <td className="px-4 py-2">
+                    <span className="text-sm text-zinc-900">
                       {sub.display_name || "Unknown"}
                     </span>
                   </td>
-                  <td className="px-6 py-3">
-                    <span className="text-sm text-zinc-400 flex items-center gap-1.5">
+                  <td className="px-4 py-2">
+                    <span className="text-sm text-zinc-600 flex items-center gap-1.5">
                       {sub.primary_email && (
                         <>
                           <Mail className="w-3.5 h-3.5" />
@@ -506,8 +506,8 @@ function SubscriberDetailView({
                       )}
                     </span>
                   </td>
-                  <td className="px-6 py-3">
-                    <span className="text-sm text-zinc-400 flex items-center gap-1.5">
+                  <td className="px-4 py-2">
+                    <span className="text-sm text-zinc-600 flex items-center gap-1.5">
                       {sub.primary_phone && (
                         <>
                           <Phone className="w-3.5 h-3.5" />
@@ -516,23 +516,23 @@ function SubscriberDetailView({
                       )}
                     </span>
                   </td>
-                  <td className="px-6 py-3">
+                  <td className="px-4 py-2">
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full ${
                         sub.status === "Subscribed"
-                          ? "bg-green-500/10 text-green-400"
-                          : "bg-red-500/10 text-red-400"
+                          ? "bg-green-500/10 text-green-700"
+                          : "bg-red-500/10 text-red-700"
                       }`}
                     >
                       {sub.status}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-xs text-zinc-500">
+                  <td className="px-4 py-2 text-xs text-zinc-600">
                     {sub.subscribed_on
                       ? new Date(sub.subscribed_on).toLocaleDateString()
                       : "\u2014"}
                   </td>
-                  <td className="px-6 py-3 text-right">
+                  <td className="px-4 py-2 text-right">
                     <div className="flex items-center justify-end gap-1">
                       {sub.status === "Subscribed" ? (
                         <button
@@ -541,7 +541,7 @@ function SubscriberDetailView({
                             toast.success("Unsubscribed");
                             onRefresh();
                           }}
-                          className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-orange-400"
+                          className="p-1.5 rounded hover:bg-zinc-100 text-zinc-600 hover:text-orange-700"
                           title="Unsubscribe"
                         >
                           <UserMinus className="w-4 h-4" />
@@ -553,7 +553,7 @@ function SubscriberDetailView({
                             toast.success("Re-subscribed");
                             onRefresh();
                           }}
-                          className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-green-400"
+                          className="p-1.5 rounded hover:bg-zinc-100 text-zinc-600 hover:text-green-700"
                           title="Re-subscribe"
                         >
                           <UserPlus className="w-4 h-4" />
@@ -565,7 +565,7 @@ function SubscriberDetailView({
                           toast.success("Removed");
                           onRefresh();
                         }}
-                        className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-red-400"
+                        className="p-1.5 rounded hover:bg-zinc-100 text-zinc-600 hover:text-red-700"
                         title="Remove"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -735,17 +735,17 @@ export function SubscriberListPage({
   }
 
   return (
-    <div className="h-full w-full bg-zinc-950 flex flex-col">
-      <div className="shrink-0 px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+    <div className="h-full w-full bg-white flex flex-col">
+      <div className="shrink-0 px-4 py-3 border-b border-zinc-200 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={onNavigateBack}
-            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <Users className="w-5 h-5 text-blue-400" />
-          <h1 className="text-lg font-semibold text-white">Subscriber Lists</h1>
+          <Users className="w-5 h-5 text-blue-700" />
+          <h1 className="text-lg font-semibold text-zinc-900">Subscriber Lists</h1>
         </div>
         <Button
           onClick={() => setShowCreateDialog(true)}
@@ -756,49 +756,49 @@ export function SubscriberListPage({
         </Button>
       </div>
 
-      <div className="px-6 py-3 border-b border-zinc-800">
+      <div className="px-4 py-2 border-b border-zinc-200">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search lists..."
-            className="pl-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
+            className="pl-9 bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-600"
           />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4">
         {lists.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
-            <Users className="w-12 h-12 text-zinc-600 mb-3" />
-            <p className="text-zinc-400 text-sm">No subscriber lists yet</p>
-            <p className="text-zinc-500 text-xs mt-1">
+            <Users className="w-12 h-12 text-zinc-500 mb-3" />
+            <p className="text-zinc-600 text-sm">No subscriber lists yet</p>
+            <p className="text-zinc-600 text-xs mt-1">
               Create a list to start grouping your contacts
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {lists.map((list) => (
               <button
                 key={list.name}
                 onClick={() => handleSelectList(list)}
-                className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 text-left hover:border-zinc-600 transition-colors group"
+                className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 text-left hover:border-zinc-300 transition-colors group"
               >
                 <div className="flex items-start justify-between mb-3">
-                  <h3 className="font-medium text-white group-hover:text-blue-400 transition-colors">
+                  <h3 className="font-medium text-zinc-900 group-hover:text-blue-700 transition-colors">
                     {list.list_name}
                   </h3>
-                  <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-blue-500/10 text-blue-700 px-2 py-0.5 rounded-full">
                     {list.active_subscribers} active
                   </span>
                 </div>
                 {list.description && (
-                  <p className="text-xs text-zinc-400 mb-3 line-clamp-2">
+                  <p className="text-xs text-zinc-600 mb-3 line-clamp-2">
                     {list.description}
                   </p>
                 )}
-                <div className="flex items-center gap-4 text-xs text-zinc-500">
+                <div className="flex items-center gap-3 text-xs text-zinc-600">
                   <span>{list.total_subscribers} total</span>
                 </div>
               </button>
