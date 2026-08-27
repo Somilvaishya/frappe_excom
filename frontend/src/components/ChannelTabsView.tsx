@@ -1,3 +1,4 @@
+import { CallMessageCard } from "./CallMessageCard";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -910,7 +911,20 @@ export function ChannelTabsView({
                             {message.isPinned && (
                               <Pin className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 text-amber-700" />
                             )}
-                            {message.type === "template" ? (
+                                                        {message.type === "call" || message.type === "Call" ? (
+                              <CallMessageCard
+                                message={{
+                                  name: message.id,
+                                  direction: isUser ? "Outbound" : "Inbound",
+                                  content_text: message.content,
+                                  creation: message.timestamp,
+                                  delivery_status: message.status,
+                                  call_id: (message as any).call_id,
+                                  duration: (message as any).duration,
+                                  recording_url: (message as any).recording_url || message.mediaUrl
+                                }}
+                              />
+                            ) : message.type === "template" ? (
                               <div className="space-y-2">
                                 {message.mediaUrl && (
                                   /\.(jpg|jpeg|png|gif|webp)$/i.test(message.mediaUrl) ? (

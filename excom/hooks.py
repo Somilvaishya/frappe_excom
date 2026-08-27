@@ -26,7 +26,7 @@ website_route_rules = [
 # Includes in <head>
 # ------------------
 
-app_include_js = "/assets/excom/js/excom_navbar.js"
+app_include_js = ["/assets/excom/js/excom_navbar.js", "/assets/excom/js/excom_voice_desk.js"]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/excom/css/excom.css"
