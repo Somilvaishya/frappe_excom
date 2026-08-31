@@ -71,15 +71,23 @@ def resolve_ring_destination(caller_number: str, business_number: str, account_d
 				if mob and mob not in ring_numbers:
 					ring_numbers.append(mob)
 
-	# Fallback if no specific team member found: add System Manager mobiles
+	# Fallback if no specific team member found: check all enabled users with mobile_no/phone
 	if not ring_numbers:
 		sys_users = frappe.get_all("Has Role", filters={"role": "System Manager", "parenttype": "User"}, fields=["parent"])
-		mgr_ids = [s.parent for s in sys_users[:5]]
+		mgr_ids = [s.parent for s in sys_users[:10]]
 		if mgr_ids:
-			mgr_mobiles = frappe.get_all("User", filters={"name": ["in", mgr_ids], "enabled": 1}, fields=["mobile_no"])
+			mgr_mobiles = frappe.get_all("User", filters={"name": ["in", mgr_ids], "enabled": 1}, fields=["mobile_no", "phone"])
 			for m in mgr_mobiles:
-				if m.mobile_no:
-					ring_numbers.append(m.mobile_no.strip())
+				mob = (m.mobile_no or m.phone or "").strip()
+				if mob and mob not in ring_numbers:
+					ring_numbers.append(mob)
+
+	if not ring_numbers:
+		all_users = frappe.get_all("User", filters={"enabled": 1, "user_type": "System User"}, fields=["mobile_no", "phone"], limit=10)
+		for u in all_users:
+			mob = (u.mobile_no or u.phone or "").strip()
+			if mob and mob not in ring_numbers:
+				ring_numbers.append(mob)
 
 	return ring_numbers
 
