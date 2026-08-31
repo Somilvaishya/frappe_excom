@@ -50,7 +50,7 @@ const getSocketPort = (): string | undefined => {
   const fromBoot = (window as any).frappe?.boot?.socketio_port;
   if (fromBoot != null) return String(fromBoot);
 
-  return undefined;
+  return window.location.port ? window.location.port : "8000";
 };
 
 function ExcomDashboard() {
