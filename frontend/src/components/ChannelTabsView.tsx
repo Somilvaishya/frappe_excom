@@ -511,7 +511,42 @@ export function ChannelTabsView({
                   Human Control
                 </Badge>
               )}
-              <Button
+                            <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
+                onClick={async () => {
+                  const num = contact.contactInfo?.phone;
+                  if (!num) {
+                    toast.error("Contact phone number missing");
+                    return;
+                  }
+                  try {
+                    const res = await (window as any).frappe?.call?.({
+                      method: "excom.excom.api.voice.initiate_call",
+                      args: { to_number: num, thread_id: selectedAccountId }
+                    });
+                    if (res?.message?.status === "success") {
+                      toast.success("Call initiated to " + num);
+                    }
+                  } catch (e: any) {
+                    let msg = "Call failed";
+                    if (e?._server_messages) {
+                      try {
+                        const parsed = JSON.parse(e._server_messages);
+                        const inner = JSON.parse(parsed[0]);
+                        msg = inner?.message || parsed[0];
+                      } catch {}
+                    } else if (e?.message) {
+                      msg = e.message;
+                    }
+                    toast.error(msg);
+                  }
+                }}
+              >
+                <Phone className="w-4 h-4 mr-1.5" />
+                Call
+              </Button>
+<Button
                 size="sm"
                 variant="outline"
                 className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"

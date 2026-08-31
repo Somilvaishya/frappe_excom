@@ -74,17 +74,31 @@ export function OmniIdentityPanel({
 
   const handleCall = async (phoneNum?: string) => {
     const num = phoneNum || contactInfo?.phone;
-    if (!num) return;
+    if (!num) {
+      toast.error("No phone number available for this contact");
+      return;
+    }
     try {
       const res = await (window as any).frappe?.call?.({
         method: "excom.excom.api.voice.initiate_call",
         args: { to_number: num, thread_id: conversation.id }
       });
       if (res?.message?.status === "success") {
-        (window as any).frappe?.show_alert?.({ message: "Calling " + num + "...", indicator: "green" });
+        toast.success("Call initiated to " + num);
       }
     } catch (e: any) {
       console.error("Call error:", e);
+      let msg = "Call failed";
+      if (e?._server_messages) {
+        try {
+          const parsed = JSON.parse(e._server_messages);
+          const inner = JSON.parse(parsed[0]);
+          msg = inner?.message || parsed[0];
+        } catch {}
+      } else if (e?.message) {
+        msg = e.message;
+      }
+      toast.error(msg);
     }
   };
 
