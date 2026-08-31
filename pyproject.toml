@@ -60,6 +60,7 @@ ignore = [
     "F405", # cant detect undefined names from * import
     "F722", # syntax error in forward type annotation
     "W191", # indentation contains tabs
+
 ]
 typing-modules = ["frappe.types.DF"]
 

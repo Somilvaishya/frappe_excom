@@ -72,6 +72,23 @@ export function OmniIdentityPanel({
   const { contactInfo } = conversation;
   const [activeTab, setActiveTab] = useState<"profile" | "invoices">("profile");
 
+  const handleCall = async (phoneNum?: string) => {
+    const num = phoneNum || contactInfo?.phone;
+    if (!num) return;
+    try {
+      const res = await (window as any).frappe?.call?.({
+        method: "excom.excom.api.voice.initiate_call",
+        args: { to_number: num, thread_id: conversation.id }
+      });
+      if (res?.message?.status === "success") {
+        (window as any).frappe?.show_alert?.({ message: "Calling " + num + "...", indicator: "green" });
+      }
+    } catch (e: any) {
+      console.error("Call error:", e);
+    }
+  };
+
+
   const { linkedEntities, isLoading: linkedLoading } = useLinkedEntities(
     conversation.id
   );
@@ -336,12 +353,26 @@ export function OmniIdentityPanel({
                   </p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <Phone className="w-4 h-4 text-zinc-600 mt-0.5 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-xs text-zinc-600">Phone</p>
-                  <p className="text-sm text-zinc-700">{contactInfo.phone}</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <Phone className="w-4 h-4 text-zinc-600 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-zinc-600">Phone</p>
+                    <p className="text-sm text-zinc-700 truncate">{contactInfo.phone}</p>
+                  </div>
                 </div>
+                {contactInfo.phone && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleCall(contactInfo.phone)}
+                    className="h-7 px-2.5 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 shrink-0"
+                    title={"Call " + contactInfo.phone}
+                  >
+                    <Phone className="w-3 h-3 mr-1 text-emerald-600" />
+                    Call
+                  </Button>
+                )}
               </div>
               {contactInfo.company && (
                 <div className="flex items-start gap-3">
