@@ -32,6 +32,7 @@
   "column_break_rel",
   "reference_doctype",
   "reference_name",
+  "excom_call",
   "is_internal",
   "pinning_section",
   "is_pinned",
@@ -236,6 +237,12 @@
    "fieldname": "reactions",
    "fieldtype": "JSON",
    "label": "Reactions"
+  },
+  {
+   "fieldname": "excom_call",
+   "fieldtype": "Link",
+   "label": "Excom Call",
+   "options": "Excom Call"
   }
  ],
  "index_web_pages_for_search": 1,

@@ -85,10 +85,16 @@ def persist_inbound_call_async(call_sid, caller, business_num, account_name, dig
 			msg.account = account_name
 			msg.message_type = "Call"
 			msg.content_text = f"Incoming Call from {caller}"
-			msg.excom_call = call_doc.name
+			if frappe.db.has_column("Excom Message", "excom_call"):
+				msg.excom_call = call_doc.name
 			msg.delivery_status = "Delivered"
 			msg.provider_timestamp = now_datetime()
 			msg.insert(ignore_permissions=True)
+
+			frappe.db.set_value("Excom Thread", thread_name, {
+				"last_message_preview": f"Incoming Call from {caller}",
+				"last_message_at": now_datetime()
+			})
 		except Exception as e:
 			frappe.log_error(f"Failed creating inbound Excom Message stub: {e}", "Excom Voice")
 
@@ -102,9 +108,13 @@ def handle_status_webhook(params: dict, account_name: str = None):
 
 	call_id = frappe.db.get_value("Excom Call", {"provider_call_id": call_sid}, "name")
 	if not call_id:
-		return {"status": "ignored", "reason": "Call not found"}
+		caller = params.get("CallFrom") or params.get("From") or ""
+		business_num = params.get("CallTo") or params.get("To") or ""
+		digits = params.get("digits") or ""
+		persist_inbound_call_async(call_sid, caller, business_num, account_name, digits, params)
+		call_id = frappe.db.get_value("Excom Call", {"provider_call_id": call_sid}, "name")
 
-	status_raw = (params.get("DialCallStatus") or params.get("Status") or "completed").lower()
+	status_raw = (params.get("DialCallStatus") or params.get("Status") or params.get("CallStatus") or "completed").lower()
 	status_map = {
 		"completed": "Completed",
 		"busy": "Busy",
@@ -123,36 +133,53 @@ def handle_status_webhook(params: dict, account_name: str = None):
 	if rec_url:
 		update_fields["recording_url"] = rec_url
 
-	frappe.db.set_value("Excom Call", call_id, update_fields)
+	if call_id:
+		frappe.db.set_value("Excom Call", call_id, update_fields)
+		thread_id = frappe.db.get_value("Excom Call", call_id, "thread")
 
-	# Update Excom Message timeline stub content
-	msg_name = frappe.db.get_value("Excom Message", {"excom_call": call_id}, "name")
-	if msg_name:
-		if new_status == "Completed":
-			txt = f"Call completed ({duration}s)" if duration else "Call completed"
-		elif new_status in ["Missed", "no-answer"]:
-			txt = f"Missed Call"
-		elif new_status == "Busy":
-			txt = f"Call busy"
-		else:
-			txt = f"Call {new_status.lower()}"
+		# Safe update of Excom Message timeline stub content
+		try:
+			msg_name = None
+			if frappe.db.has_column("Excom Message", "excom_call"):
+				msg_name = frappe.db.get_value("Excom Message", {"excom_call": call_id}, "name")
+			if not msg_name and thread_id:
+				msg_name = frappe.db.get_value("Excom Message", {"thread": thread_id, "message_type": "Call"}, "name", order_by="creation desc")
 
-		frappe.db.set_value("Excom Message", msg_name, {
-			"content_text": txt,
-			"delivery_status": "Delivered" if new_status == "Completed" else "Failed"
-		})
+			if msg_name:
+				if new_status == "Completed":
+					txt = f"Call completed ({duration}s)" if duration else "Call completed"
+				elif new_status in ["Missed", "no-answer"]:
+					txt = f"Missed Call"
+				elif new_status == "Busy":
+					txt = f"Call busy"
+				else:
+					txt = f"Call {new_status.lower()}"
 
-	frappe.db.commit()
+				frappe.db.set_value("Excom Message", msg_name, {
+					"content_text": txt,
+					"delivery_status": "Delivered" if new_status == "Completed" else "Failed"
+				})
 
-	# Emit realtime status update
-	frappe.publish_realtime(
-		"excom_call_status_update",
-		{
-			"call_id": call_id,
-			"provider_call_id": call_sid,
-			"status": new_status,
-			"duration": duration
-		}
-	)
+				if thread_id:
+					frappe.db.set_value("Excom Thread", thread_id, {
+						"last_message_preview": txt,
+						"last_message_at": now_datetime()
+					})
+		except Exception as e:
+			frappe.log_error(f"Error updating Excom Message in status webhook: {e}", "Excom Voice Webhook")
+
+		frappe.db.commit()
+
+		# Emit realtime status update
+		frappe.publish_realtime(
+			"excom_call_status_update",
+			{
+				"call_id": call_id,
+				"provider_call_id": call_sid,
+				"status": new_status,
+				"duration": duration,
+				"thread_id": thread_id
+			}
+		)
 
 	return {"status": "updated", "call_id": call_id}
