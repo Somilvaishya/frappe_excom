@@ -34,7 +34,7 @@ def handle_inbound_routing(params: dict):
 		}
 	)
 
-	# Enqueue asynchronous creation of Excom Call record
+	# Enqueue asynchronous creation of Excom Call & Thread Message stub
 	frappe.enqueue(
 		"excom.excom.channels.voice.handler.persist_inbound_call_async",
 		call_sid=call_sid,
@@ -49,16 +49,16 @@ def handle_inbound_routing(params: dict):
 	return response_payload
 
 def persist_inbound_call_async(call_sid, caller, business_num, account_name, digits, raw_params):
-	"""Asynchronous persistence of inbound call record."""
+	"""Asynchronous persistence of inbound call record & Excom Message thread stub."""
 	if not call_sid or frappe.db.exists("Excom Call", {"provider_call_id": call_sid}):
 		return
 
-	clean_caller = (caller or "").strip().lstrip("+")
-	identity = frappe.db.get_value(
-		"Omni Identity",
-		{"primary_phone": ["like", f"%{clean_caller[-10:]}%"]},
-		"name"
-	)
+	from excom.excom.doctype.omni_identity.omni_identity import resolve_identity
+	from excom.excom.services.thread_service import upsert_thread
+
+	clean_caller = (caller or "").strip()
+	identity_name = resolve_identity(phone=clean_caller, channel="voice", display_name=clean_caller)
+	thread_name = upsert_thread(identity_name, "voice", account_name) if account_name else None
 
 	call_doc = frappe.new_doc("Excom Call")
 	call_doc.provider_call_id = call_sid
@@ -68,10 +68,30 @@ def persist_inbound_call_async(call_sid, caller, business_num, account_name, dig
 	call_doc.to_number = business_num
 	call_doc.business_number = business_num
 	call_doc.channel_account = account_name
-	call_doc.omni_identity = identity
+	call_doc.omni_identity = identity_name
+	call_doc.thread = thread_name
 	call_doc.ivr_selection = digits
 	call_doc.raw_event_payload = json.dumps(raw_params)
 	call_doc.insert(ignore_permissions=True)
+
+	if thread_name:
+		try:
+			msg = frappe.new_doc("Excom Message")
+			msg.thread = thread_name
+			msg.omni_identity = identity_name
+			msg.direction = "Inbound"
+			msg.channel = "voice"
+			msg.account_doctype = "Excom Channel Account"
+			msg.account = account_name
+			msg.message_type = "Call"
+			msg.content_text = f"Incoming Call from {caller}"
+			msg.excom_call = call_doc.name
+			msg.delivery_status = "Delivered"
+			msg.provider_timestamp = now_datetime()
+			msg.insert(ignore_permissions=True)
+		except Exception as e:
+			frappe.log_error(f"Failed creating inbound Excom Message stub: {e}", "Excom Voice")
+
 	frappe.db.commit()
 
 def handle_status_webhook(params: dict, account_name: str = None):
@@ -93,8 +113,8 @@ def handle_status_webhook(params: dict, account_name: str = None):
 		"canceled": "Canceled"
 	}
 	new_status = status_map.get(status_raw, "Completed")
-	duration = int(params.get("DialCallDuration") or params.get("Duration") or 0)
-	rec_url = params.get("RecordingUrl")
+	duration = int(params.get("DialCallDuration") or params.get("Duration") or params.get("Legs[0][Duration]") or 0)
+	rec_url = params.get("RecordingUrl") or params.get("Legs[0][RecordingUrl]")
 
 	update_fields = {"status": new_status}
 	if duration:
@@ -104,6 +124,24 @@ def handle_status_webhook(params: dict, account_name: str = None):
 		update_fields["recording_url"] = rec_url
 
 	frappe.db.set_value("Excom Call", call_id, update_fields)
+
+	# Update Excom Message timeline stub content
+	msg_name = frappe.db.get_value("Excom Message", {"excom_call": call_id}, "name")
+	if msg_name:
+		if new_status == "Completed":
+			txt = f"Call completed ({duration}s)" if duration else "Call completed"
+		elif new_status in ["Missed", "no-answer"]:
+			txt = f"Missed Call"
+		elif new_status == "Busy":
+			txt = f"Call busy"
+		else:
+			txt = f"Call {new_status.lower()}"
+
+		frappe.db.set_value("Excom Message", msg_name, {
+			"content_text": txt,
+			"delivery_status": "Delivered" if new_status == "Completed" else "Failed"
+		})
+
 	frappe.db.commit()
 
 	# Emit realtime status update

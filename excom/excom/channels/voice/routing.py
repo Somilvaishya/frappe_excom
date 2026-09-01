@@ -99,13 +99,21 @@ def build_exotel_routing_response(ring_numbers: list, business_number: str, acco
 	record = account_doc.voice_record_calls in ["All", "Inbound only"] if account_doc else True
 	rec_channels = "dual" if (account_doc and account_doc.voice_recording_channels == "Dual") else "single"
 	
-	# Clean E.164 formatting
+	import re
+	# Clean standard phone formatting for Exotel parallel ringing
 	formatted_numbers = []
 	for n in ring_numbers:
-		n_clean = n.strip()
-		if not n_clean.startswith("+") and len(n_clean) == 10:
-			n_clean = "+91" + n_clean
-		formatted_numbers.append(n_clean)
+		raw_digits = re.sub(r"\D", "", n.strip())
+		if len(raw_digits) == 10:
+			num = "0" + raw_digits
+		elif len(raw_digits) == 12 and raw_digits.startswith("91"):
+			num = "0" + raw_digits[2:]
+		elif len(raw_digits) == 11 and raw_digits.startswith("0"):
+			num = raw_digits
+		else:
+			num = "+" + raw_digits
+		if num not in formatted_numbers:
+			formatted_numbers.append(num)
 
 	return {
 		"fetch_after_attempt": False,

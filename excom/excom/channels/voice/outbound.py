@@ -53,9 +53,15 @@ def initiate_click_to_call(to_number: str, account_name: str = None, thread_id: 
 	call_doc.business_number = account.voice_phone_number
 	call_doc.agent = agent
 	call_doc.channel_account = account.name
-	if thread_id and frappe.db.exists("Excom Thread", thread_id):
-		call_doc.thread = thread_id
-		call_doc.omni_identity = frappe.db.get_value("Excom Thread", thread_id, "omni_identity")
+	if not thread_id or not frappe.db.exists("Excom Thread", thread_id):
+		from excom.excom.doctype.omni_identity.omni_identity import resolve_identity
+		from excom.excom.services.thread_service import upsert_thread
+		clean_to = to_number.strip()
+		identity_name = resolve_identity(phone=clean_to, channel="voice", display_name=clean_to)
+		thread_id = upsert_thread(identity_name, "voice", account.name)
+
+	call_doc.thread = thread_id
+	call_doc.omni_identity = frappe.db.get_value("Excom Thread", thread_id, "omni_identity")
 
 	call_doc.insert(ignore_permissions=True)
 	frappe.db.commit()
