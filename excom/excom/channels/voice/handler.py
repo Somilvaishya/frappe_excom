@@ -50,6 +50,8 @@ def handle_inbound_routing(params: dict):
 
 def persist_inbound_call_async(call_sid, caller, business_num, account_name, digits, raw_params):
 	"""Asynchronous persistence of inbound call record & Excom Message thread stub."""
+	frappe.set_user("Administrator")
+	frappe.flags.ignore_permissions = True
 	if not call_sid or frappe.db.exists("Excom Call", {"provider_call_id": call_sid}):
 		return
 
@@ -102,6 +104,8 @@ def persist_inbound_call_async(call_sid, caller, business_num, account_name, dig
 
 def handle_status_webhook(params: dict, account_name: str = None):
 	"""Status callback webhook processor."""
+	frappe.set_user("Administrator")
+	frappe.flags.ignore_permissions = True
 	call_sid = params.get("CallSid") or params.get("Sid")
 	if not call_sid:
 		return {"status": "ignored", "reason": "No CallSid"}
