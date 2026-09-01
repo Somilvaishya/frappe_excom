@@ -10,14 +10,23 @@ def inbound_routing(**kwargs):
 	"""
 	Exotel Connect Dynamic URL GET Endpoint.
 	Called by Exotel mid-call to fetch destination numbers.
-	Header: Exotel-Version: 1.0
+	Root-level JSON formatting per Exotel Passthrough specification.
 	"""
 	params = frappe.local.form_dict or kwargs
-	# Return JSON directly
 	response = handle_inbound_routing(params)
+	
+	# Populate root-level keys on frappe.response so Exotel receives raw JSON without wrapper nesting
+	frappe.response.clear()
 	frappe.response["type"] = "json"
-	frappe.response["data"] = response
-	return response
+	for k, v in response.items():
+		frappe.response[k] = v
+
+	# Add select_data string for Exotel Passthrough applet backward compatibility
+	dest_numbers = response.get("destination", {}).get("numbers") or []
+	if dest_numbers:
+		frappe.response["select_data"] = ",".join(dest_numbers)
+
+	return
 
 @frappe.whitelist(allow_guest=True)
 def status_webhook(**kwargs):

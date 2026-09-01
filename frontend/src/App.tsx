@@ -59,9 +59,11 @@ function ExcomDashboard() {
 
   useEffect(() => {
     const handleIncomingCall = (data: any) => {
+      console.log("[Excom SPA] Incoming Call Event Received:", data);
       setIncomingCall(data);
     };
     const handleCallStatusUpdate = (data: any) => {
+      console.log("[Excom SPA] Call Status Update Received:", data);
       if (data.status === "Ringing" || data.status === "In-progress") {
         setActiveCall((prev: any) => ({ ...(prev || {}), ...data }));
       } else {
@@ -70,13 +72,21 @@ function ExcomDashboard() {
       }
     };
 
-    if ((window as any).frappe?.realtime) {
-      (window as any).frappe.realtime.on("excom_incoming_call", handleIncomingCall);
-      (window as any).frappe.realtime.on("excom_call_status_update", handleCallStatusUpdate);
-    }
+    let attached = false;
+    const attachRealtime = () => {
+      if ((window as any).frappe?.realtime && !attached) {
+        (window as any).frappe.realtime.on("excom_incoming_call", handleIncomingCall);
+        (window as any).frappe.realtime.on("excom_call_status_update", handleCallStatusUpdate);
+        attached = true;
+      }
+    };
+
+    attachRealtime();
+    const intervalId = setInterval(attachRealtime, 1500);
 
     return () => {
-      if ((window as any).frappe?.realtime) {
+      clearInterval(intervalId);
+      if ((window as any).frappe?.realtime && attached) {
         (window as any).frappe.realtime.off?.("excom_incoming_call", handleIncomingCall);
         (window as any).frappe.realtime.off?.("excom_call_status_update", handleCallStatusUpdate);
       }
