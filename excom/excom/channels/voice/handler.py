@@ -42,6 +42,30 @@ def handle_inbound_routing(params: dict):
 			user=u.name,
 			after_commit=False
 		)
+		frappe.publish_realtime(
+			"excom:incoming_call",
+			{
+				"provider_call_id": call_sid,
+				"from_number": caller,
+				"business_number": business_num,
+				"account": account.name if account else None,
+				"ring_numbers": ring_numbers
+			},
+			user=u.name,
+			after_commit=False
+		)
+	# Also broadcast without user filter
+	frappe.publish_realtime(
+		"excom_incoming_call",
+		{
+			"provider_call_id": call_sid,
+			"from_number": caller,
+			"business_number": business_num,
+			"account": account.name if account else None,
+			"ring_numbers": ring_numbers
+		},
+		after_commit=False
+	)
 
 	# Enqueue asynchronous creation of Excom Call & Thread Message stub
 	frappe.enqueue(
@@ -66,6 +90,10 @@ def persist_inbound_call_async(call_sid, caller, business_num, account_name, dig
 
 	from excom.excom.doctype.omni_identity.omni_identity import resolve_identity
 	from excom.excom.services.thread_service import upsert_thread
+
+	if not account_name and business_num:
+		acc_doc = resolve_voice_account(business_num)
+		account_name = acc_doc.name if acc_doc else None
 
 	clean_caller = (caller or "").strip()
 	identity_name = resolve_identity(phone=clean_caller, channel="voice", display_name=clean_caller)
@@ -119,11 +147,16 @@ def handle_status_webhook(params: dict, account_name: str = None):
 	if not call_sid:
 		return {"status": "ignored", "reason": "No CallSid"}
 
+	caller = params.get("CallFrom") or params.get("From") or ""
+	business_num = params.get("CallTo") or params.get("To") or ""
+	digits = params.get("digits") or ""
+
+	if not account_name and business_num:
+		acc_doc = resolve_voice_account(business_num)
+		account_name = acc_doc.name if acc_doc else None
+
 	call_id = frappe.db.get_value("Excom Call", {"provider_call_id": call_sid}, "name")
 	if not call_id:
-		caller = params.get("CallFrom") or params.get("From") or ""
-		business_num = params.get("CallTo") or params.get("To") or ""
-		digits = params.get("digits") or ""
 		persist_inbound_call_async(call_sid, caller, business_num, account_name, digits, params)
 		call_id = frappe.db.get_value("Excom Call", {"provider_call_id": call_sid}, "name")
 
@@ -133,11 +166,16 @@ def handle_status_webhook(params: dict, account_name: str = None):
 		"busy": "Busy",
 		"no-answer": "Missed",
 		"failed": "Failed",
-		"canceled": "Canceled"
+		"canceled": "Missed",
+		"cancelled": "Missed"
 	}
 	new_status = status_map.get(status_raw, "Completed")
 	duration = int(params.get("DialCallDuration") or params.get("Duration") or params.get("Legs[0][Duration]") or 0)
 	rec_url = params.get("RecordingUrl") or params.get("Legs[0][RecordingUrl]")
+
+	dial_whom = params.get("DialWhomNumber") or params.get("DialWhom") or params.get("AgentPhoneNumber") or ""
+	if duration == 0 and not dial_whom and new_status == "Completed":
+		new_status = "Missed"
 
 	update_fields = {"status": new_status}
 	if duration:
@@ -147,7 +185,6 @@ def handle_status_webhook(params: dict, account_name: str = None):
 		update_fields["recording_url"] = rec_url
 
 	# Resolve agent & team from DialWhomNumber if present
-	dial_whom = params.get("DialWhomNumber") or params.get("DialWhom") or params.get("AgentPhoneNumber") or ""
 	if dial_whom:
 		digits_whom = re.sub(r"\D", "", str(dial_whom))
 		if len(digits_whom) >= 10:
@@ -163,8 +200,22 @@ def handle_status_webhook(params: dict, account_name: str = None):
 					update_fields["team"] = team_member
 
 	if call_id:
-		frappe.db.set_value("Excom Call", call_id, update_fields)
 		thread_id = frappe.db.get_value("Excom Call", call_id, "thread")
+		if not thread_id:
+			from excom.excom.doctype.omni_identity.omni_identity import resolve_identity
+			from excom.excom.services.thread_service import upsert_thread
+			caller_num = caller or frappe.db.get_value("Excom Call", call_id, "from_number")
+			acc_num = business_num or frappe.db.get_value("Excom Call", call_id, "business_number")
+			if caller_num and acc_num:
+				id_name = resolve_identity(phone=caller_num, channel="voice", display_name=caller_num)
+				acc = resolve_voice_account(acc_num)
+				if acc:
+					thread_id = upsert_thread(id_name, "voice", acc.name)
+					update_fields["thread"] = thread_id
+					update_fields["omni_identity"] = id_name
+					update_fields["channel_account"] = acc.name
+
+		frappe.db.set_value("Excom Call", call_id, update_fields)
 
 		# Assign thread to agent if agent resolved
 		if update_fields.get("agent") and thread_id:
@@ -182,9 +233,9 @@ def handle_status_webhook(params: dict, account_name: str = None):
 				if new_status == "Completed":
 					txt = f"Call completed ({duration}s)" if duration else "Call completed"
 				elif new_status in ["Missed", "no-answer"]:
-					txt = f"Missed Call"
+					txt = f"Missed Call from {caller or 'customer'}"
 				elif new_status == "Busy":
-					txt = f"Call busy"
+					txt = f"Call busy from {caller or 'customer'}"
 				else:
 					txt = f"Call {new_status.lower()}"
 
@@ -225,5 +276,27 @@ def handle_status_webhook(params: dict, account_name: str = None):
 					user=u.name,
 					after_commit=False
 				)
+				frappe.publish_realtime(
+					"excom:thread_updated",
+					{"thread_id": thread_id},
+					user=u.name,
+					after_commit=False
+				)
+
+		# Broadcast to all sockets
+		frappe.publish_realtime(
+			"excom_call_status_update",
+			{
+				"call_id": call_id,
+				"provider_call_id": call_sid,
+				"status": new_status,
+				"duration": duration,
+				"thread_id": thread_id
+			},
+			after_commit=False
+		)
+		if thread_id:
+			frappe.publish_realtime("excom_thread_updated", {"thread_id": thread_id}, after_commit=False)
+			frappe.publish_realtime("excom:thread_updated", {"thread_id": thread_id}, after_commit=False)
 
 	return {"status": "updated", "call_id": call_id}
