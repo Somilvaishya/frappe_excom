@@ -15,7 +15,14 @@ def handle_inbound_routing(params: dict):
 	5. Enqueues background persistence of call record.
 	"""
 	# Check if this request is actually an end-of-call status callback
-	if params.get("DialCallStatus") or params.get("DialCallDuration") or params.get("RecordingUrl") or params.get("CallStatus"):
+	is_end_of_call = (
+		params.get("DialCallStatus") in ["completed", "busy", "no-answer", "failed", "canceled", "cancelled"]
+		or params.get("CallStatus") in ["completed", "busy", "no-answer", "failed", "canceled", "cancelled"]
+		or params.get("RecordingUrl")
+		or (params.get("CallType") and params.get("CallType") != "call-attempt")
+		or int(params.get("DialCallDuration") or 0) > 0
+	)
+	if is_end_of_call:
 		return handle_status_webhook(params)
 
 	caller = params.get("CallFrom") or params.get("From") or ""
