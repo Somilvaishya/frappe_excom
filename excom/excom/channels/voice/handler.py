@@ -1,3 +1,4 @@
+import re
 import json
 import frappe
 from frappe.utils import now_datetime
@@ -9,10 +10,14 @@ def handle_inbound_routing(params: dict):
 	Inbound Dynamic URL endpoint (<5s execution budget).
 	1. Resolves account & caller identity.
 	2. Resolves destination ring list (Sticky-then-team).
-	3. Emits realtime incoming call event for desk screen pop.
+	3. Emits realtime incoming call event for desk screen pop to all logged-in agent sockets.
 	4. Returns JSON destination payload immediately.
 	5. Enqueues background persistence of call record.
 	"""
+	# Check if this request is actually an end-of-call status callback
+	if params.get("DialCallStatus") or params.get("DialCallDuration") or params.get("RecordingUrl") or params.get("CallStatus"):
+		return handle_status_webhook(params)
+
 	caller = params.get("CallFrom") or params.get("From") or ""
 	business_num = params.get("CallTo") or params.get("To") or ""
 	call_sid = params.get("CallSid") or params.get("Sid") or ""
@@ -22,17 +27,21 @@ def handle_inbound_routing(params: dict):
 	ring_numbers = resolve_ring_destination(caller, business_num, account) if account else []
 	response_payload = build_exotel_routing_response(ring_numbers, business_num, account)
 
-	# Publish realtime screen pop before DB writes
-	frappe.publish_realtime(
-		"excom_incoming_call",
-		{
-			"provider_call_id": call_sid,
-			"from_number": caller,
-			"business_number": business_num,
-			"account": account.name if account else None,
-			"ring_numbers": ring_numbers
-		}
-	)
+	# Publish realtime screen pop to ALL enabled system user browser rooms
+	active_users = frappe.get_all("User", filters={"enabled": 1, "user_type": "System User"}, fields=["name"])
+	for u in active_users:
+		frappe.publish_realtime(
+			"excom_incoming_call",
+			{
+				"provider_call_id": call_sid,
+				"from_number": caller,
+				"business_number": business_num,
+				"account": account.name if account else None,
+				"ring_numbers": ring_numbers
+			},
+			user=u.name,
+			after_commit=False
+		)
 
 	# Enqueue asynchronous creation of Excom Call & Thread Message stub
 	frappe.enqueue(
@@ -137,9 +146,29 @@ def handle_status_webhook(params: dict, account_name: str = None):
 	if rec_url:
 		update_fields["recording_url"] = rec_url
 
+	# Resolve agent & team from DialWhomNumber if present
+	dial_whom = params.get("DialWhomNumber") or params.get("DialWhom") or params.get("AgentPhoneNumber") or ""
+	if dial_whom:
+		digits_whom = re.sub(r"\D", "", str(dial_whom))
+		if len(digits_whom) >= 10:
+			clean_digits = digits_whom[-10:]
+			matched_users = frappe.get_all("User", filters=[["mobile_no", "like", f"%{clean_digits}%"]], fields=["name"])
+			if not matched_users:
+				matched_users = frappe.get_all("User", filters=[["phone", "like", f"%{clean_digits}%"]], fields=["name"])
+			if matched_users:
+				agent_user = matched_users[0].name
+				update_fields["agent"] = agent_user
+				team_member = frappe.db.get_value("Excom Team Member", {"user": agent_user}, "parent")
+				if team_member:
+					update_fields["team"] = team_member
+
 	if call_id:
 		frappe.db.set_value("Excom Call", call_id, update_fields)
 		thread_id = frappe.db.get_value("Excom Call", call_id, "thread")
+
+		# Assign thread to agent if agent resolved
+		if update_fields.get("agent") and thread_id:
+			frappe.db.set_value("Excom Thread", thread_id, "assigned_to", update_fields["agent"])
 
 		# Safe update of Excom Message timeline stub content
 		try:
@@ -174,16 +203,27 @@ def handle_status_webhook(params: dict, account_name: str = None):
 
 		frappe.db.commit()
 
-		# Emit realtime status update
-		frappe.publish_realtime(
-			"excom_call_status_update",
-			{
-				"call_id": call_id,
-				"provider_call_id": call_sid,
-				"status": new_status,
-				"duration": duration,
-				"thread_id": thread_id
-			}
-		)
+		# Emit realtime status update & thread list refresh to all user sockets
+		active_users = frappe.get_all("User", filters={"enabled": 1, "user_type": "System User"}, fields=["name"])
+		for u in active_users:
+			frappe.publish_realtime(
+				"excom_call_status_update",
+				{
+					"call_id": call_id,
+					"provider_call_id": call_sid,
+					"status": new_status,
+					"duration": duration,
+					"thread_id": thread_id
+				},
+				user=u.name,
+				after_commit=False
+			)
+			if thread_id:
+				frappe.publish_realtime(
+					"excom_thread_updated",
+					{"thread_id": thread_id},
+					user=u.name,
+					after_commit=False
+				)
 
 	return {"status": "updated", "call_id": call_id}
